@@ -16,8 +16,10 @@ SessionLocal = sessionmaker(autoflush=False, autocommit=False, bind=engine)
 
 metadata = MetaData()
 
+
 class Base(DeclarativeBase):
     metadata = metadata
+
 
 def get_db() -> Generator:
     db = SessionLocal()
