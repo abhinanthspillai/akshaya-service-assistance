@@ -2,41 +2,33 @@ name: Frontend CI
 on:
   pull_request:
   push:
-    branches: [main]
+permissions:
+  contents: read
 jobs:
   frontend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - id: detect
-        run: |
-          if [ -f frontend/package.json ]; then echo "exists=true" >> "$GITHUB_OUTPUT"; else echo "exists=false" >> "$GITHUB_OUTPUT"; fi
       - uses: actions/setup-node@v4
-        if: steps.detect.outputs.exists == 'true'
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install
-        if: steps.detect.outputs.exists == 'true'
         working-directory: frontend
         run: npm ci
       - name: Lint
-        if: steps.detect.outputs.exists == 'true'
         working-directory: frontend
-        run: npm run lint --if-present
+        run: npm run lint
       - name: Typecheck
-        if: steps.detect.outputs.exists == 'true'
         working-directory: frontend
-        run: npm run typecheck --if-present
+        run: npm run typecheck
       - name: Test
-        if: steps.detect.outputs.exists == 'true'
         working-directory: frontend
-        run: npm test --if-present -- --run
+        run: npm test -- --run
       - name: Build
-        if: steps.detect.outputs.exists == 'true'
         working-directory: frontend
         run: npm run build
-      - name: Not bootstrapped yet
-        if: steps.detect.outputs.exists != 'true'
-        run: echo "Frontend will be created by implementation tasks."
+      - name: Dependency audit
+        working-directory: frontend
+        run: npm audit --audit-level=high

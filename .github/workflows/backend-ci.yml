@@ -2,7 +2,8 @@ name: Backend CI
 on:
   pull_request:
   push:
-    branches: [main]
+permissions:
+  contents: read
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -24,26 +25,29 @@ jobs:
       ACCESS_TOKEN_EXPIRE_MINUTES: 60
     steps:
       - uses: actions/checkout@v4
-      - id: detect
-        run: |
-          if [ -f backend/pyproject.toml ] || [ -f backend/requirements.txt ]; then echo "exists=true" >> "$GITHUB_OUTPUT"; else echo "exists=false" >> "$GITHUB_OUTPUT"; fi
       - uses: actions/setup-python@v5
-        if: steps.detect.outputs.exists == 'true'
         with:
           python-version: '3.12'
       - name: Install
-        if: steps.detect.outputs.exists == 'true'
+        working-directory: backend
         run: |
           python -m pip install --upgrade pip
-          if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; else pip install -e ./backend; fi
-      - name: Migrations
-        if: steps.detect.outputs.exists == 'true'
+          python -m pip install -e ".[dev]"
+      - name: Format check
         working-directory: backend
-        run: if [ -f alembic.ini ]; then alembic upgrade head; fi
-      - name: Tests
-        if: steps.detect.outputs.exists == 'true'
+        run: ruff format --check .
+      - name: Lint
+        working-directory: backend
+        run: ruff check .
+      - name: Type check
+        working-directory: backend
+        run: mypy app tests
+      - name: Test
         working-directory: backend
         run: pytest
-      - name: Not bootstrapped yet
-        if: steps.detect.outputs.exists != 'true'
-        run: echo "Backend will be created by implementation tasks."
+      - name: Migration upgrade
+        working-directory: backend
+        run: alembic upgrade head
+      - name: Dependency audit
+        working-directory: backend
+        run: pip-audit
