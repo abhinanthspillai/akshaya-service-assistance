@@ -59,7 +59,7 @@ No autonomous milestone task has been executed yet.
 
 Task: 004
 Status: COMPLETE
-Commit: <pending>
+Commit: 13283ec748e80af649a1f3b2c48978227453829a
 Validation: mypy/ruff/pytest passed. Schema and migrations created manually and validated.
 Environment limitation: test_db_connectivity failed on expected local credential rejection.
 Decision required: none
