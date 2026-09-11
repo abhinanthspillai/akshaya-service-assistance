@@ -1,12 +1,10 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+﻿import { render, screen } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
+import App from './App';
 
-import App from "./App";
-
-describe("App", () => {
-  it("renders the application shell", () => {
+describe('App', () => {
+  it('renders the application shell', () => {
     render(<App />);
-
-    expect(screen.getByRole("heading", { name: "Akshaya Service Assistance" })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
   });
 });
