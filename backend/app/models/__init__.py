@@ -1,5 +1,6 @@
 from app.models.centre import AkshayaCentre
 from app.models.profile import CentreAdministrator, CitizenProfile, EmployeeProfile
+from app.models.request import ServiceRequest
 from app.models.service import (
     CentreSupportedService,
     Service,
@@ -20,4 +21,5 @@ __all__ = [
     "ServiceDocumentRequirement",
     "ServiceInteractionRequirement",
     "ServiceRequirementAllowedFileType",
+    "ServiceRequest",
 ]
