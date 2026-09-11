@@ -1,0 +1,20 @@
+name: Security Checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  repository-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reject committed .env
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$'; then echo "Tracked .env found"; exit 1; fi
+      - name: Check private key headers
+        run: |
+          if git grep -n "BEGIN .*PRIVATE KEY" -- . ':!*.md'; then echo "Possible private key committed"; exit 1; fi

@@ -1,0 +1,35 @@
+{
+  "project": "Akshaya MCA Service-Assistance Platform",
+  "status": "READY",
+  "batch1_tables": [
+    "users",
+    "citizen_profiles",
+    "akshaya_centres",
+    "employee_profiles",
+    "centre_administrators",
+    "services",
+    "service_document_requirements",
+    "service_requirement_allowed_file_types",
+    "service_interaction_requirements",
+    "centre_supported_services",
+    "service_requests"
+  ],
+  "request_states": [
+    "DRAFT",
+    "SUBMITTED",
+    "WAITING_FOR_CENTRE",
+    "ACCEPTED",
+    "UNDER_REVIEW",
+    "CORRECTION_REQUIRED",
+    "INTERACTION_REQUIRED",
+    "INTERACTION_SCHEDULED",
+    "READY_FOR_PROCESSING",
+    "PROCESSING",
+    "PAYMENT_PENDING",
+    "COMPLETED",
+    "CLOSED",
+    "CANCELLED",
+    "UNABLE_TO_PROCEED"
+  ],
+  "task_count": 20
+}

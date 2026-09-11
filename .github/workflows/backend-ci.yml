@@ -1,0 +1,49 @@
+name: Backend CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: akshaya
+          POSTGRES_PASSWORD: akshaya
+          POSTGRES_DB: akshaya_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U akshaya -d akshaya_test"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://akshaya:akshaya@localhost:5432/akshaya_test
+      JWT_SECRET_KEY: ci-only-not-production
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+    steps:
+      - uses: actions/checkout@v4
+      - id: detect
+        run: |
+          if [ -f backend/pyproject.toml ] || [ -f backend/requirements.txt ]; then echo "exists=true" >> "$GITHUB_OUTPUT"; else echo "exists=false" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/setup-python@v5
+        if: steps.detect.outputs.exists == 'true'
+        with:
+          python-version: '3.12'
+      - name: Install
+        if: steps.detect.outputs.exists == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; else pip install -e ./backend; fi
+      - name: Migrations
+        if: steps.detect.outputs.exists == 'true'
+        working-directory: backend
+        run: if [ -f alembic.ini ]; then alembic upgrade head; fi
+      - name: Tests
+        if: steps.detect.outputs.exists == 'true'
+        working-directory: backend
+        run: pytest
+      - name: Not bootstrapped yet
+        if: steps.detect.outputs.exists != 'true'
+        run: echo "Backend will be created by implementation tasks."

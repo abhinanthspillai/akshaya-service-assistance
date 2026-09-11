@@ -1,0 +1,71 @@
+[F] .env.example
+[D] .github
+  [F] CODEOWNERS
+  [D] ISSUE_TEMPLATE
+    [F] bug.yml
+    [F] feature.yml
+  [F] pull_request_template.md
+  [D] workflows
+    [F] backend-ci.yml
+    [F] frontend-ci.yml
+    [F] security.yml
+[F] .gitignore
+[F] AGENTS.md
+[F] ANTIGRAVITY_OPERATING_PROMPT.md
+[F] CLAUDE_OPERATING_PROMPT.md
+[D] CLAUDE_PROJECT_KNOWLEDGE
+  [F] DOMAIN_RULES.md
+  [F] IMPLEMENTATION_RULES.md
+  [F] PROJECT_CONTEXT.md
+[F] CODEX_OPERATING_PROMPT.md
+[F] GITHUB_SETUP.md
+[F] README.md
+[D] backend
+  [F] README.md
+[D] docs
+  [F] 50_60_PERCENT_MILESTONE.md
+  [F] AI_SYSTEM.md
+  [F] API_SPEC.md
+  [F] ARCHITECTURE.md
+  [F] CHANGE_POLICY.md
+  [F] DATABASE.md
+  [F] DECISIONS.md
+  [F] DEPLOYMENT.md
+  [F] GITHUB_WORKFLOW.md
+  [F] IMPLEMENTATION_PLAN.md
+  [F] IMPLEMENTATION_READINESS.md
+  [F] PROJECT_SPEC.md
+  [F] SECURITY.md
+  [F] TECH_STACK.md
+  [F] TEST_STRATEGY.md
+  [F] UI_SPEC.md
+  [D] ui
+    [F] DESIGN_SOURCE.md
+    [D] references
+      [F] dashboard_reference.png
+      [F] login_reference.png
+[D] frontend
+  [F] README.md
+[F] readiness_manifest.json
+[D] tasks
+  [F] 001_repository_ci_foundation.md
+  [F] 002_backend_bootstrap.md
+  [F] 003_database_alembic.md
+  [F] 004_batch1_identity_schema.md
+  [F] 005_authentication.md
+  [F] 006_role_scope_authorization.md
+  [F] 007_centres_staff_admin.md
+  [F] 008_service_catalogue_schema.md
+  [F] 009_service_catalogue_api_ui.md
+  [F] 010_centre_support_config.md
+  [F] 011_service_request_schema.md
+  [F] 012_request_creation_api.md
+  [F] 013_request_submission.md
+  [F] 014_request_frontend.md
+  [F] 015_assignment_schema_service.md
+  [F] 016_employee_queue_acceptance.md
+  [F] 017_employee_queue_ui.md
+  [F] 018_history_timeline.md
+  [F] 019_e2e_security_regression.md
+  [F] 020_milestone_review.md
+  [F] UI-001_ANTIGRAVITY_MASTER_UI_IMPLEMENTATION.md

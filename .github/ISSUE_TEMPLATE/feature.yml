@@ -1,0 +1,28 @@
+name: Implementation Task
+description: Approved implementation task
+title: "[TASK] "
+labels: ["implementation"]
+body:
+  - type: input
+    id: task_file
+    attributes:
+      label: Task file
+      placeholder: tasks/005_authentication.md
+    validations:
+      required: true
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+    validations:
+      required: true
