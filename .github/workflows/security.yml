@@ -12,9 +12,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Reject committed .env
         run: |
           if git ls-files | grep -E '(^|/)\.env$'; then echo "Tracked .env found"; exit 1; fi
       - name: Check private key headers
         run: |
-          if git grep -n "BEGIN .*PRIVATE KEY" -- . ':!*.md'; then echo "Possible private key committed"; exit 1; fi
+          if git grep -n "BEGIN .*PRIVATE KEY" -- . ':!*.md' ':!.github/workflows/security.yml'; then echo "Possible private key committed"; exit 1; fi

@@ -1,3 +1,13 @@
 # Frontend
 
-Intentionally unbootstrapped. Implement according to `docs/UI_SPEC.md` and the Antigravity UI master task.
+React + TypeScript application for the Akshaya MCA project.
+
+## Local commands
+
+```bash
+npm ci
+npm run lint
+npm run typecheck
+npm test -- --run
+npm run build
+```
