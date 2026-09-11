@@ -4,6 +4,8 @@ import { Login } from './pages/auth/Login';
 import { AppLayout } from './components/layout/AppLayout';
 import { ServiceCatalogue } from './pages/citizen/ServiceCatalogue';
 import { ServiceDetail } from './pages/citizen/ServiceDetail';
+import { MyRequests } from './pages/citizen/MyRequests';
+import { RequestDetail } from './pages/citizen/RequestDetail';
 import { Loader2 } from 'lucide-react';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -30,23 +32,18 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          
+
           <Route path="/" element={<ProtectedRoute><Navigate to="/services" replace /></ProtectedRoute>} />
-          
-          <Route 
-            path="/services" 
-            element={<ProtectedRoute><ServiceCatalogue /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/services/:id" 
-            element={<ProtectedRoute><ServiceDetail /></ProtectedRoute>} 
-          />
-          
-          {/* Placeholders for other routes */}
-          <Route path="/requests" element={<ProtectedRoute><div>My Requests (Pending)</div></ProtectedRoute>} />
-          <Route path="/notifications" element={<ProtectedRoute><div>Notifications (Pending)</div></ProtectedRoute>} />
-          <Route path="/support" element={<ProtectedRoute><div>Support (Pending)</div></ProtectedRoute>} />
-          <Route path="/profile" element={<ProtectedRoute><div>Profile (Pending)</div></ProtectedRoute>} />
+
+          <Route path="/services" element={<ProtectedRoute><ServiceCatalogue /></ProtectedRoute>} />
+          <Route path="/services/:id" element={<ProtectedRoute><ServiceDetail /></ProtectedRoute>} />
+
+          <Route path="/requests" element={<ProtectedRoute><MyRequests /></ProtectedRoute>} />
+          <Route path="/requests/:id" element={<ProtectedRoute><RequestDetail /></ProtectedRoute>} />
+
+          <Route path="/notifications" element={<ProtectedRoute><div className="p-4 text-slate-600">Notifications (pending)</div></ProtectedRoute>} />
+          <Route path="/support" element={<ProtectedRoute><div className="p-4 text-slate-600">Support (pending)</div></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><div className="p-4 text-slate-600">Profile (pending)</div></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
