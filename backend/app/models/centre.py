@@ -1,12 +1,16 @@
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.service import CentreSupportedService
 
 
 class AkshayaCentre(Base):
@@ -25,6 +29,10 @@ class AkshayaCentre(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.now(), nullable=False
     )
+    supported_services: Mapped[list["CentreSupportedService"]] = relationship(
+        "CentreSupportedService", back_populates="centre"
+    )
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False
     )

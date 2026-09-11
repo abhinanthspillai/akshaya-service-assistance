@@ -1,11 +1,23 @@
-from .centre import AkshayaCentre
-from .profile import CentreAdministrator, CitizenProfile, EmployeeProfile
-from .user import User
+from app.models.centre import AkshayaCentre
+from app.models.profile import CentreAdministrator, CitizenProfile, EmployeeProfile
+from app.models.service import (
+    CentreSupportedService,
+    Service,
+    ServiceDocumentRequirement,
+    ServiceInteractionRequirement,
+    ServiceRequirementAllowedFileType,
+)
+from app.models.user import User
 
 __all__ = [
-    "User",
+    "AkshayaCentre",
+    "CentreAdministrator",
     "CitizenProfile",
     "EmployeeProfile",
-    "CentreAdministrator",
-    "AkshayaCentre",
+    "User",
+    "CentreSupportedService",
+    "Service",
+    "ServiceDocumentRequirement",
+    "ServiceInteractionRequirement",
+    "ServiceRequirementAllowedFileType",
 ]
