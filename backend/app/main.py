@@ -1,12 +1,18 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from app.core.config import get_settings
+from app.core.logging import configure_logging
+
 
 class HealthResponse(BaseModel):
     status: str
 
 
 def create_app() -> FastAPI:
+    settings = get_settings()
+    configure_logging(settings)
+
     app = FastAPI(title="Akshaya Service Assistance API")
 
     @app.get("/health", response_model=HealthResponse)
