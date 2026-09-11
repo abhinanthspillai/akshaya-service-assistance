@@ -6,6 +6,7 @@ from sqlalchemy.engine import Connection, create_engine
 from alembic import context
 from app.core.config import get_settings
 from app.core.database import metadata
+import app.models  # noqa
 
 config = context.config
 
