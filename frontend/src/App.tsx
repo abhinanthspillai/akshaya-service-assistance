@@ -6,6 +6,8 @@ import { ServiceCatalogue } from './pages/citizen/ServiceCatalogue';
 import { ServiceDetail } from './pages/citizen/ServiceDetail';
 import { MyRequests } from './pages/citizen/MyRequests';
 import { RequestDetail } from './pages/citizen/RequestDetail';
+import { Queue } from './pages/employee/Queue';
+import { RequestWorkspace } from './pages/employee/RequestWorkspace';
 import { Loader2 } from 'lucide-react';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -40,6 +42,8 @@ export default function App() {
 
           <Route path="/requests" element={<ProtectedRoute><MyRequests /></ProtectedRoute>} />
           <Route path="/requests/:id" element={<ProtectedRoute><RequestDetail /></ProtectedRoute>} />
+          <Route path="/queue" element={<ProtectedRoute><Queue /></ProtectedRoute>} />
+          <Route path="/employee/requests/:id" element={<ProtectedRoute><RequestWorkspace /></ProtectedRoute>} />
 
           <Route path="/notifications" element={<ProtectedRoute><div className="p-4 text-slate-600">Notifications (pending)</div></ProtectedRoute>} />
           <Route path="/support" element={<ProtectedRoute><div className="p-4 text-slate-600">Support (pending)</div></ProtectedRoute>} />

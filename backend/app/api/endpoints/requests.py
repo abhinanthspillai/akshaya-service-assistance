@@ -14,6 +14,7 @@ from app.api.deps import (
 from app.models.centre import AkshayaCentre
 from app.models.request import ServiceRequest
 from app.models.service import CentreSupportedService, Service
+from app.schemas.history import RequestHistoryResponse
 from app.schemas.request import SelectCentreRequest, ServiceRequestCreate, ServiceRequestResponse
 
 router = APIRouter()
@@ -242,6 +243,28 @@ def accept_request(
     session.commit()
     session.refresh(service_request)
     return service_request
+
+
+@router.get("/{request_id}/history", response_model=list[RequestHistoryResponse])
+def get_request_history(
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    _verify_request_access(current_user, service_request, session)
+
+    from app.models.assignment import RequestHistory
+
+    history = session.scalars(
+        select(RequestHistory)
+        .where(RequestHistory.request_id == request_id)
+        .order_by(RequestHistory.created_at.asc())
+    ).all()
+    return history
 
 
 def _verify_request_access(user: Any, service_request: ServiceRequest, session: Any) -> None:
