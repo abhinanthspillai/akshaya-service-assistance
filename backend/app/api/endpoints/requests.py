@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app.api.deps import (
     CurrentUser,
     CurrentUserCitizen,
+    CurrentUserEmployee,
     SessionDep,
 )
 from app.models.centre import AkshayaCentre
@@ -159,6 +160,84 @@ def submit_request(
 
     # Atomic transition to WAITING_FOR_CENTRE after routing succeeds
     service_request.status = "WAITING_FOR_CENTRE"
+    session.add(service_request)
+    session.commit()
+    session.refresh(service_request)
+    return service_request
+
+
+@router.post("/{request_id}/accept", response_model=ServiceRequestResponse)
+def accept_request(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+) -> Any:
+    from datetime import datetime
+
+    from sqlalchemy import func
+
+    from app.models.assignment import RequestAssignment, RequestHistory
+    from app.models.profile import EmployeeProfile
+
+    employee = session.get(EmployeeProfile, current_user.id)
+    if not employee or not employee.is_available:
+        raise HTTPException(status_code=403, detail="Employee profile unavailable")
+
+    service_request = session.scalar(
+        select(ServiceRequest)
+        .where(
+            ServiceRequest.id == request_id,
+            ServiceRequest.selected_centre_id == employee.centre_id,
+        )
+        .with_for_update()
+    )
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found in your centre")
+    if service_request.status != "WAITING_FOR_CENTRE":
+        raise HTTPException(status_code=409, detail="Request must be in WAITING_FOR_CENTRE state")
+
+    active_count = (
+        session.scalar(
+            select(func.count())
+            .select_from(RequestAssignment)
+            .where(
+                RequestAssignment.employee_id == current_user.id,
+                RequestAssignment.is_active.is_(True),
+            )
+        )
+        or 0
+    )
+    if active_count >= employee.max_active_requests:
+        raise HTTPException(status_code=409, detail="Employee at maximum capacity")
+
+    now = datetime.now(tz=UTC)
+    existing_assignments = session.scalars(
+        select(RequestAssignment).where(
+            RequestAssignment.request_id == request_id,
+            RequestAssignment.is_active.is_(True),
+        )
+    ).all()
+    for existing in existing_assignments:
+        existing.is_active = False
+        existing.revoked_at = now
+        session.add(existing)
+
+    assignment = RequestAssignment(
+        request_id=request_id, employee_id=current_user.id, is_active=True, assigned_at=now
+    )
+    session.add(assignment)
+
+    history = RequestHistory(
+        request_id=request_id,
+        actor_id=current_user.id,
+        action="accept",
+        from_status=service_request.status,
+        to_status="ACCEPTED",
+    )
+    session.add(history)
+
+    service_request.status = "ACCEPTED"
     session.add(service_request)
     session.commit()
     session.refresh(service_request)

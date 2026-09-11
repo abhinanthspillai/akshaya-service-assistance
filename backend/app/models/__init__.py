@@ -1,3 +1,4 @@
+from app.models.assignment import RequestAssignment, RequestHistory
 from app.models.centre import AkshayaCentre
 from app.models.profile import CentreAdministrator, CitizenProfile, EmployeeProfile
 from app.models.request import ServiceRequest
@@ -22,4 +23,6 @@ __all__ = [
     "ServiceInteractionRequirement",
     "ServiceRequirementAllowedFileType",
     "ServiceRequest",
+    "RequestAssignment",
+    "RequestHistory",
 ]
