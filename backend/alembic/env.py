@@ -3,10 +3,10 @@ from logging.config import fileConfig
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection, create_engine
 
+import app.models  # noqa
 from alembic import context
 from app.core.config import get_settings
 from app.core.database import metadata
-import app.models  # noqa
 
 config = context.config
 
