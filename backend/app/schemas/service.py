@@ -86,3 +86,26 @@ class ServiceDetailResponse(ServiceResponse):
     interaction_requirements: list[ServiceInteractionRequirementResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CentreSupportedServiceBase(BaseModel):
+    is_active: bool = True
+    centre_fee_override: Decimal | None = Field(None, ge=0)
+
+
+class CentreSupportedServiceCreate(CentreSupportedServiceBase):
+    service_id: UUID
+
+
+class CentreSupportedServiceUpdate(BaseModel):
+    is_active: bool | None = None
+    centre_fee_override: Decimal | None = Field(None, ge=0)
+
+
+class CentreSupportedServiceResponse(CentreSupportedServiceBase):
+    centre_id: UUID
+    service_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

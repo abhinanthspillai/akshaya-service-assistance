@@ -1,25 +1,20 @@
-import pytest
+from uuid import uuid4
+
 from app.models.service import (
-    CentreSupportedService,
     Service,
     ServiceDocumentRequirement,
     ServiceInteractionRequirement,
-    ServiceRequirementAllowedFileType,
 )
-from uuid import uuid4
+
 
 def test_service_model() -> None:
     service = Service(
-        name="Test Service",
-        code="SRV001",
-        service_type="A",
-        base_fee=100.50,
-        retention_days=30
+        name="Test Service", code="SRV001", service_type="A", base_fee=100.50, retention_days=30
     )
     assert service.name == "Test Service"
     assert service.code == "SRV001"
     assert service.service_type == "A"
-    
+
 
 def test_service_document_requirement_model() -> None:
     req = ServiceDocumentRequirement(
@@ -30,6 +25,7 @@ def test_service_document_requirement_model() -> None:
     )
     assert req.name == "ID Proof"
     assert req.is_required is True
+
 
 def test_service_interaction_requirement_model() -> None:
     req = ServiceInteractionRequirement(
