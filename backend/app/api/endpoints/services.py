@@ -6,14 +6,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, CurrentUserSysAdmin, SessionDep
+from app.models.centre import AkshayaCentre
 from app.models.service import (
+    CentreSupportedService,
     Service,
     ServiceDocumentRequirement,
     ServiceInteractionRequirement,
     ServiceRequirementAllowedFileType,
-    CentreSupportedService,
 )
-from app.models.centre import AkshayaCentre
 from app.schemas.centre import AkshayaCentreResponse
 from app.schemas.service import (
     ServiceCreate,
