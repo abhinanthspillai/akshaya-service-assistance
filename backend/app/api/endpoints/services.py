@@ -177,7 +177,7 @@ def get_service_centres(
     current_user: CurrentUser,
 ) -> Any:
     service = session.get(Service, service_id)
-    if not service:
+    if not service or not service.is_active:
         raise HTTPException(status_code=404, detail="Service not found")
 
     stmt = (
@@ -185,6 +185,7 @@ def get_service_centres(
         .join(CentreSupportedService, CentreSupportedService.centre_id == AkshayaCentre.id)
         .where(CentreSupportedService.service_id == service_id)
         .where(AkshayaCentre.is_active)
+        .where(CentreSupportedService.is_active)
     )
     centres = session.scalars(stmt).all()
     return centres

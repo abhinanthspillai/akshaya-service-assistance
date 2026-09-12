@@ -2,7 +2,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core.security import get_password_hash
-from app.models.service import Service
+from app.models.centre import AkshayaCentre
+from app.models.service import CentreSupportedService, Service
 from app.models.user import User
 
 
@@ -43,3 +44,59 @@ def test_get_services(client: TestClient, db_session: Session) -> None:
     r = client.get("/api/v1/services/", headers=headers)
     assert r.status_code == 200
     assert len(r.json()) >= 1
+
+
+def test_get_service_centres(client: TestClient, db_session: Session) -> None:
+    headers = get_sysadmin_headers(client, db_session)
+
+    service = Service(
+        name="Test Centre Service", code="SRV_CENTRE", service_type="C", is_active=True
+    )
+    db_session.add(service)
+    db_session.commit()
+
+    c1 = AkshayaCentre(
+        code="AC001",
+        name="C1",
+        district="D1",
+        locality="LB1",
+        is_active=True,
+        address_text="Address 1",
+    )
+    c2 = AkshayaCentre(
+        code="AC002",
+        name="C2",
+        district="D1",
+        locality="LB1",
+        is_active=True,
+        address_text="Address 2",
+    )
+    c3 = AkshayaCentre(
+        code="AC003",
+        name="C3",
+        district="D1",
+        locality="LB1",
+        is_active=False,
+        address_text="Address 3",
+    )
+
+    db_session.add_all([c1, c2, c3])
+    db_session.commit()
+
+    s1 = CentreSupportedService(centre_id=c1.id, service_id=service.id, is_active=True)
+    s2 = CentreSupportedService(centre_id=c2.id, service_id=service.id, is_active=False)
+    s3 = CentreSupportedService(centre_id=c3.id, service_id=service.id, is_active=True)
+
+    db_session.add_all([s1, s2, s3])
+    db_session.commit()
+
+    r = client.get(f"/api/v1/services/{service.id}/centres", headers=headers)
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data) == 1
+    assert data[0]["code"] == "AC001"
+
+    service.is_active = False
+    db_session.commit()
+    r = client.get(f"/api/v1/services/{service.id}/centres", headers=headers)
+    assert r.status_code == 404
