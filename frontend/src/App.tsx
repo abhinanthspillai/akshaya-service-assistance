@@ -8,6 +8,11 @@ import { ServiceCatalogue } from './pages/citizen/ServiceCatalogue';
 import { ServiceDetail } from './pages/citizen/ServiceDetail';
 import { MyRequests } from './pages/citizen/MyRequests';
 import { RequestDetail } from './pages/citizen/RequestDetail';
+import { Dashboard } from './pages/citizen/Dashboard';
+import { NewRequest } from './pages/citizen/NewRequest';
+import { Notifications } from './pages/citizen/Notifications';
+import { Support } from './pages/citizen/Support';
+import { Profile } from './pages/citizen/Profile';
 import { Queue } from './pages/employee/Queue';
 import { RequestWorkspace } from './pages/employee/RequestWorkspace';
 import { Loader2 } from 'lucide-react';
@@ -39,10 +44,12 @@ export default function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
 
-          <Route path="/" element={<ProtectedRoute><Navigate to="/services" replace /></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute><Navigate to="/dashboard" replace /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
 
           <Route path="/services" element={<ProtectedRoute><ServiceCatalogue /></ProtectedRoute>} />
           <Route path="/services/:id" element={<ProtectedRoute><ServiceDetail /></ProtectedRoute>} />
+          <Route path="/services/:id/request" element={<ProtectedRoute><NewRequest /></ProtectedRoute>} />
 
           <Route path="/requests" element={<ProtectedRoute><MyRequests /></ProtectedRoute>} />
           <Route path="/requests/:id" element={<ProtectedRoute><RequestDetail /></ProtectedRoute>} />
@@ -53,9 +60,9 @@ export default function App() {
           <Route path="/admin/dashboard" element={<ProtectedRoute><div className="p-4 text-slate-600">Centre Admin Dashboard (pending)</div></ProtectedRoute>} />
           <Route path="/sysadmin/dashboard" element={<ProtectedRoute><div className="p-4 text-slate-600">System Admin Dashboard (pending)</div></ProtectedRoute>} />
 
-          <Route path="/notifications" element={<ProtectedRoute><div className="p-4 text-slate-600">Notifications (pending)</div></ProtectedRoute>} />
-          <Route path="/support" element={<ProtectedRoute><div className="p-4 text-slate-600">Support (pending)</div></ProtectedRoute>} />
-          <Route path="/profile" element={<ProtectedRoute><div className="p-4 text-slate-600">Profile (pending)</div></ProtectedRoute>} />
+          <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+          <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

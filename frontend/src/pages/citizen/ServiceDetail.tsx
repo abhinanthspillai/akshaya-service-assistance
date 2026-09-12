@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
-import { Loader2, ArrowLeft, FileCheck, Users } from 'lucide-react';
+import { Loader2, ArrowLeft, FileCheck, Users, Info } from 'lucide-react';
 
 interface ServiceDetail {
   id: string;
@@ -33,7 +33,7 @@ export function ServiceDetail() {
   useEffect(() => {
     const fetchService = async () => {
       try {
-        const res = await api.get(/services/ + (id || ''));
+        const res = await api.get(`/services/${id || ''}`);
         setService(res.data);
       } catch {
         setError('Failed to load service details.');
@@ -47,7 +47,7 @@ export function ServiceDetail() {
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <Loader2 className="animate-spin text-purple-600" size={32} />
+        <Loader2 className="animate-spin text-indigo-600" size={32} />
       </div>
     );
   }
@@ -70,24 +70,35 @@ export function ServiceDetail() {
         Back to Services
       </button>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="p-8 border-b border-slate-100 bg-gradient-to-br from-purple-50/50 to-white">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-              Type {service.service_type}
-            </span>
-            <span className="text-sm font-medium text-slate-500 uppercase tracking-wider">{service.code}</span>
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="p-8 border-b border-slate-100 bg-gradient-to-br from-indigo-50/50 to-white relative">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-semibold bg-indigo-100 text-indigo-800">
+                Type {service.service_type}
+              </span>
+              <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider bg-white px-2 py-1 rounded-md border border-slate-100">{service.code}</span>
+            </div>
+            
+            <div className="flex items-start sm:items-center gap-2 text-xs text-indigo-700 bg-indigo-50/80 p-3 rounded-lg border border-indigo-100 max-w-sm">
+              <Info size={16} className="shrink-0 mt-0.5 sm:mt-0" />
+              <span>
+                {service.service_type === 'A' && "Type A: Predominantly digital service with minimal centre interaction required."}
+                {service.service_type === 'B' && "Type B: Some centre interaction may be required for processing or document verification."}
+                {service.service_type === 'C' && "Type C: Substantial physical participation or in-person verification required at the centre."}
+              </span>
+            </div>
           </div>
           
-          <h1 className="text-3xl font-bold text-indigo-950 mb-4">{service.name}</h1>
+          <h1 className="text-3xl font-bold text-slate-900 mb-4">{service.name}</h1>
           <p className="text-slate-600 text-lg leading-relaxed max-w-3xl">
             {service.description || 'No detailed description available for this service.'}
           </p>
           
           <div className="mt-8">
-            <div className="text-sm text-slate-500 mb-1">Base Fee</div>
+            <div className="text-sm font-semibold text-slate-500 mb-1 uppercase tracking-wider">Base Fee</div>
             <div className="text-2xl font-bold text-slate-900">
-              {service.base_fee ? '?' + service.base_fee : 'Free'}
+              {service.base_fee ? '₹' + service.base_fee : 'Free'}
             </div>
           </div>
         </div>
@@ -149,8 +160,11 @@ export function ServiceDetail() {
           </div>
         </div>
         
-        <div className="p-8 border-t border-slate-100 bg-slate-50 flex justify-end">
-          <button className="bg-purple-600 hover:bg-purple-700 text-white font-medium px-6 py-2.5 rounded-lg transition-colors shadow-sm shadow-purple-200">
+        <div className="p-8 border-t border-slate-200 bg-slate-50 flex justify-end">
+          <button 
+            onClick={() => navigate(`/services/${service.id}/request`)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-8 py-3 rounded-xl transition-all shadow-sm shadow-indigo-200 hover:shadow-md transform hover:-translate-y-0.5"
+          >
             Start Request
           </button>
         </div>
