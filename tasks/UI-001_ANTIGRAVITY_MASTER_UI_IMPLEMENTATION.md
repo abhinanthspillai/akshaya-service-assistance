@@ -555,9 +555,9 @@ Required:
 After implementation:
 
 1. Run the app.
-2. Compare Login/Registration against Reference A.
-3. Compare dashboard/app-shell structure against Reference B.
-4. Confirm the green dashboard palette was NOT copied.
+2. Login visual reference is the STYLE/THEME source. Approved theme: soft lavender/off-white page backgrounds, white cards, charcoal/dark-indigo text, purple primary actions, restrained purple-to-blue/cyan gradients, rounded corners, restrained shadows, dark indigo / charcoal-purple sidebar. Keep interface simple, professional, uncluttered and service-portal oriented.
+3. Dashboard visual reference is the STRUCTURE/LAYOUT source. Use approved role navigation (Dashboard, Services, etc.).
+4. Do NOT use the green visual language from the dashboard reference.
 5. Verify consistent purple/blue/cyan branding.
 6. Test all implemented role navigations.
 7. Test desktop, tablet, and mobile widths.

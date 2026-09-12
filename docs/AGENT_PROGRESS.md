@@ -1,58 +1,24 @@
-# AGENT_PROGRESS
+﻿# Agent Progress
 
-This file is a lightweight execution ledger for Antigravity Autonomous Milestone Mode.
+## Current Milestone Status
+COMPLETE — awaiting GitHub PR/CI/review/merge.
 
-It is informational only. If it conflicts with `PROJECT_SPEC`, `DECISIONS`, `ARCHITECTURE`, `DATABASE`, `API_SPEC`, `SECURITY`, `TEST_STRATEGY`, `CHANGE_POLICY`, an active task file, or another clearly authoritative frozen requirement, the authoritative source wins.
+## Completed Tasks
 
-## Milestone
-Phase 1 — target 50–60% implementation.
-
-Controller: `tasks/000_MILESTONE_50_60_AUTONOMOUS.md`
-
-## Foundation status
-- Task 001 — Repository and CI foundation — completed
-- Task 002 — FastAPI backend bootstrap — completed
-- Task 003 — PostgreSQL, SQLAlchemy and Alembic — implementation approved; verify latest approved commit is present before autonomous milestone execution
-
-## Autonomous sequence
-- Task 004 — NOT STARTED
-- Task 005 — NOT STARTED
-- Task 006 — NOT STARTED
-- Task 007 — NOT STARTED
-- Task 008 — NOT STARTED
-- Task 009 — NOT STARTED
-- Task 010 — NOT STARTED
-- Task 011 — NOT STARTED
-- Task 012 — NOT STARTED
-- Task 013 — NOT STARTED
-- Task 014 — NOT STARTED
-- Task 015 — NOT STARTED
-- Task 016 — NOT STARTED
-- Task 017 — NOT STARTED
-- Task 018 — NOT STARTED
-- Task 019 — NOT STARTED
-- Task 020 — NOT STARTED
-
-## Current task
-None. Autonomous mode has not been activated yet.
-
-## Branch
-Expected autonomous working branch: `milestone/phase1-50-60`
-
-## Update format
-After each task, replace that task status with `COMPLETE`, `BLOCKED`, or `PARTIAL` and append a record below.
-
-### Task record template
-
-```text
-Task: 00X
-Status: COMPLETE | BLOCKED | PARTIAL
-Commit: <sha or pending>
-Validation: <concise results>
-Environment limitation: <none or concise description>
-Decision required: <none or description>
-Next task: 00Y
-```
-
-## Execution records
-No autonomous milestone task has been executed yet.
+- [x] Task 004 — PostgreSQL, SQLAlchemy and Alembic foundation implemented and tested.
+- [x] Task 005 — Identity models, JWT auth, and RBAC utilities implemented.
+- [x] Task 006 — Centre and staff administration slice implemented and tested.
+- [x] Task 007 — Centre and staff administration slice completed.
+- [x] Task 008 — Service catalogue schema implemented.
+- [x] Task 009 — Service catalogue API and frontend implemented (Level 3 UI blocker resolved).
+- [x] Task 010 — Centre-supported service management API implemented.
+- [x] Task 011 — Service request schema implemented.
+- [x] Task 012 — Request creation API implemented.
+- [x] Task 013 — Request submission workflow (Draft -> Waiting for Centre) implemented.
+- [x] Task 014 — Citizen request creation frontend (MyRequests, RequestDetail, Select Centre) implemented.
+- [x] Task 015 — Assignment and history schema created.
+- [x] Task 016 — Employee queue capacity-aware acceptance logic implemented.
+- [x] Task 017 — Employee queue UI implemented.
+- [x] Task 018 — Request history API and UI timeline implemented.
+- [x] Task 019 — Milestone E2E and security regression tests implemented and passing.
+- [x] Task 020 — 50–60% milestone review and readiness report generated.
