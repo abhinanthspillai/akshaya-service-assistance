@@ -47,8 +47,18 @@ export function Login() {
 
       login(access_token, userRes.data);
       navigate(handleRoleRouting(userRes.data.role));
-    } catch {
-      setError('Invalid email or password');
+    } catch (error) {
+      const e = error as { response?: { data?: { detail?: string } } };
+      if (!e.response) {
+        setError('Backend is unavailable. Please try again later.');
+        return;
+      }
+      const data = e.response.data;
+      if (data && data.detail && typeof data.detail === 'string') {
+        setError(data.detail);
+      } else {
+        setError('Invalid email or password');
+      }
     } finally {
       setIsLoading(false);
     }

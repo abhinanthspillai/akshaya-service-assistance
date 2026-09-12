@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 import app.models  # noqa
 from app.core.database import Base, get_db
-from app.main import app
+from app.main import app as fastapi_app
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///file:memdb1?mode=memory&cache=shared"
 
@@ -35,6 +35,6 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
         finally:
             pass
 
-    app.dependency_overrides[get_db] = override_get_db
-    yield TestClient(app)
-    app.dependency_overrides.clear()
+    fastapi_app.dependency_overrides[get_db] = override_get_db
+    yield TestClient(fastapi_app)
+    fastapi_app.dependency_overrides.clear()

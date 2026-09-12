@@ -38,9 +38,26 @@ export function Register() {
         full_name: fullName,
       });
       navigate('/login');
-    } catch (e) {
-      const err = e as { response?: { data?: { detail?: string } } };
-      setError(err.response?.data?.detail || 'Failed to create account');
+    } catch (error) {
+      const e = error as { response?: { data?: { detail?: string | { msg: string }[] } } };
+      if (!e.response) {
+        setError('Backend is unavailable. Please try again later.');
+        return;
+      }
+      const data = e.response.data;
+      if (data && data.detail) {
+        if (Array.isArray(data.detail)) {
+          // FastAPI 422 validation error
+          const msg = data.detail.map((err: { msg: string }) => err.msg).join(', ');
+          setError(`Validation error: ${msg}`);
+        } else if (typeof data.detail === 'string') {
+          setError(data.detail);
+        } else {
+          setError('An unexpected error occurred.');
+        }
+      } else {
+        setError('Failed to create account. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }

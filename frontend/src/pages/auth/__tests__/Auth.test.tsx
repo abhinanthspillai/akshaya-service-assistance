@@ -60,8 +60,8 @@ describe('Auth UI Tests', () => {
   });
 
   it('performs role-aware routing on login', async () => {
-    (api.post as any).mockResolvedValueOnce({ data: { access_token: 'fake-token' } });
-    (api.get as any).mockResolvedValueOnce({ data: { id: '1', email: 'emp@test.com', role: 'centre_employee' } });
+    (api.post as import('vitest').Mock).mockResolvedValueOnce({ data: { access_token: 'fake-token' } });
+    (api.get as import('vitest').Mock).mockResolvedValueOnce({ data: { id: '1', email: 'emp@test.com', role: 'centre_employee' } });
 
     render(
       <MemoryRouter initialEntries={['/login']}>
