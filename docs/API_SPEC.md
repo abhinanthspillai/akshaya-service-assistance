@@ -119,6 +119,12 @@ Preconditions: DRAFT, centre selected where required, all mandatory pre-submissi
 Atomic transition to SUBMITTED then WAITING_FOR_CENTRE when routing succeeds.
 409 on invalid state/precondition.
 
+### POST /requests/{request_id}/pre-validate
+Citizen owner while request is DRAFT or CORRECTION_REQUIRED.
+Runs deterministic Phase 1 document checks only: required document presence, configured MIME type, non-empty file, configured/default size limits and deterministic duplicate-content warning.
+Response: request_id, is_valid, itemized requirement statuses/messages and warnings.
+The endpoint must not claim government authenticity, OCR extraction or AI verification.
+
 ## Later business-action endpoint pattern
 Use actions, not arbitrary status PATCH:
 - POST /requests/{id}/accept

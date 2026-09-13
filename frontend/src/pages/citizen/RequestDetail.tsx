@@ -35,6 +35,17 @@ interface RequestDocument {
   uploaded_at: string;
 }
 
+interface PreValidationResult {
+  is_valid: boolean;
+  warnings: string[];
+  items: Array<{
+    requirement_id: string;
+    requirement_name: string;
+    status: string;
+    messages: string[];
+  }>;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: 'bg-slate-100 text-slate-700',
   SUBMITTED: 'bg-blue-50 text-blue-700',
@@ -50,6 +61,7 @@ export function RequestDetail() {
   const [request, setRequest] = useState<ServiceRequest | null>(null);
   const [requirements, setRequirements] = useState<ServiceRequirement[]>([]);
   const [documents, setDocuments] = useState<RequestDocument[]>([]);
+  const [preValidation, setPreValidation] = useState<PreValidationResult | null>(null);
   const [centres, setCentres] = useState<Array<{ id: string; name: string; district: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -68,6 +80,10 @@ export function RequestDetail() {
         ]);
         setRequirements(serviceRes.data.document_requirements || []);
         setDocuments(documentsRes.data || []);
+        if (res.data.status === 'DRAFT' || res.data.status === 'CORRECTION_REQUIRED') {
+          const validationRes = await api.post('/requests/' + res.data.id + '/pre-validate');
+          setPreValidation(validationRes.data);
+        }
         if (res.data.status === 'DRAFT' && res.data.service_id) {
           const centresRes = await api.get('/centres/?active=true');
           setCentres(centresRes.data);
@@ -91,6 +107,13 @@ export function RequestDetail() {
     }
   };
 
+  const refreshPreValidation = async () => {
+    if (!request || (request.status !== 'DRAFT' && request.status !== 'CORRECTION_REQUIRED')) return null;
+    const validationRes = await api.post('/requests/' + request.id + '/pre-validate');
+    setPreValidation(validationRes.data);
+    return validationRes.data as PreValidationResult;
+  };
+
   const handleDocumentUpload = async (requirementId: string, file: File | null) => {
     if (!request || !file) return;
     setUploadingRequirementId(requirementId);
@@ -103,6 +126,7 @@ export function RequestDetail() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setDocuments((current) => [...current, res.data]);
+      await refreshPreValidation();
     } catch {
       setError('Document upload failed. Check the file type and size for this requirement.');
     } finally {
@@ -114,6 +138,11 @@ export function RequestDetail() {
     if (!request) return;
     setIsSubmitting(true);
     try {
+      const validation = await refreshPreValidation();
+      if (validation && !validation.is_valid) {
+        setError('Required document checks must pass before submission.');
+        return;
+      }
       const res = await api.post('/requests/' + request.id + '/submit');
       setRequest(res.data);
     } catch {
@@ -243,6 +272,34 @@ export function RequestDetail() {
                 </div>
               )}
             </section>
+
+            {preValidation && (
+              <section className="mb-8 rounded-xl border border-slate-100 bg-white p-4">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <h2 className="text-lg font-semibold text-indigo-950">Document Checks</h2>
+                  <span className={'px-3 py-1 rounded-full text-sm font-medium ' + (preValidation.is_valid ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700')}>
+                    {preValidation.is_valid ? 'Ready' : 'Needs attention'}
+                  </span>
+                </div>
+                <div className="grid gap-2">
+                  {preValidation.items.map((item) => (
+                    <div key={item.requirement_id} className="rounded-lg bg-slate-50 p-3">
+                      <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                        <div className="font-medium text-slate-900">{item.requirement_name}</div>
+                        <span className={'text-xs font-semibold ' + (item.status === 'FAIL' ? 'text-red-700' : item.status === 'WARNING' ? 'text-yellow-700' : 'text-green-700')}>
+                          {item.status}
+                        </span>
+                      </div>
+                      <ul className="mt-2 space-y-1 text-sm text-slate-600">
+                        {item.messages.map((message) => (
+                          <li key={message}>{message}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             <h2 className="text-lg font-semibold text-indigo-950 mb-4 flex items-center gap-2">
               <MapPin size={20} className="text-purple-600" />

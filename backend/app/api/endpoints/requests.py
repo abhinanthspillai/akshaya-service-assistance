@@ -21,7 +21,13 @@ from app.models.request import ServiceRequest
 from app.models.service import CentreSupportedService, Service, ServiceDocumentRequirement
 from app.schemas.document import RequestDocumentResponse
 from app.schemas.history import RequestHistoryResponse
-from app.schemas.request import SelectCentreRequest, ServiceRequestCreate, ServiceRequestResponse
+from app.schemas.request import (
+    RequestPreValidationItem,
+    RequestPreValidationResponse,
+    SelectCentreRequest,
+    ServiceRequestCreate,
+    ServiceRequestResponse,
+)
 
 router = APIRouter()
 
@@ -164,6 +170,12 @@ def submit_request(
         raise HTTPException(status_code=409, detail="Request must be in DRAFT state")
     if not service_request.selected_centre_id:
         raise HTTPException(status_code=409, detail="Centre must be selected before submitting")
+    validation = _run_request_pre_validation(session, service_request)
+    if not validation.is_valid:
+        raise HTTPException(
+            status_code=409,
+            detail="Required document pre-validation failed",
+        )
 
     now = datetime.now(tz=UTC)
     service_request.status = "SUBMITTED"
@@ -177,6 +189,26 @@ def submit_request(
     session.commit()
     session.refresh(service_request)
     return service_request
+
+
+@router.post("/{request_id}/pre-validate", response_model=RequestPreValidationResponse)
+def pre_validate_request(
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserCitizen,
+) -> RequestPreValidationResponse:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if service_request.citizen_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if service_request.status not in {"DRAFT", "CORRECTION_REQUIRED"}:
+        raise HTTPException(
+            status_code=409,
+            detail="Pre-validation is available only while drafting or correcting a request",
+        )
+
+    return _run_request_pre_validation(session, service_request)
 
 
 @router.get("/{request_id}/documents", response_model=list[RequestDocumentResponse])
@@ -481,6 +513,85 @@ def _verify_document_access(user: Any, service_request: ServiceRequest, session:
 
     if user.role != "system_administrator":
         raise HTTPException(status_code=403, detail="Not authorized")
+
+
+def _run_request_pre_validation(
+    session: Any, service_request: ServiceRequest
+) -> RequestPreValidationResponse:
+    requirements = session.scalars(
+        select(ServiceDocumentRequirement)
+        .where(
+            ServiceDocumentRequirement.service_id == service_request.service_id,
+            ServiceDocumentRequirement.is_active.is_(True),
+        )
+        .order_by(ServiceDocumentRequirement.sort_order, ServiceDocumentRequirement.name)
+    ).all()
+    current_documents = session.scalars(
+        select(RequestDocument).where(
+            RequestDocument.request_id == service_request.id,
+            RequestDocument.is_current.is_(True),
+        )
+    ).all()
+    documents_by_requirement = {document.requirement_id: document for document in current_documents}
+
+    items: list[RequestPreValidationItem] = []
+    is_valid = True
+    warnings = []
+    seen_hashes: dict[str, str] = {}
+    for requirement in requirements:
+        messages: list[str] = []
+        document = documents_by_requirement.get(requirement.id)
+        allowed_types = {allowed.mime_type for allowed in requirement.allowed_file_types}
+        max_size = requirement.max_file_size_bytes or get_settings().max_upload_size_bytes
+
+        if not document:
+            if requirement.is_required:
+                messages.append("Required document has not been uploaded.")
+                is_valid = False
+                status_value = "FAIL"
+            else:
+                status_value = "PASS"
+                messages.append("Optional document not uploaded.")
+        else:
+            status_value = "PASS"
+            if document.size_bytes <= 0:
+                messages.append("Uploaded file is empty.")
+                is_valid = False
+                status_value = "FAIL"
+            if document.size_bytes > max_size:
+                messages.append("Uploaded file exceeds the configured size limit.")
+                is_valid = False
+                status_value = "FAIL"
+            if allowed_types and document.content_type not in allowed_types:
+                messages.append("Uploaded file type is not allowed for this requirement.")
+                is_valid = False
+                status_value = "FAIL"
+            if document.sha256 in seen_hashes:
+                warning = f"{requirement.name} appears to duplicate {seen_hashes[document.sha256]}."
+                messages.append(warning)
+                warnings.append(warning)
+                if status_value == "PASS":
+                    status_value = "WARNING"
+            else:
+                seen_hashes[document.sha256] = requirement.name
+            if not messages:
+                messages.append("Document is present and matches configured file rules.")
+
+        items.append(
+            RequestPreValidationItem(
+                requirement_id=requirement.id,
+                requirement_name=requirement.name,
+                status=status_value,
+                messages=messages,
+            )
+        )
+
+    return RequestPreValidationResponse(
+        request_id=service_request.id,
+        is_valid=is_valid,
+        items=items,
+        warnings=warnings,
+    )
 
 
 def _write_private_upload(*, request_id: UUID, original_filename: str, data: bytes) -> str:

@@ -208,3 +208,81 @@ def test_employee_document_access_requires_active_assignment(
     )
     assert download.status_code == 200
     assert download.content == b"%PDF-1.4 document"
+
+
+def test_pre_validation_blocks_submission_until_required_document_uploaded(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    citizen_headers, _employee_headers, request_id, requirement_id = _document_fixture(
+        client, db_session, tmp_path
+    )
+
+    missing = client.post(f"/api/v1/requests/{request_id}/pre-validate", headers=citizen_headers)
+    assert missing.status_code == 200
+    missing_body = missing.json()
+    assert missing_body["is_valid"] is False
+    assert missing_body["items"][0]["status"] == "FAIL"
+    assert "authentic" not in str(missing_body).lower()
+
+    blocked_submit = client.post(f"/api/v1/requests/{request_id}/submit", headers=citizen_headers)
+    assert blocked_submit.status_code == 409
+
+    upload = client.post(
+        f"/api/v1/requests/{request_id}/documents",
+        data={"requirement_id": str(requirement_id)},
+        files={"file": ("identity.pdf", b"%PDF-1.4 document", "application/pdf")},
+        headers=citizen_headers,
+    )
+    assert upload.status_code == 201
+
+    valid = client.post(f"/api/v1/requests/{request_id}/pre-validate", headers=citizen_headers)
+    assert valid.status_code == 200
+    valid_body = valid.json()
+    assert valid_body["is_valid"] is True
+    assert valid_body["items"][0]["status"] == "PASS"
+
+    submit = client.post(f"/api/v1/requests/{request_id}/submit", headers=citizen_headers)
+    assert submit.status_code == 200
+    assert submit.json()["status"] == "WAITING_FOR_CENTRE"
+
+
+def test_pre_validation_returns_deterministic_duplicate_warning(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    citizen_headers, _employee_headers, request_id, requirement_id = _document_fixture(
+        client, db_session, tmp_path
+    )
+    first_requirement = db_session.get(ServiceDocumentRequirement, requirement_id)
+    assert first_requirement is not None
+    second_requirement = ServiceDocumentRequirement(
+        service_id=first_requirement.service_id,
+        name="Address proof",
+        is_required=True,
+        max_file_size_bytes=32,
+        sort_order=2,
+    )
+    db_session.add(second_requirement)
+    db_session.commit()
+    db_session.add(
+        ServiceRequirementAllowedFileType(
+            requirement_id=second_requirement.id,
+            mime_type="application/pdf",
+        )
+    )
+    db_session.commit()
+
+    for requirement in [requirement_id, second_requirement.id]:
+        upload = client.post(
+            f"/api/v1/requests/{request_id}/documents",
+            data={"requirement_id": str(requirement)},
+            files={"file": ("same.pdf", b"%PDF-1.4 same", "application/pdf")},
+            headers=citizen_headers,
+        )
+        assert upload.status_code == 201
+
+    validation = client.post(f"/api/v1/requests/{request_id}/pre-validate", headers=citizen_headers)
+    assert validation.status_code == 200
+    body = validation.json()
+    assert body["is_valid"] is True
+    assert body["warnings"]
+    assert any(item["status"] == "WARNING" for item in body["items"])

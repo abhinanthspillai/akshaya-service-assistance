@@ -12,7 +12,7 @@
 | Workstream | Status | Verification |
 |---|---|---|
 | R1 - Document Requirements and Secure Uploads | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `alembic upgrade head`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
-| R2 - Deterministic System Pre-Validation | NOT STARTED | Pending |
+| R2 - Deterministic System Pre-Validation | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
 | R3 - Document Review and Correction Cycle | NOT STARTED | Pending |
 | R4 - Interaction Requirements and Scheduling | NOT STARTED | Pending |
 | R5 - Request-Specific Communication | NOT STARTED | Pending |
@@ -34,3 +34,11 @@
 - Preserved replacement history by versioning request documents.
 - Enforced Citizen ownership and active employee assignment access for document operations.
 - Added citizen request-detail UI for document requirement upload and replacement.
+
+## R2 Notes
+
+- Added `POST /requests/{request_id}/pre-validate` for deterministic request document checks.
+- Enforced mandatory document pre-validation during request submission.
+- Added duplicate-content warning based on uploaded document hashes.
+- Kept validation language limited to file/checklist rules and avoided any authenticity, OCR or AI claims.
+- Added citizen request-detail UI for document check feedback.
