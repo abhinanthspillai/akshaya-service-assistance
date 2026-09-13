@@ -2,7 +2,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
-from sqlmodel import select
+from sqlalchemy import select
 
 from app.api.deps import CurrentUser, CurrentUserCitizen, SessionDep
 from app.models.ticket import SupportTicket, TicketMessage

@@ -45,11 +45,11 @@ from app.schemas.payment import RequestPaymentResponse
 from app.schemas.request import (
     RequestPreValidationItem,
     RequestPreValidationResponse,
-    RequestPaymentResponse,
     ServiceRequestCreate,
     ServiceRequestResponse,
     UnableToProceedRequest,
     ReassignRequest,
+    SelectCentreRequest,
 )
 from app.schemas.output import CompletedOutputCreate, CompletedOutputResponse
 from app.models.output import CompletedOutput
