@@ -15,14 +15,35 @@ export function AppLayout({ children }: { children: ReactNode }) {
     navigate('/login');
   };
 
-  const navItems = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { name: 'Services', path: '/services', icon: FileSearch },
-    { name: 'My Requests', path: '/requests', icon: FileText },
-    { name: 'Notifications', path: '/notifications', icon: Bell },
-    { name: 'Support', path: '/support', icon: LifeBuoy },
-    { name: 'Profile', path: '/profile', icon: UserCircle },
-  ];
+  let navItems = [];
+  if (user?.role === 'citizen') {
+    navItems = [
+      { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+      { name: 'Services', path: '/services', icon: FileSearch },
+      { name: 'My Requests', path: '/requests', icon: FileText },
+      { name: 'Notifications', path: '/notifications', icon: Bell },
+      { name: 'Support', path: '/support', icon: LifeBuoy },
+      { name: 'Profile', path: '/profile', icon: UserCircle },
+    ];
+  } else if (user?.role === 'centre_employee') {
+    navItems = [
+      { name: 'Queue', path: '/queue', icon: LayoutDashboard },
+      { name: 'Support Tickets', path: '/support', icon: LifeBuoy },
+    ];
+  } else if (user?.role === 'centre_administrator') {
+    navItems = [
+      { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
+      { name: 'Queue', path: '/queue', icon: FileText },
+      { name: 'Escalations', path: '/admin/escalations', icon: Bell },
+      { name: 'Support Tickets', path: '/support', icon: LifeBuoy },
+    ];
+  } else if (user?.role === 'system_administrator') {
+    navItems = [
+      { name: 'Dashboard', path: '/sysadmin/dashboard', icon: LayoutDashboard },
+      { name: 'Centres', path: '/sysadmin/centres', icon: FileText },
+      { name: 'Audit Logs', path: '/sysadmin/audit', icon: FileSearch },
+    ];
+  }
 
   return (
     <div className="flex h-screen bg-[#faf5ff] text-slate-900 overflow-hidden">
