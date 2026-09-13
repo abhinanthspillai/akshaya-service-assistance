@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
-import { Loader2, ArrowLeft, Clock } from 'lucide-react';
+import { Loader2, ArrowLeft, Clock, FileText, CheckCircle, AlertTriangle } from 'lucide-react';
 
 interface ServiceRequest {
   id: string;
@@ -22,6 +22,24 @@ interface RequestHistory {
   created_at: string;
 }
 
+interface RequestDocument {
+  id: string;
+  original_filename: string;
+  requirement_id: string;
+  content_type: string;
+  version: number;
+  is_current: boolean;
+  uploaded_at: string;
+}
+
+interface DocumentReview {
+  id: string;
+  document_id: string;
+  decision: string;
+  reason: string | null;
+  created_at: string;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   SUBMITTED: 'bg-blue-50 text-blue-700',
   WAITING_FOR_CENTRE: 'bg-yellow-50 text-yellow-800',
@@ -33,8 +51,11 @@ export function RequestWorkspace() {
   const { id } = useParams<{ id: string }>();
   const [request, setRequest] = useState<ServiceRequest | null>(null);
   const [history, setHistory] = useState<RequestHistory[]>([]);
+  const [documents, setDocuments] = useState<RequestDocument[]>([]);
+  const [reviews, setReviews] = useState<DocumentReview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAccepting, setIsAccepting] = useState(false);
+  const [isStartingReview, setIsStartingReview] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
@@ -47,6 +68,17 @@ export function RequestWorkspace() {
         ]);
         setRequest(reqRes.data);
         setHistory(histRes.data);
+        try {
+          const [docsRes, reviewsRes] = await Promise.all([
+            api.get('/requests/' + id + '/documents'),
+            api.get('/requests/' + id + '/document-reviews')
+          ]);
+          setDocuments(docsRes.data);
+          setReviews(reviewsRes.data);
+        } catch {
+          setDocuments([]);
+          setReviews([]);
+        }
       } catch {
         setError('Failed to load request workspace.');
       } finally {
@@ -64,11 +96,51 @@ export function RequestWorkspace() {
       setRequest(res.data);
       const histRes = await api.get('/requests/' + request.id + '/history');
       setHistory(histRes.data);
+      const docsRes = await api.get('/requests/' + request.id + '/documents');
+      setDocuments(docsRes.data);
     } catch (e) {
       const err = e as { response?: { data?: { detail?: string } } };
       setError(err.response?.data?.detail || 'Failed to accept request.');
     } finally {
       setIsAccepting(false);
+    }
+  };
+
+  const refreshWorkspace = async (requestId: string) => {
+    const [reqRes, histRes, docsRes, reviewsRes] = await Promise.all([
+      api.get('/requests/' + requestId),
+      api.get('/requests/' + requestId + '/history'),
+      api.get('/requests/' + requestId + '/documents'),
+      api.get('/requests/' + requestId + '/document-reviews')
+    ]);
+    setRequest(reqRes.data);
+    setHistory(histRes.data);
+    setDocuments(docsRes.data);
+    setReviews(reviewsRes.data);
+  };
+
+  const handleStartReview = async () => {
+    if (!request) return;
+    setIsStartingReview(true);
+    try {
+      await api.post('/requests/' + request.id + '/start-review');
+      await refreshWorkspace(request.id);
+    } catch {
+      setError('Failed to start document review.');
+    } finally {
+      setIsStartingReview(false);
+    }
+  };
+
+  const handleReviewDocument = async (documentId: string, decision: 'APPROVED' | 'REPLACEMENT_REQUESTED') => {
+    if (!request) return;
+    const reason = decision === 'APPROVED' ? null : window.prompt('Correction reason');
+    if (decision !== 'APPROVED' && !reason) return;
+    try {
+      await api.post('/requests/' + request.id + '/documents/' + documentId + '/review', { decision, reason });
+      await refreshWorkspace(request.id);
+    } catch {
+      setError('Failed to save document review decision.');
     }
   };
 
@@ -118,6 +190,15 @@ export function RequestWorkspace() {
                 {isAccepting ? 'Accepting...' : 'Accept Request'}
               </button>
             )}
+            {request.status === 'ACCEPTED' && (
+              <button
+                onClick={handleStartReview}
+                disabled={isStartingReview}
+                className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {isStartingReview ? 'Starting...' : 'Start Review'}
+              </button>
+            )}
           </div>
           <h1 className="text-2xl font-bold text-indigo-950 mb-2">{request.service_name_snapshot}</h1>
           <div className="text-slate-500 text-sm">
@@ -130,6 +211,58 @@ export function RequestWorkspace() {
             {error}
           </div>
         )}
+
+        <div className="p-8 border-b border-slate-100">
+          <h2 className="text-lg font-semibold text-indigo-950 mb-6 flex items-center gap-2">
+            <FileText size={20} className="text-indigo-600" />
+            Documents
+          </h2>
+
+          {documents.length === 0 ? (
+            <p className="text-slate-500 text-sm">No accessible documents yet.</p>
+          ) : (
+            <div className="grid gap-3">
+              {documents.filter((doc) => doc.is_current).map((doc) => {
+                const review = reviews.find((item) => item.document_id === doc.id);
+                return (
+                  <div key={doc.id} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <div className="font-semibold text-slate-900">{doc.original_filename}</div>
+                        <div className="text-sm text-slate-500 mt-1">
+                          {doc.content_type} · v{doc.version}
+                        </div>
+                        {review && (
+                          <div className="text-sm text-slate-600 mt-2">
+                            Decision: {review.decision}{review.reason ? ' · ' + review.reason : ''}
+                          </div>
+                        )}
+                      </div>
+                      {request.status === 'UNDER_REVIEW' && !review && (
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => handleReviewDocument(doc.id, 'APPROVED')}
+                            className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+                          >
+                            <CheckCircle size={16} />
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleReviewDocument(doc.id, 'REPLACEMENT_REQUESTED')}
+                            className="inline-flex items-center gap-2 rounded-lg bg-yellow-500 px-3 py-2 text-sm font-medium text-white hover:bg-yellow-600"
+                          >
+                            <AlertTriangle size={16} />
+                            Request Correction
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         <div className="p-8">
           <h2 className="text-lg font-semibold text-indigo-950 mb-6 flex items-center gap-2">

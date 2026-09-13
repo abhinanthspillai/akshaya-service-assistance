@@ -13,7 +13,7 @@
 |---|---|---|
 | R1 - Document Requirements and Secure Uploads | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `alembic upgrade head`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
 | R2 - Deterministic System Pre-Validation | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
-| R3 - Document Review and Correction Cycle | NOT STARTED | Pending |
+| R3 - Document Review and Correction Cycle | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `alembic upgrade head`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
 | R4 - Interaction Requirements and Scheduling | NOT STARTED | Pending |
 | R5 - Request-Specific Communication | NOT STARTED | Pending |
 | R6 - Readiness and Processing Flow | NOT STARTED | Pending |
@@ -42,3 +42,12 @@
 - Added duplicate-content warning based on uploaded document hashes.
 - Kept validation language limited to file/checklist rules and avoided any authenticity, OCR or AI claims.
 - Added citizen request-detail UI for document check feedback.
+
+## R3 Notes
+
+- Added request document review evidence in migration 0008.
+- Added active-assignment-only start-review and document-review business actions.
+- Implemented `ACCEPTED -> UNDER_REVIEW` and non-approval review transition to `CORRECTION_REQUIRED`.
+- Made correction reasons visible to the Citizen owner.
+- Replacement upload from `CORRECTION_REQUIRED` returns the request to `UNDER_REVIEW` while preserving prior review evidence.
+- Added employee request workspace controls for document review and correction requests.

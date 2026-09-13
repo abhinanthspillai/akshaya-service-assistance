@@ -286,3 +286,100 @@ def test_pre_validation_returns_deterministic_duplicate_warning(
     assert body["is_valid"] is True
     assert body["warnings"]
     assert any(item["status"] == "WARNING" for item in body["items"])
+
+
+def test_employee_review_correction_cycle_preserves_review_evidence(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    citizen_headers, employee_headers, request_id, requirement_id = _document_fixture(
+        client, db_session, tmp_path
+    )
+    upload = client.post(
+        f"/api/v1/requests/{request_id}/documents",
+        data={"requirement_id": str(requirement_id)},
+        files={"file": ("identity.pdf", b"%PDF-1.4 document", "application/pdf")},
+        headers=citizen_headers,
+    )
+    assert upload.status_code == 201
+    document_id = upload.json()["id"]
+
+    submit = client.post(f"/api/v1/requests/{request_id}/submit", headers=citizen_headers)
+    assert submit.status_code == 200
+    accept = client.post(f"/api/v1/requests/{request_id}/accept", headers=employee_headers)
+    assert accept.status_code == 200
+
+    start_review = client.post(
+        f"/api/v1/requests/{request_id}/start-review",
+        headers=employee_headers,
+    )
+    assert start_review.status_code == 200
+    assert start_review.json()["status"] == "UNDER_REVIEW"
+
+    review = client.post(
+        f"/api/v1/requests/{request_id}/documents/{document_id}/review",
+        json={"decision": "REPLACEMENT_REQUESTED", "reason": "Address page is unreadable."},
+        headers=employee_headers,
+    )
+    assert review.status_code == 201
+    assert review.json()["reason"] == "Address page is unreadable."
+
+    request_after_review = client.get(f"/api/v1/requests/{request_id}", headers=citizen_headers)
+    assert request_after_review.json()["status"] == "CORRECTION_REQUIRED"
+
+    citizen_reviews = client.get(
+        f"/api/v1/requests/{request_id}/document-reviews",
+        headers=citizen_headers,
+    )
+    assert citizen_reviews.status_code == 200
+    assert citizen_reviews.json()[0]["reason"] == "Address page is unreadable."
+
+    replacement = client.post(
+        f"/api/v1/requests/{request_id}/documents",
+        data={"requirement_id": str(requirement_id)},
+        files={"file": ("identity-fixed.pdf", b"%PDF-1.4 fixed", "application/pdf")},
+        headers=citizen_headers,
+    )
+    assert replacement.status_code == 201
+    assert replacement.json()["version"] == 2
+
+    request_after_replacement = client.get(
+        f"/api/v1/requests/{request_id}", headers=citizen_headers
+    )
+    assert request_after_replacement.json()["status"] == "UNDER_REVIEW"
+
+    preserved_reviews = client.get(
+        f"/api/v1/requests/{request_id}/document-reviews",
+        headers=citizen_headers,
+    )
+    assert len(preserved_reviews.json()) == 1
+    assert preserved_reviews.json()[0]["document_id"] == document_id
+
+
+def test_review_requires_current_assignment_and_under_review_state(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    citizen_headers, employee_headers, request_id, requirement_id = _document_fixture(
+        client, db_session, tmp_path
+    )
+    upload = client.post(
+        f"/api/v1/requests/{request_id}/documents",
+        data={"requirement_id": str(requirement_id)},
+        files={"file": ("identity.pdf", b"%PDF-1.4 document", "application/pdf")},
+        headers=citizen_headers,
+    )
+    document_id = upload.json()["id"]
+
+    not_assigned = client.post(
+        f"/api/v1/requests/{request_id}/start-review",
+        headers=employee_headers,
+    )
+    assert not_assigned.status_code == 403
+
+    client.post(f"/api/v1/requests/{request_id}/submit", headers=citizen_headers)
+    client.post(f"/api/v1/requests/{request_id}/accept", headers=employee_headers)
+    wrong_state = client.post(
+        f"/api/v1/requests/{request_id}/documents/{document_id}/review",
+        json={"decision": "APPROVED"},
+        headers=employee_headers,
+    )
+    assert wrong_state.status_code == 409

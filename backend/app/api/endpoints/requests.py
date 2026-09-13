@@ -16,10 +16,14 @@ from app.api.deps import (
 )
 from app.core.config import get_settings
 from app.models.centre import AkshayaCentre
-from app.models.document import RequestDocument
+from app.models.document import DOCUMENT_REVIEW_DECISIONS, RequestDocument, RequestDocumentReview
 from app.models.request import ServiceRequest
 from app.models.service import CentreSupportedService, Service, ServiceDocumentRequirement
-from app.schemas.document import RequestDocumentResponse
+from app.schemas.document import (
+    RequestDocumentResponse,
+    RequestDocumentReviewCreate,
+    RequestDocumentReviewResponse,
+)
 from app.schemas.history import RequestHistoryResponse
 from app.schemas.request import (
     RequestPreValidationItem,
@@ -211,6 +215,37 @@ def pre_validate_request(
     return _run_request_pre_validation(session, service_request)
 
 
+@router.post("/{request_id}/start-review", response_model=ServiceRequestResponse)
+def start_request_review(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+) -> Any:
+    from app.models.assignment import RequestHistory
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    _verify_active_assignment(current_user, service_request, session)
+    if service_request.status != "ACCEPTED":
+        raise HTTPException(status_code=409, detail="Request must be in ACCEPTED state")
+
+    history = RequestHistory(
+        request_id=request_id,
+        actor_id=current_user.id,
+        action="start_review",
+        from_status=service_request.status,
+        to_status="UNDER_REVIEW",
+    )
+    session.add(history)
+    service_request.status = "UNDER_REVIEW"
+    session.add(service_request)
+    session.commit()
+    session.refresh(service_request)
+    return service_request
+
+
 @router.get("/{request_id}/documents", response_model=list[RequestDocumentResponse])
 def list_request_documents(
     request_id: UUID,
@@ -328,6 +363,22 @@ async def upload_request_document(
         uploaded_at=now,
     )
     session.add(document)
+
+    if service_request.status == "CORRECTION_REQUIRED":
+        from app.models.assignment import RequestHistory
+
+        history = RequestHistory(
+            request_id=request_id,
+            actor_id=current_user.id,
+            action="submit_correction",
+            from_status=service_request.status,
+            to_status="UNDER_REVIEW",
+            note=f"Replacement uploaded for {requirement.name}",
+        )
+        session.add(history)
+        service_request.status = "UNDER_REVIEW"
+        session.add(service_request)
+
     session.commit()
     session.refresh(document)
     return document
@@ -364,6 +415,103 @@ def download_request_document(
         media_type=document.content_type,
         filename=document.original_filename,
     )
+
+
+@router.get(
+    "/{request_id}/document-reviews",
+    response_model=list[RequestDocumentReviewResponse],
+)
+def list_document_reviews(
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    _verify_document_access(current_user, service_request, session)
+
+    reviews = session.scalars(
+        select(RequestDocumentReview)
+        .where(RequestDocumentReview.request_id == request_id)
+        .order_by(RequestDocumentReview.created_at.asc())
+    ).all()
+    return reviews
+
+
+@router.post(
+    "/{request_id}/documents/{document_id}/review",
+    response_model=RequestDocumentReviewResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def review_request_document(
+    *,
+    request_id: UUID,
+    document_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+    body: RequestDocumentReviewCreate,
+) -> Any:
+    from app.models.assignment import RequestHistory
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    _verify_active_assignment(current_user, service_request, session)
+    if service_request.status != "UNDER_REVIEW":
+        raise HTTPException(status_code=409, detail="Request must be in UNDER_REVIEW state")
+
+    if body.decision not in DOCUMENT_REVIEW_DECISIONS:
+        raise HTTPException(status_code=422, detail="Unsupported review decision")
+    if body.decision != "APPROVED" and not body.reason:
+        raise HTTPException(status_code=422, detail="A reason is required for this decision")
+
+    document = session.scalar(
+        select(RequestDocument).where(
+            RequestDocument.id == document_id,
+            RequestDocument.request_id == request_id,
+            RequestDocument.is_current.is_(True),
+        )
+    )
+    if not document:
+        raise HTTPException(status_code=404, detail="Current document not found")
+
+    review = RequestDocumentReview(
+        request_id=request_id,
+        document_id=document_id,
+        requirement_id=document.requirement_id,
+        reviewer_id=current_user.id,
+        decision=body.decision,
+        reason=body.reason,
+    )
+    session.add(review)
+
+    if body.decision != "APPROVED":
+        history = RequestHistory(
+            request_id=request_id,
+            actor_id=current_user.id,
+            action="document_correction_required",
+            from_status=service_request.status,
+            to_status="CORRECTION_REQUIRED",
+            note=body.reason,
+        )
+        session.add(history)
+        service_request.status = "CORRECTION_REQUIRED"
+        session.add(service_request)
+    else:
+        history = RequestHistory(
+            request_id=request_id,
+            actor_id=current_user.id,
+            action="document_approved",
+            from_status=service_request.status,
+            to_status=service_request.status,
+            note=f"Document {document.original_filename} approved",
+        )
+        session.add(history)
+
+    session.commit()
+    session.refresh(review)
+    return review
 
 
 @router.post("/{request_id}/accept", response_model=ServiceRequestResponse)
@@ -512,6 +660,20 @@ def _verify_document_access(user: Any, service_request: ServiceRequest, session:
         return
 
     if user.role != "system_administrator":
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+
+def _verify_active_assignment(user: Any, service_request: ServiceRequest, session: Any) -> None:
+    from app.models.assignment import RequestAssignment
+
+    assignment = session.scalar(
+        select(RequestAssignment).where(
+            RequestAssignment.request_id == service_request.id,
+            RequestAssignment.employee_id == user.id,
+            RequestAssignment.is_active.is_(True),
+        )
+    )
+    if not assignment:
         raise HTTPException(status_code=403, detail="Not authorized")
 
 

@@ -35,6 +35,15 @@ interface RequestDocument {
   uploaded_at: string;
 }
 
+interface DocumentReview {
+  id: string;
+  document_id: string;
+  requirement_id: string;
+  decision: string;
+  reason: string | null;
+  created_at: string;
+}
+
 interface PreValidationResult {
   is_valid: boolean;
   warnings: string[];
@@ -61,6 +70,7 @@ export function RequestDetail() {
   const [request, setRequest] = useState<ServiceRequest | null>(null);
   const [requirements, setRequirements] = useState<ServiceRequirement[]>([]);
   const [documents, setDocuments] = useState<RequestDocument[]>([]);
+  const [reviews, setReviews] = useState<DocumentReview[]>([]);
   const [preValidation, setPreValidation] = useState<PreValidationResult | null>(null);
   const [centres, setCentres] = useState<Array<{ id: string; name: string; district: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -74,12 +84,14 @@ export function RequestDetail() {
       try {
         const res = await api.get('/requests/' + (id || ''));
         setRequest(res.data);
-        const [serviceRes, documentsRes] = await Promise.all([
+        const [serviceRes, documentsRes, reviewsRes] = await Promise.all([
           api.get('/services/' + res.data.service_id),
           api.get('/requests/' + res.data.id + '/documents'),
+          api.get('/requests/' + res.data.id + '/document-reviews'),
         ]);
         setRequirements(serviceRes.data.document_requirements || []);
         setDocuments(documentsRes.data || []);
+        setReviews(reviewsRes.data || []);
         if (res.data.status === 'DRAFT' || res.data.status === 'CORRECTION_REQUIRED') {
           const validationRes = await api.post('/requests/' + res.data.id + '/pre-validate');
           setPreValidation(validationRes.data);
@@ -126,6 +138,8 @@ export function RequestDetail() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setDocuments((current) => [...current, res.data]);
+      const reviewsRes = await api.get('/requests/' + request.id + '/document-reviews');
+      setReviews(reviewsRes.data || []);
       await refreshPreValidation();
     } catch {
       setError('Document upload failed. Check the file type and size for this requirement.');
@@ -171,6 +185,9 @@ export function RequestDetail() {
   const statusColor = STATUS_COLORS[request.status] || 'bg-slate-100 text-slate-600';
   const currentDocumentByRequirement = new Map(
     documents.filter((doc) => doc.is_current).map((doc) => [doc.requirement_id, doc])
+  );
+  const latestReviewByRequirement = new Map(
+    reviews.map((review) => [review.requirement_id, review])
   );
   const canUploadDocuments = request.status === 'DRAFT' || request.status === 'CORRECTION_REQUIRED';
 
@@ -246,6 +263,11 @@ export function RequestDetail() {
                             {document && (
                               <div className="text-sm text-green-700 mt-2">
                                 Uploaded {document.original_filename} · v{document.version}
+                              </div>
+                            )}
+                            {latestReviewByRequirement.get(requirement.id)?.reason && (
+                              <div className="text-sm text-red-700 mt-2">
+                                Correction: {latestReviewByRequirement.get(requirement.id)?.reason}
                               </div>
                             )}
                           </div>

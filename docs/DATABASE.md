@@ -175,6 +175,23 @@ Rules:
 - replacement uploads create a new version and preserve prior metadata.
 - authorization is enforced by Citizen ownership, active employee assignment, centre administrator scope or system administrator role.
 
+### request_document_reviews
+Implemented in migration 0008.
+
+- id UUID PK
+- request_id UUID NOT NULL FK -> service_requests.id
+- document_id UUID NOT NULL FK -> request_documents.id
+- requirement_id UUID NOT NULL FK -> service_document_requirements.id
+- reviewer_id UUID NOT NULL FK -> users.id
+- decision VARCHAR(40) NOT NULL CHECK in APPROVED, REJECTED, REPLACEMENT_REQUESTED, SUSPICIOUS
+- reason TEXT NULL
+- created_at TIMESTAMPTZ NOT NULL
+
+Rules:
+- review records are append-only evidence for a document version.
+- replacement uploads create new request_documents rows and preserve earlier review rows.
+- correction reasons are visible to the Citizen owner through authorized request-scoped endpoints.
+
 ## 5. Migration sequence
 0001 users
 0002 profiles_and_centres

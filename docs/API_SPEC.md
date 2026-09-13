@@ -125,6 +125,20 @@ Runs deterministic Phase 1 document checks only: required document presence, con
 Response: request_id, is_valid, itemized requirement statuses/messages and warnings.
 The endpoint must not claim government authenticity, OCR extraction or AI verification.
 
+### POST /requests/{request_id}/start-review
+Centre Employee with active assignment.
+Precondition: ACCEPTED.
+Transitions request to UNDER_REVIEW and writes history evidence.
+
+### GET /requests/{request_id}/document-reviews
+Authorized request participants.
+Returns document review evidence, including Citizen-visible correction reasons for the request owner.
+
+### POST /requests/{request_id}/documents/{document_id}/review
+Centre Employee with active assignment while request is UNDER_REVIEW.
+Request: decision and optional reason. Supported Phase 1 decisions are APPROVED, REJECTED, REPLACEMENT_REQUESTED and SUSPICIOUS.
+Non-approval decisions require a reason and transition the request to CORRECTION_REQUIRED with history evidence. Approval records review evidence without advancing the primary request state.
+
 ## Later business-action endpoint pattern
 Use actions, not arbitrary status PATCH:
 - POST /requests/{id}/accept
@@ -150,6 +164,7 @@ Implemented Phase 1 request-document endpoints:
 - GET /requests/{request_id}/documents
 - POST /requests/{request_id}/documents
 - GET /requests/{request_id}/documents/{document_id}/download
+- POST /requests/{request_id}/documents/{document_id}/review
 
 Upload is multipart form data with `requirement_id` and `file`.
 

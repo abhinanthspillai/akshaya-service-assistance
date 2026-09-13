@@ -2,7 +2,17 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -56,3 +66,52 @@ class RequestDocument(Base):
         "ServiceDocumentRequirement", foreign_keys=[requirement_id]
     )
     uploaded_by: Mapped["User"] = relationship("User", foreign_keys=[uploaded_by_id])
+
+
+DOCUMENT_REVIEW_DECISIONS = (
+    "APPROVED",
+    "REJECTED",
+    "REPLACEMENT_REQUESTED",
+    "SUSPICIOUS",
+)
+_DECISION_CHECK = (
+    "decision IN (" + ", ".join("'" + s + "'" for s in DOCUMENT_REVIEW_DECISIONS) + ")"
+)
+
+
+class RequestDocumentReview(Base):
+    __tablename__ = "request_document_reviews"
+    __table_args__ = (
+        CheckConstraint(_DECISION_CHECK, name="chk_request_document_review_decision"),
+        Index("ix_request_document_reviews_request_id", "request_id"),
+        Index("ix_request_document_reviews_document_id", "document_id"),
+        Index("ix_request_document_reviews_reviewer_id", "reviewer_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    request_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("service_requests.id"), nullable=False
+    )
+    document_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("request_documents.id"), nullable=False
+    )
+    requirement_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("service_document_requirements.id"), nullable=False
+    )
+    reviewer_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    decision: Mapped[str] = mapped_column(String(40), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    request: Mapped["ServiceRequest"] = relationship("ServiceRequest", foreign_keys=[request_id])
+    document: Mapped["RequestDocument"] = relationship(
+        "RequestDocument", foreign_keys=[document_id]
+    )
+    requirement: Mapped["ServiceDocumentRequirement"] = relationship(
+        "ServiceDocumentRequirement", foreign_keys=[requirement_id]
+    )
+    reviewer: Mapped["User"] = relationship("User", foreign_keys=[reviewer_id])
