@@ -6,12 +6,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, CurrentUserSysAdmin, SessionDep
+from app.models.centre import AkshayaCentre
 from app.models.service import (
+    CentreSupportedService,
     Service,
     ServiceDocumentRequirement,
     ServiceInteractionRequirement,
     ServiceRequirementAllowedFileType,
 )
+from app.schemas.centre import AkshayaCentreResponse
 from app.schemas.service import (
     ServiceCreate,
     ServiceDetailResponse,
@@ -165,3 +168,24 @@ def update_interaction_requirements(
 
     session.commit()
     return requirements_in
+
+
+@router.get("/{service_id}/centres", response_model=list[AkshayaCentreResponse])
+def get_service_centres(
+    service_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    service = session.get(Service, service_id)
+    if not service or not service.is_active:
+        raise HTTPException(status_code=404, detail="Service not found")
+
+    stmt = (
+        select(AkshayaCentre)
+        .join(CentreSupportedService, CentreSupportedService.centre_id == AkshayaCentre.id)
+        .where(CentreSupportedService.service_id == service_id)
+        .where(AkshayaCentre.is_active)
+        .where(CentreSupportedService.is_active)
+    )
+    centres = session.scalars(stmt).all()
+    return centres
