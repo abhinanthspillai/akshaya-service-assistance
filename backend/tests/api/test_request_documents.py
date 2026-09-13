@@ -501,3 +501,52 @@ def test_missed_interaction_uses_record_not_primary_missed_state(
     assert missed.json()["status"] == "MISSED"
     request_after_missed = client.get(f"/api/v1/requests/{request_id}", headers=citizen_headers)
     assert request_after_missed.json()["status"] == "INTERACTION_REQUIRED"
+
+
+def test_request_messages_are_scoped_to_owner_and_active_assignment(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    citizen_headers, employee_headers, request_id, requirement_id = _document_fixture(
+        client, db_session, tmp_path
+    )
+    other = _create_user(db_session, "messageother@example.com", "citizen")
+    other_headers = _login(client, other.email)
+
+    citizen_message = client.post(
+        f"/api/v1/requests/{request_id}/messages",
+        json={"body": "Please review my uploaded document."},
+        headers=citizen_headers,
+    )
+    assert citizen_message.status_code == 201
+
+    other_read = client.get(f"/api/v1/requests/{request_id}/messages", headers=other_headers)
+    assert other_read.status_code == 403
+
+    employee_before_assignment = client.get(
+        f"/api/v1/requests/{request_id}/messages",
+        headers=employee_headers,
+    )
+    assert employee_before_assignment.status_code == 403
+
+    client.post(
+        f"/api/v1/requests/{request_id}/documents",
+        data={"requirement_id": str(requirement_id)},
+        files={"file": ("identity.pdf", b"%PDF-1.4 document", "application/pdf")},
+        headers=citizen_headers,
+    )
+    client.post(f"/api/v1/requests/{request_id}/submit", headers=citizen_headers)
+    client.post(f"/api/v1/requests/{request_id}/accept", headers=employee_headers)
+
+    employee_reply = client.post(
+        f"/api/v1/requests/{request_id}/messages",
+        json={"body": "We have started reviewing your request."},
+        headers=employee_headers,
+    )
+    assert employee_reply.status_code == 201
+
+    messages = client.get(f"/api/v1/requests/{request_id}/messages", headers=citizen_headers)
+    assert messages.status_code == 200
+    assert [message["body"] for message in messages.json()] == [
+        "Please review my uploaded document.",
+        "We have started reviewing your request.",
+    ]

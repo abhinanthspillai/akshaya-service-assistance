@@ -18,6 +18,7 @@ from app.core.config import get_settings
 from app.models.centre import AkshayaCentre
 from app.models.document import DOCUMENT_REVIEW_DECISIONS, RequestDocument, RequestDocumentReview
 from app.models.interaction import RequestInteraction
+from app.models.message import RequestMessage
 from app.models.request import ServiceRequest
 from app.models.service import (
     CentreSupportedService,
@@ -37,6 +38,7 @@ from app.schemas.interaction import (
     RequireInteractionRequest,
     ScheduleInteractionRequest,
 )
+from app.schemas.message import RequestMessageCreate, RequestMessageResponse
 from app.schemas.request import (
     RequestPreValidationItem,
     RequestPreValidationResponse,
@@ -707,6 +709,51 @@ def record_interaction_outcome(
     return interaction
 
 
+@router.get("/{request_id}/messages", response_model=list[RequestMessageResponse])
+def list_request_messages(
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    _verify_message_access(current_user, service_request, session)
+    messages = session.scalars(
+        select(RequestMessage)
+        .where(RequestMessage.request_id == request_id)
+        .order_by(RequestMessage.created_at.asc())
+    ).all()
+    return messages
+
+
+@router.post(
+    "/{request_id}/messages",
+    response_model=RequestMessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_request_message(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    body: RequestMessageCreate,
+) -> Any:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    _verify_message_access(current_user, service_request, session)
+    message = RequestMessage(
+        request_id=request_id,
+        sender_id=current_user.id,
+        body=body.body,
+    )
+    session.add(message)
+    session.commit()
+    session.refresh(message)
+    return message
+
+
 @router.post("/{request_id}/accept", response_model=ServiceRequestResponse)
 def accept_request(
     *,
@@ -868,6 +915,17 @@ def _verify_active_assignment(user: Any, service_request: ServiceRequest, sessio
     )
     if not assignment:
         raise HTTPException(status_code=403, detail="Not authorized")
+
+
+def _verify_message_access(user: Any, service_request: ServiceRequest, session: Any) -> None:
+    if user.role == "citizen":
+        if service_request.citizen_id != user.id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        return
+    if user.role == "centre_employee":
+        _verify_active_assignment(user, service_request, session)
+        return
+    raise HTTPException(status_code=403, detail="Not authorized")
 
 
 def _run_request_pre_validation(

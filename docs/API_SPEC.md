@@ -158,6 +158,14 @@ Centre Employee with active assignment.
 Precondition: INTERACTION_SCHEDULED.
 Records COMPLETED or MISSED on the interaction record. COMPLETED returns the request to UNDER_REVIEW; MISSED returns it to INTERACTION_REQUIRED for rescheduling. There is no primary MISSED state.
 
+### GET /requests/{request_id}/messages
+Citizen owner or active assigned Centre Employee.
+Returns request-scoped messages ordered by timestamp.
+
+### POST /requests/{request_id}/messages
+Citizen owner or active assigned Centre Employee.
+Creates a request-scoped message. Message bodies are stored as request data and must not be written to application logs.
+
 ## Later business-action endpoint pattern
 Use actions, not arbitrary status PATCH:
 - POST /requests/{id}/accept

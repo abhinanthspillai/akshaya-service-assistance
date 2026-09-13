@@ -214,6 +214,21 @@ Rules:
 - required interactions move the request through INTERACTION_REQUIRED and INTERACTION_SCHEDULED only.
 - repeated missed mandatory interactions remain represented through interaction records/history for later cancellation handling.
 
+### request_messages
+Implemented in migration 0010.
+
+- id UUID PK
+- request_id UUID NOT NULL FK -> service_requests.id
+- sender_id UUID NOT NULL FK -> users.id
+- body TEXT NOT NULL
+- created_at TIMESTAMPTZ NOT NULL
+
+Rules:
+- messages are scoped to a single request.
+- Citizen owners and the current active assigned Employee may read/send.
+- reassignment revokes old Employee access because access is checked against active assignment.
+- message bodies are request data and must not be emitted to application logs.
+
 ## 5. Migration sequence
 0001 users
 0002 profiles_and_centres

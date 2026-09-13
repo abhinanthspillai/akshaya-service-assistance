@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
-import { Loader2, ArrowLeft, MapPin, Upload, FileText, CalendarClock } from 'lucide-react';
+import { Loader2, ArrowLeft, MapPin, Upload, FileText, CalendarClock, MessageSquare } from 'lucide-react';
 
 interface ServiceRequest {
   id: string;
@@ -53,6 +53,13 @@ interface RequestInteraction {
   outcome_note: string | null;
 }
 
+interface RequestMessage {
+  id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+}
+
 interface PreValidationResult {
   is_valid: boolean;
   warnings: string[];
@@ -81,6 +88,8 @@ export function RequestDetail() {
   const [documents, setDocuments] = useState<RequestDocument[]>([]);
   const [reviews, setReviews] = useState<DocumentReview[]>([]);
   const [interactions, setInteractions] = useState<RequestInteraction[]>([]);
+  const [messages, setMessages] = useState<RequestMessage[]>([]);
+  const [newMessage, setNewMessage] = useState('');
   const [scheduleValues, setScheduleValues] = useState<Record<string, string>>({});
   const [preValidation, setPreValidation] = useState<PreValidationResult | null>(null);
   const [centres, setCentres] = useState<Array<{ id: string; name: string; district: string }>>([]);
@@ -95,16 +104,18 @@ export function RequestDetail() {
       try {
         const res = await api.get('/requests/' + (id || ''));
         setRequest(res.data);
-        const [serviceRes, documentsRes, reviewsRes, interactionsRes] = await Promise.all([
+        const [serviceRes, documentsRes, reviewsRes, interactionsRes, messagesRes] = await Promise.all([
           api.get('/services/' + res.data.service_id),
           api.get('/requests/' + res.data.id + '/documents'),
           api.get('/requests/' + res.data.id + '/document-reviews'),
           api.get('/requests/' + res.data.id + '/interactions'),
+          api.get('/requests/' + res.data.id + '/messages'),
         ]);
         setRequirements(serviceRes.data.document_requirements || []);
         setDocuments(documentsRes.data || []);
         setReviews(reviewsRes.data || []);
         setInteractions(interactionsRes.data || []);
+        setMessages(messagesRes.data || []);
         if (res.data.status === 'DRAFT' || res.data.status === 'CORRECTION_REQUIRED') {
           const validationRes = await api.post('/requests/' + res.data.id + '/pre-validate');
           setPreValidation(validationRes.data);
@@ -129,6 +140,17 @@ export function RequestDetail() {
       setRequest(res.data);
     } catch {
       setError('Failed to select centre.');
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!request || !newMessage.trim()) return;
+    try {
+      const res = await api.post('/requests/' + request.id + '/messages', { body: newMessage.trim() });
+      setMessages((current) => [...current, res.data]);
+      setNewMessage('');
+    } catch {
+      setError('Failed to send message.');
     }
   };
 
@@ -420,6 +442,41 @@ export function RequestDetail() {
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {request.status !== 'DRAFT' && (
+          <div className="p-8 border-t border-slate-100">
+            <h2 className="text-lg font-semibold text-indigo-950 mb-4 flex items-center gap-2">
+              <MessageSquare size={20} className="text-purple-600" />
+              Messages
+            </h2>
+            <div className="space-y-3 mb-4">
+              {messages.length === 0 ? (
+                <p className="text-sm text-slate-500">No messages yet.</p>
+              ) : (
+                messages.map((message) => (
+                  <div key={message.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                    <div className="text-sm text-slate-900">{message.body}</div>
+                    <div className="text-xs text-slate-500 mt-1">{new Date(message.created_at).toLocaleString()}</div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="flex flex-col gap-2 md:flex-row">
+              <input
+                value={newMessage}
+                onChange={(event) => setNewMessage(event.target.value)}
+                className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                placeholder="Write a request message"
+              />
+              <button
+                onClick={handleSendMessage}
+                className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
+              >
+                Send
+              </button>
             </div>
           </div>
         )}

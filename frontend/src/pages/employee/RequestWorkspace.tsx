@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
-import { Loader2, ArrowLeft, Clock, FileText, CheckCircle, AlertTriangle, CalendarClock } from 'lucide-react';
+import { Loader2, ArrowLeft, Clock, FileText, CheckCircle, AlertTriangle, CalendarClock, MessageSquare } from 'lucide-react';
 
 interface ServiceRequest {
   id: string;
@@ -56,6 +56,13 @@ interface RequestInteraction {
   outcome_note: string | null;
 }
 
+interface RequestMessage {
+  id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   SUBMITTED: 'bg-blue-50 text-blue-700',
   WAITING_FOR_CENTRE: 'bg-yellow-50 text-yellow-800',
@@ -71,6 +78,8 @@ export function RequestWorkspace() {
   const [reviews, setReviews] = useState<DocumentReview[]>([]);
   const [interactionRequirements, setInteractionRequirements] = useState<InteractionRequirement[]>([]);
   const [interactions, setInteractions] = useState<RequestInteraction[]>([]);
+  const [messages, setMessages] = useState<RequestMessage[]>([]);
+  const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isAccepting, setIsAccepting] = useState(false);
   const [isStartingReview, setIsStartingReview] = useState(false);
@@ -87,20 +96,23 @@ export function RequestWorkspace() {
         setRequest(reqRes.data);
         setHistory(histRes.data);
         try {
-          const [docsRes, reviewsRes, serviceRes, interactionsRes] = await Promise.all([
+          const [docsRes, reviewsRes, serviceRes, interactionsRes, messagesRes] = await Promise.all([
             api.get('/requests/' + id + '/documents'),
             api.get('/requests/' + id + '/document-reviews'),
             api.get('/services/' + reqRes.data.service_id),
-            api.get('/requests/' + id + '/interactions')
+            api.get('/requests/' + id + '/interactions'),
+            api.get('/requests/' + id + '/messages')
           ]);
           setDocuments(docsRes.data);
           setReviews(reviewsRes.data);
           setInteractionRequirements(serviceRes.data.interaction_requirements || []);
           setInteractions(interactionsRes.data || []);
+          setMessages(messagesRes.data || []);
         } catch {
           setDocuments([]);
           setReviews([]);
           setInteractions([]);
+          setMessages([]);
         }
       } catch {
         setError('Failed to load request workspace.');
@@ -130,13 +142,14 @@ export function RequestWorkspace() {
   };
 
   const refreshWorkspace = async (requestId: string) => {
-    const [reqRes, histRes, docsRes, reviewsRes, serviceRes, interactionsRes] = await Promise.all([
+    const [reqRes, histRes, docsRes, reviewsRes, serviceRes, interactionsRes, messagesRes] = await Promise.all([
       api.get('/requests/' + requestId),
       api.get('/requests/' + requestId + '/history'),
       api.get('/requests/' + requestId + '/documents'),
       api.get('/requests/' + requestId + '/document-reviews'),
       request ? api.get('/services/' + request.service_id) : Promise.resolve({ data: { interaction_requirements: [] } }),
-      api.get('/requests/' + requestId + '/interactions')
+      api.get('/requests/' + requestId + '/interactions'),
+      api.get('/requests/' + requestId + '/messages')
     ]);
     setRequest(reqRes.data);
     setHistory(histRes.data);
@@ -144,6 +157,7 @@ export function RequestWorkspace() {
     setReviews(reviewsRes.data);
     setInteractionRequirements(serviceRes.data.interaction_requirements || []);
     setInteractions(interactionsRes.data || []);
+    setMessages(messagesRes.data || []);
   };
 
   const handleStartReview = async () => {
@@ -199,6 +213,17 @@ export function RequestWorkspace() {
       await refreshWorkspace(request.id);
     } catch {
       setError('Failed to record interaction outcome.');
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!request || !newMessage.trim()) return;
+    try {
+      const res = await api.post('/requests/' + request.id + '/messages', { body: newMessage.trim() });
+      setMessages((current) => [...current, res.data]);
+      setNewMessage('');
+    } catch {
+      setError('Failed to send message.');
     }
   };
 
@@ -377,6 +402,41 @@ export function RequestWorkspace() {
             </div>
           )}
         </div>
+
+        {request.status !== 'WAITING_FOR_CENTRE' && (
+          <div className="p-8 border-b border-slate-100">
+            <h2 className="text-lg font-semibold text-indigo-950 mb-6 flex items-center gap-2">
+              <MessageSquare size={20} className="text-indigo-600" />
+              Messages
+            </h2>
+            <div className="space-y-3 mb-4">
+              {messages.length === 0 ? (
+                <p className="text-sm text-slate-500">No request messages yet.</p>
+              ) : (
+                messages.map((message) => (
+                  <div key={message.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                    <div className="text-sm text-slate-900">{message.body}</div>
+                    <div className="text-xs text-slate-500 mt-1">{new Date(message.created_at).toLocaleString()}</div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="flex flex-col gap-2 md:flex-row">
+              <input
+                value={newMessage}
+                onChange={(event) => setNewMessage(event.target.value)}
+                className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                placeholder="Write a request message"
+              />
+              <button
+                onClick={handleSendMessage}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              >
+                Send
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="p-8">
           <h2 className="text-lg font-semibold text-indigo-950 mb-6 flex items-center gap-2">

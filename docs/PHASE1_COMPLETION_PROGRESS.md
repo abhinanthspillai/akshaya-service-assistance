@@ -15,7 +15,7 @@
 | R2 - Deterministic System Pre-Validation | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
 | R3 - Document Review and Correction Cycle | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `alembic upgrade head`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
 | R4 - Interaction Requirements and Scheduling | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `alembic upgrade head`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
-| R5 - Request-Specific Communication | NOT STARTED | Pending |
+| R5 - Request-Specific Communication | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `alembic upgrade head`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
 | R6 - Readiness and Processing Flow | NOT STARTED | Pending |
 | R7 - Consolidated Payment Workflow | NOT STARTED | Pending |
 | R8 - Notification System | NOT STARTED | Pending |
@@ -59,3 +59,10 @@
 - Added Citizen/Employee scheduling support with `INTERACTION_REQUIRED -> INTERACTION_SCHEDULED`.
 - Represented missed/completed outcomes on interaction records instead of inventing primary request states.
 - Added Citizen request-detail scheduling UI and Employee workspace interaction controls.
+
+## R5 Notes
+
+- Added request messages in migration 0010.
+- Added request-scoped list/send endpoints for Citizen owners and current active assigned Employees.
+- Added authorization tests for cross-Citizen denial and employee access only after assignment.
+- Added Citizen and Employee request workspace message panels.
