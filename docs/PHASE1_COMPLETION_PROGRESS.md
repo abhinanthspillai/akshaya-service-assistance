@@ -1,0 +1,36 @@
+# Phase 1 Completion Progress
+
+## Status Legend
+
+- NOT STARTED
+- IN PROGRESS
+- BLOCKED
+- COMPLETE
+
+## Workstreams
+
+| Workstream | Status | Verification |
+|---|---|---|
+| R1 - Document Requirements and Secure Uploads | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `alembic upgrade head`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
+| R2 - Deterministic System Pre-Validation | NOT STARTED | Pending |
+| R3 - Document Review and Correction Cycle | NOT STARTED | Pending |
+| R4 - Interaction Requirements and Scheduling | NOT STARTED | Pending |
+| R5 - Request-Specific Communication | NOT STARTED | Pending |
+| R6 - Readiness and Processing Flow | NOT STARTED | Pending |
+| R7 - Consolidated Payment Workflow | NOT STARTED | Pending |
+| R8 - Notification System | NOT STARTED | Pending |
+| R9 - Cancellation, Escalation and Reassignment | NOT STARTED | Pending |
+| R10 - Support Tickets | NOT STARTED | Pending |
+| R11 - Completed Output and Secure Delivery | NOT STARTED | Pending |
+| R12 - Audit Logging and Privacy Hardening | NOT STARTED | Pending |
+| R13 - Role-Complete Frontend | NOT STARTED | Pending |
+| R14 - Final Integration, Regression and Demonstration | NOT STARTED | Pending |
+
+## R1 Notes
+
+- Added request-document metadata persistence with private generated storage keys.
+- Added Citizen upload/replacement, document listing and authorized download endpoints.
+- Added file validation for configured MIME types, known extension/MIME pairs, empty files and max size.
+- Preserved replacement history by versioning request documents.
+- Enforced Citizen ownership and active employee assignment access for document operations.
+- Added citizen request-detail UI for document requirement upload and replacement.

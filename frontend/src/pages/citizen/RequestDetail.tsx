@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
-import { Loader2, ArrowLeft, MapPin } from 'lucide-react';
+import { Loader2, ArrowLeft, MapPin, Upload, FileText } from 'lucide-react';
 
 interface ServiceRequest {
   id: string;
+  service_id: string;
   status: string;
   service_name_snapshot: string;
   service_type_snapshot: string;
@@ -12,6 +13,26 @@ interface ServiceRequest {
   submitted_at: string | null;
   created_at: string;
   selected_centre_id: string | null;
+}
+
+interface ServiceRequirement {
+  id: string;
+  name: string;
+  description: string | null;
+  is_required: boolean;
+  max_file_size_bytes: number | null;
+  allowed_file_types: Array<{ mime_type: string }>;
+}
+
+interface RequestDocument {
+  id: string;
+  requirement_id: string;
+  original_filename: string;
+  content_type: string;
+  size_bytes: number;
+  version: number;
+  is_current: boolean;
+  uploaded_at: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -27,9 +48,12 @@ const STATUS_COLORS: Record<string, string> = {
 export function RequestDetail() {
   const { id } = useParams<{ id: string }>();
   const [request, setRequest] = useState<ServiceRequest | null>(null);
+  const [requirements, setRequirements] = useState<ServiceRequirement[]>([]);
+  const [documents, setDocuments] = useState<RequestDocument[]>([]);
   const [centres, setCentres] = useState<Array<{ id: string; name: string; district: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadingRequirementId, setUploadingRequirementId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
@@ -38,6 +62,12 @@ export function RequestDetail() {
       try {
         const res = await api.get('/requests/' + (id || ''));
         setRequest(res.data);
+        const [serviceRes, documentsRes] = await Promise.all([
+          api.get('/services/' + res.data.service_id),
+          api.get('/requests/' + res.data.id + '/documents'),
+        ]);
+        setRequirements(serviceRes.data.document_requirements || []);
+        setDocuments(documentsRes.data || []);
         if (res.data.status === 'DRAFT' && res.data.service_id) {
           const centresRes = await api.get('/centres/?active=true');
           setCentres(centresRes.data);
@@ -58,6 +88,25 @@ export function RequestDetail() {
       setRequest(res.data);
     } catch {
       setError('Failed to select centre.');
+    }
+  };
+
+  const handleDocumentUpload = async (requirementId: string, file: File | null) => {
+    if (!request || !file) return;
+    setUploadingRequirementId(requirementId);
+    setError('');
+    const formData = new FormData();
+    formData.append('requirement_id', requirementId);
+    formData.append('file', file);
+    try {
+      const res = await api.post('/requests/' + request.id + '/documents', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setDocuments((current) => [...current, res.data]);
+    } catch {
+      setError('Document upload failed. Check the file type and size for this requirement.');
+    } finally {
+      setUploadingRequirementId(null);
     }
   };
 
@@ -91,6 +140,10 @@ export function RequestDetail() {
   if (!request) return null;
 
   const statusColor = STATUS_COLORS[request.status] || 'bg-slate-100 text-slate-600';
+  const currentDocumentByRequirement = new Map(
+    documents.filter((doc) => doc.is_current).map((doc) => [doc.requirement_id, doc])
+  );
+  const canUploadDocuments = request.status === 'DRAFT' || request.status === 'CORRECTION_REQUIRED';
 
   return (
     <div>
@@ -130,6 +183,67 @@ export function RequestDetail() {
 
         {request.status === 'DRAFT' && (
           <div className="p-8">
+            <section className="mb-8">
+              <h2 className="text-lg font-semibold text-indigo-950 mb-4 flex items-center gap-2">
+                <FileText size={20} className="text-purple-600" />
+                Required Documents
+              </h2>
+
+              {requirements.length === 0 ? (
+                <p className="text-slate-500 text-sm">No documents are required for this service.</p>
+              ) : (
+                <div className="grid gap-3">
+                  {requirements.map((requirement) => {
+                    const document = currentDocumentByRequirement.get(requirement.id);
+                    return (
+                      <div key={requirement.id} className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <div className="font-semibold text-slate-900">
+                              {requirement.name}
+                              {requirement.is_required && <span className="text-red-600"> *</span>}
+                            </div>
+                            {requirement.description && (
+                              <div className="text-sm text-slate-500 mt-1">{requirement.description}</div>
+                            )}
+                            <div className="text-xs text-slate-500 mt-2">
+                              {requirement.allowed_file_types.length > 0
+                                ? 'Allowed: ' + requirement.allowed_file_types.map((type) => type.mime_type).join(', ')
+                                : 'Allowed file type configured by centre'}
+                              {requirement.max_file_size_bytes
+                                ? ' · Max ' + Math.round(requirement.max_file_size_bytes / 1024) + ' KB'
+                                : ''}
+                            </div>
+                            {document && (
+                              <div className="text-sm text-green-700 mt-2">
+                                Uploaded {document.original_filename} · v{document.version}
+                              </div>
+                            )}
+                          </div>
+                          {canUploadDocuments && (
+                            <label className="inline-flex items-center justify-center gap-2 rounded-lg bg-white border border-purple-200 px-4 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50 cursor-pointer transition-colors">
+                              {uploadingRequirementId === requirement.id ? (
+                                <Loader2 size={16} className="animate-spin" />
+                              ) : (
+                                <Upload size={16} />
+                              )}
+                              {document ? 'Replace' : 'Upload'}
+                              <input
+                                type="file"
+                                className="sr-only"
+                                disabled={uploadingRequirementId === requirement.id}
+                                onChange={(event) => handleDocumentUpload(requirement.id, event.target.files?.[0] || null)}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
             <h2 className="text-lg font-semibold text-indigo-950 mb-4 flex items-center gap-2">
               <MapPin size={20} className="text-purple-600" />
               Select a Centre

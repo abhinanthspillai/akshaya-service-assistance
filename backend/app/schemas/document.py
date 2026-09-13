@@ -1,0 +1,21 @@
+from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
+
+
+class RequestDocumentResponse(BaseModel):
+    id: UUID
+    request_id: UUID
+    requirement_id: UUID
+    uploaded_by_id: UUID
+    original_filename: str
+    content_type: str
+    size_bytes: int
+    sha256: str
+    version: int
+    is_current: bool
+    uploaded_at: datetime
+    replaced_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)

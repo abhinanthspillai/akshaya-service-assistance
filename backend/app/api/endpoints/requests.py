@@ -1,8 +1,11 @@
 from datetime import UTC, datetime
-from typing import Any
-from uuid import UUID
+from hashlib import sha256
+from pathlib import Path, PurePath
+from typing import Annotated, Any
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 
 from app.api.deps import (
@@ -11,13 +14,22 @@ from app.api.deps import (
     CurrentUserEmployee,
     SessionDep,
 )
+from app.core.config import get_settings
 from app.models.centre import AkshayaCentre
+from app.models.document import RequestDocument
 from app.models.request import ServiceRequest
-from app.models.service import CentreSupportedService, Service
+from app.models.service import CentreSupportedService, Service, ServiceDocumentRequirement
+from app.schemas.document import RequestDocumentResponse
 from app.schemas.history import RequestHistoryResponse
 from app.schemas.request import SelectCentreRequest, ServiceRequestCreate, ServiceRequestResponse
 
 router = APIRouter()
+
+_ALLOWED_EXTENSIONS_BY_MIME = {
+    "application/pdf": {".pdf"},
+    "image/jpeg": {".jpg", ".jpeg"},
+    "image/png": {".png"},
+}
 
 
 @router.post("/", response_model=ServiceRequestResponse, status_code=status.HTTP_201_CREATED)
@@ -167,6 +179,161 @@ def submit_request(
     return service_request
 
 
+@router.get("/{request_id}/documents", response_model=list[RequestDocumentResponse])
+def list_request_documents(
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    _verify_document_access(current_user, service_request, session)
+
+    documents = session.scalars(
+        select(RequestDocument)
+        .where(RequestDocument.request_id == request_id)
+        .order_by(RequestDocument.requirement_id, RequestDocument.version)
+    ).all()
+    return documents
+
+
+@router.post(
+    "/{request_id}/documents",
+    response_model=RequestDocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_request_document(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserCitizen,
+    requirement_id: Annotated[UUID, Form()],
+    file: Annotated[UploadFile, File()],
+) -> Any:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if service_request.citizen_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if service_request.status not in {"DRAFT", "CORRECTION_REQUIRED"}:
+        raise HTTPException(
+            status_code=409,
+            detail="Documents can be uploaded only while drafting or correcting a request",
+        )
+
+    requirement = session.scalar(
+        select(ServiceDocumentRequirement).where(
+            ServiceDocumentRequirement.id == requirement_id,
+            ServiceDocumentRequirement.service_id == service_request.service_id,
+            ServiceDocumentRequirement.is_active.is_(True),
+        )
+    )
+    if not requirement:
+        raise HTTPException(status_code=404, detail="Document requirement not found")
+
+    content_type = file.content_type or "application/octet-stream"
+    allowed_types = {allowed.mime_type for allowed in requirement.allowed_file_types}
+    if allowed_types and content_type not in allowed_types:
+        raise HTTPException(status_code=422, detail="Unsupported file type")
+
+    original_filename = PurePath(file.filename or "upload").name[:255] or "upload"
+    suffix = Path(original_filename).suffix.lower()
+    allowed_extensions = _ALLOWED_EXTENSIONS_BY_MIME.get(content_type)
+    if allowed_extensions and suffix not in allowed_extensions:
+        raise HTTPException(status_code=422, detail="File extension does not match content type")
+
+    data = await file.read()
+    size = len(data)
+    max_size = requirement.max_file_size_bytes or get_settings().max_upload_size_bytes
+    if size == 0:
+        raise HTTPException(status_code=422, detail="Uploaded file must not be empty")
+    if size > max_size:
+        raise HTTPException(status_code=413, detail="Uploaded file exceeds allowed size")
+
+    now = datetime.now(tz=UTC)
+    existing_documents = session.scalars(
+        select(RequestDocument).where(
+            RequestDocument.request_id == request_id,
+            RequestDocument.requirement_id == requirement_id,
+            RequestDocument.is_current.is_(True),
+        )
+    ).all()
+    for existing_document in existing_documents:
+        existing_document.is_current = False
+        existing_document.replaced_at = now
+        session.add(existing_document)
+
+    latest_version = (
+        session.scalar(
+            select(RequestDocument.version)
+            .where(
+                RequestDocument.request_id == request_id,
+                RequestDocument.requirement_id == requirement_id,
+            )
+            .order_by(RequestDocument.version.desc())
+            .limit(1)
+        )
+        or 0
+    )
+    storage_key = _write_private_upload(
+        request_id=request_id,
+        original_filename=original_filename,
+        data=data,
+    )
+    document = RequestDocument(
+        request_id=request_id,
+        requirement_id=requirement_id,
+        uploaded_by_id=current_user.id,
+        storage_key=storage_key,
+        original_filename=original_filename,
+        content_type=content_type,
+        size_bytes=size,
+        sha256=sha256(data).hexdigest(),
+        version=latest_version + 1,
+        is_current=True,
+        uploaded_at=now,
+    )
+    session.add(document)
+    session.commit()
+    session.refresh(document)
+    return document
+
+
+@router.get("/{request_id}/documents/{document_id}/download")
+def download_request_document(
+    request_id: UUID,
+    document_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> FileResponse:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    _verify_document_access(current_user, service_request, session)
+
+    document = session.scalar(
+        select(RequestDocument).where(
+            RequestDocument.id == document_id,
+            RequestDocument.request_id == request_id,
+        )
+    )
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    path = _resolve_storage_path(document.storage_key)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Document file not found")
+
+    return FileResponse(
+        path,
+        media_type=document.content_type,
+        filename=document.original_filename,
+    )
+
+
 @router.post("/{request_id}/accept", response_model=ServiceRequestResponse)
 def accept_request(
     *,
@@ -282,3 +449,52 @@ def _verify_request_access(user: Any, service_request: ServiceRequest, session: 
         admin = session.get(CentreAdministrator, user.id)
         if not admin or admin.centre_id != service_request.selected_centre_id:
             raise HTTPException(status_code=403, detail="Not authorized")
+
+
+def _verify_document_access(user: Any, service_request: ServiceRequest, session: Any) -> None:
+    if user.role == "citizen":
+        if service_request.citizen_id != user.id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        return
+
+    if user.role == "centre_employee":
+        from app.models.assignment import RequestAssignment
+
+        assignment = session.scalar(
+            select(RequestAssignment).where(
+                RequestAssignment.request_id == service_request.id,
+                RequestAssignment.employee_id == user.id,
+                RequestAssignment.is_active.is_(True),
+            )
+        )
+        if not assignment:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        return
+
+    if user.role == "centre_administrator":
+        from app.models.profile import CentreAdministrator
+
+        admin = session.get(CentreAdministrator, user.id)
+        if not admin or admin.centre_id != service_request.selected_centre_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        return
+
+    if user.role != "system_administrator":
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+
+def _write_private_upload(*, request_id: UUID, original_filename: str, data: bytes) -> str:
+    safe_suffix = Path(original_filename).suffix.lower()
+    storage_key = f"request-documents/{request_id}/{uuid4().hex}{safe_suffix}"
+    path = _resolve_storage_path(storage_key)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    return storage_key
+
+
+def _resolve_storage_path(storage_key: str) -> Path:
+    root = Path(get_settings().file_storage_path).resolve()
+    path = (root / storage_key).resolve()
+    if root != path and root not in path.parents:
+        raise HTTPException(status_code=500, detail="Invalid storage path")
+    return path

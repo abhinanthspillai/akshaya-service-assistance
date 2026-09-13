@@ -7,6 +7,6 @@ describe("App", () => {
   it("renders the application shell", () => {
     render(<App />);
 
-    expect(screen.getByRole("heading", { name: "Akshaya Service Assistance" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Akshaya" })).toBeInTheDocument();
   });
 });

@@ -1,5 +1,6 @@
 from app.models.assignment import RequestAssignment, RequestHistory
 from app.models.centre import AkshayaCentre
+from app.models.document import RequestDocument
 from app.models.profile import CentreAdministrator, CitizenProfile, EmployeeProfile
 from app.models.request import ServiceRequest
 from app.models.service import (
@@ -25,4 +26,5 @@ __all__ = [
     "ServiceRequest",
     "RequestAssignment",
     "RequestHistory",
+    "RequestDocument",
 ]

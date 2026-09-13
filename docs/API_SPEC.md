@@ -139,8 +139,17 @@ Use actions, not arbitrary status PATCH:
 Every action validates current state, caller role/scope, required evidence and concurrency version/transaction assumptions.
 
 ## Documents (later slice)
-Multipart upload with requirement_id.
-Backend validates authorization, MIME type, configured max size, safe generated storage name, malware policy if available, and metadata persistence. Download uses authorized backend endpoint or short-lived signed URL; never expose unrestricted storage paths.
+Implemented Phase 1 request-document endpoints:
+
+- GET /requests/{request_id}/documents
+- POST /requests/{request_id}/documents
+- GET /requests/{request_id}/documents/{document_id}/download
+
+Upload is multipart form data with `requirement_id` and `file`.
+
+Backend validates Citizen ownership, request state, requirement/service relationship, MIME type, configured/default max size, non-empty file content, generated private storage key and metadata persistence. Replacement uploads create a new document version and mark prior current versions as replaced rather than deleting their evidence.
+
+Download is served only through the authorized backend endpoint. Citizen owners, active assigned employees, same-centre administrators and system administrators may access according to role scope. Responses expose metadata only and never expose unrestricted storage paths.
 
 ## Payments (later slice)
 Payment intent/mock initiation only after allowed workflow point.

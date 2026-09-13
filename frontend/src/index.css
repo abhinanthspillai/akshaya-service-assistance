@@ -4,6 +4,9 @@
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 font-sans;
+    margin: 0;
+    background: #f8fafc;
+    color: #0f172a;
+    font-family: ui-sans-serif, system-ui, sans-serif;
   }
 }
