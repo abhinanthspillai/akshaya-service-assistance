@@ -49,6 +49,7 @@ from app.schemas.request import (
     ServiceRequestCreate,
     ServiceRequestResponse,
     UnableToProceedRequest,
+    ReassignRequest,
 )
 
 router = APIRouter()
@@ -888,6 +889,173 @@ def mark_unable_to_proceed(
     )
     session.add(history)
     service_request.status = "UNABLE_TO_PROCEED"
+    session.add(service_request)
+    session.commit()
+    session.refresh(service_request)
+    return service_request
+
+
+@router.post("/{request_id}/cancel", response_model=ServiceRequestResponse)
+def cancel_request(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserCitizen,
+) -> Any:
+    from datetime import datetime
+    from app.models.assignment import RequestAssignment, RequestHistory
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if service_request.citizen_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    allowed_cancel_states = {
+        "DRAFT", "SUBMITTED", "WAITING_FOR_CENTRE", "ACCEPTED",
+        "UNDER_REVIEW", "CORRECTION_REQUIRED", "INTERACTION_REQUIRED", "INTERACTION_SCHEDULED"
+    }
+    if service_request.status not in allowed_cancel_states:
+        raise HTTPException(status_code=409, detail="Request cannot be cancelled in its current state")
+
+    now = datetime.now(tz=UTC)
+    existing_assignments = session.scalars(
+        select(RequestAssignment).where(
+            RequestAssignment.request_id == request_id,
+            RequestAssignment.is_active.is_(True),
+        )
+    ).all()
+    for existing in existing_assignments:
+        existing.is_active = False
+        existing.revoked_at = now
+        session.add(existing)
+        _safe_add_notification(
+            session,
+            user_id=existing.employee_id,
+            request_id=request_id,
+            event_type="request_cancelled",
+            title="Request cancelled",
+            body=f"Request {request_id} was cancelled by the citizen.",
+        )
+
+    history = RequestHistory(
+        request_id=request_id,
+        actor_id=current_user.id,
+        action="cancel",
+        from_status=service_request.status,
+        to_status="CANCELLED",
+        note="Cancelled by citizen",
+    )
+    session.add(history)
+
+    service_request.status = "CANCELLED"
+    service_request.cancelled_at = now
+    session.add(service_request)
+    session.commit()
+    session.refresh(service_request)
+    return service_request
+
+
+@router.post("/{request_id}/reassign", response_model=ServiceRequestResponse)
+def reassign_request(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    body: ReassignRequest,
+) -> Any:
+    from datetime import datetime
+    from sqlalchemy import func
+    from app.models.assignment import RequestAssignment, RequestHistory
+    from app.models.profile import EmployeeProfile, CentreAdministrator
+
+    if current_user.role not in {"centre_administrator", "system_administrator"}:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    if current_user.role == "centre_administrator":
+        admin = session.get(CentreAdministrator, current_user.id)
+        if not admin or admin.centre_id != service_request.selected_centre_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+    if service_request.status in {"DRAFT", "SUBMITTED", "WAITING_FOR_CENTRE", "COMPLETED", "CLOSED", "CANCELLED", "UNABLE_TO_PROCEED"}:
+        raise HTTPException(status_code=409, detail="Request cannot be reassigned in its current state")
+
+    target_employee = session.get(EmployeeProfile, body.employee_id)
+    if not target_employee or not target_employee.is_available:
+        raise HTTPException(status_code=400, detail="Target employee not available")
+
+    if body.centre_id and body.centre_id != service_request.selected_centre_id:
+        if current_user.role != "system_administrator":
+            raise HTTPException(status_code=403, detail="Only system admin can change centre during reassignment")
+        supported = session.scalar(
+            select(CentreSupportedService).where(
+                CentreSupportedService.centre_id == body.centre_id,
+                CentreSupportedService.service_id == service_request.service_id,
+                CentreSupportedService.is_active.is_(True),
+            )
+        )
+        if not supported:
+            raise HTTPException(status_code=409, detail="Target centre does not support this service")
+        service_request.selected_centre_id = body.centre_id
+        if supported.centre_fee_override is not None:
+            service_request.fee_snapshot = supported.centre_fee_override
+    elif target_employee.centre_id != service_request.selected_centre_id:
+        raise HTTPException(status_code=409, detail="Target employee does not belong to the request's centre")
+
+    active_count = session.scalar(
+        select(func.count())
+        .select_from(RequestAssignment)
+        .where(
+            RequestAssignment.employee_id == body.employee_id,
+            RequestAssignment.is_active.is_(True),
+        )
+    ) or 0
+    if active_count >= target_employee.max_active_requests:
+        raise HTTPException(status_code=409, detail="Target employee is at maximum capacity")
+
+    now = datetime.now(tz=UTC)
+    existing_assignments = session.scalars(
+        select(RequestAssignment).where(
+            RequestAssignment.request_id == request_id,
+            RequestAssignment.is_active.is_(True),
+        )
+    ).all()
+    for existing in existing_assignments:
+        existing.is_active = False
+        existing.revoked_at = now
+        session.add(existing)
+
+    new_assignment = RequestAssignment(
+        request_id=request_id,
+        employee_id=body.employee_id,
+        is_active=True,
+        assigned_at=now,
+    )
+    session.add(new_assignment)
+
+    history = RequestHistory(
+        request_id=request_id,
+        actor_id=current_user.id,
+        action="reassign",
+        from_status=service_request.status,
+        to_status=service_request.status,
+        note=f"Reassigned to employee {body.employee_id}",
+    )
+    session.add(history)
+
+    _safe_add_notification(
+        session,
+        user_id=body.employee_id,
+        request_id=request_id,
+        event_type="request_assigned",
+        title="Request reassigned",
+        body=f"Request {request_id} was reassigned to you.",
+    )
+
     session.add(service_request)
     session.commit()
     session.refresh(service_request)

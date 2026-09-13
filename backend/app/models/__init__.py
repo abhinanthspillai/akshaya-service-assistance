@@ -7,6 +7,7 @@ from app.models.notification import Notification
 from app.models.payment import RequestPayment
 from app.models.profile import CentreAdministrator, CitizenProfile, EmployeeProfile
 from app.models.request import ServiceRequest
+from app.models.escalation import Escalation
 from app.models.service import (
     CentreSupportedService,
     Service,
@@ -36,4 +37,5 @@ __all__ = [
     "RequestMessage",
     "Notification",
     "RequestPayment",
+    "Escalation",
 ]

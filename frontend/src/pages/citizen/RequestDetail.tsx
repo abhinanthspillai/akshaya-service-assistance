@@ -240,6 +240,20 @@ export function RequestDetail() {
     }
   };
 
+  const handleCancelRequest = async () => {
+    if (!request) return;
+    if (!window.confirm('Are you sure you want to cancel this request? This action cannot be undone.')) return;
+    setIsSubmitting(true);
+    try {
+      const res = await api.post('/requests/' + request.id + '/cancel');
+      setRequest(res.data);
+    } catch {
+      setError('Failed to cancel request.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -264,6 +278,10 @@ export function RequestDetail() {
     reviews.map((review) => [review.requirement_id, review])
   );
   const canUploadDocuments = request.status === 'DRAFT' || request.status === 'CORRECTION_REQUIRED';
+  const canCancel = [
+    'DRAFT', 'SUBMITTED', 'WAITING_FOR_CENTRE', 'ACCEPTED',
+    'UNDER_REVIEW', 'CORRECTION_REQUIRED', 'INTERACTION_REQUIRED', 'INTERACTION_SCHEDULED'
+  ].includes(request.status);
 
   return (
     <div>
@@ -277,11 +295,22 @@ export function RequestDetail() {
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mb-6">
         <div className="p-8 border-b border-slate-100 bg-gradient-to-br from-purple-50/50 to-white">
-          <div className="flex items-center gap-3 mb-4">
-            <span className={('px-3 py-1 rounded-full text-sm font-medium ' + statusColor)}>
-              {request.status.replace(/_/g, ' ')}
-            </span>
-            <span className="text-sm text-slate-400">Type {request.service_type_snapshot}</span>
+          <div className="flex items-center gap-3 mb-4 justify-between">
+            <div className="flex items-center gap-3">
+              <span className={('px-3 py-1 rounded-full text-sm font-medium ' + statusColor)}>
+                {request.status.replace(/_/g, ' ')}
+              </span>
+              <span className="text-sm text-slate-400">Type {request.service_type_snapshot}</span>
+            </div>
+            {canCancel && (
+              <button
+                onClick={handleCancelRequest}
+                disabled={isSubmitting}
+                className="text-sm text-red-600 hover:text-red-800 font-medium px-3 py-1 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+              >
+                Cancel Request
+              </button>
+            )}
           </div>
           <h1 className="text-2xl font-bold text-indigo-950 mb-2">{request.service_name_snapshot}</h1>
           <div className="text-slate-500 text-sm">

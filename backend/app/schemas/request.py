@@ -31,6 +31,11 @@ class UnableToProceedRequest(BaseModel):
     reason: str
 
 
+class ReassignRequest(BaseModel):
+    employee_id: UUID
+    centre_id: UUID | None = None
+
+
 class ServiceRequestResponse(BaseModel):
     id: UUID
     citizen_id: UUID

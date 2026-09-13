@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.endpoints import auth, centres, notifications, requests, services, staff
+from app.api.endpoints import auth, centres, escalations, notifications, requests, services, staff
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -10,3 +10,4 @@ api_router.include_router(services.router, prefix="/services", tags=["services"]
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 
 api_router.include_router(requests.router, prefix="/requests", tags=["requests"])
+api_router.include_router(escalations.router, prefix="/escalations", tags=["escalations"])
