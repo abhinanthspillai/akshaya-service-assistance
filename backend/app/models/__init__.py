@@ -15,6 +15,7 @@ from app.models.service import (
     ServiceInteractionRequirement,
     ServiceRequirementAllowedFileType,
 )
+from app.models.ticket import SupportTicket, TicketMessage
 from app.models.user import User
 
 __all__ = [
