@@ -192,6 +192,28 @@ Rules:
 - replacement uploads create new request_documents rows and preserve earlier review rows.
 - correction reasons are visible to the Citizen owner through authorized request-scoped endpoints.
 
+### request_interactions
+Implemented in migration 0009.
+
+- id UUID PK
+- request_id UUID NOT NULL FK -> service_requests.id
+- requirement_id UUID NOT NULL FK -> service_interaction_requirements.id
+- requested_by_id UUID NOT NULL FK -> users.id
+- scheduled_by_id UUID NULL FK -> users.id
+- outcome_recorded_by_id UUID NULL FK -> users.id
+- status VARCHAR(40) NOT NULL CHECK in REQUESTED, SCHEDULED, COMPLETED, MISSED
+- reason TEXT NOT NULL
+- instructions TEXT NULL
+- scheduled_at TIMESTAMPTZ NULL
+- outcome_note TEXT NULL
+- created_at TIMESTAMPTZ NOT NULL
+- updated_at TIMESTAMPTZ NOT NULL
+
+Rules:
+- missed and completed interactions are secondary record statuses, not primary service request states.
+- required interactions move the request through INTERACTION_REQUIRED and INTERACTION_SCHEDULED only.
+- repeated missed mandatory interactions remain represented through interaction records/history for later cancellation handling.
+
 ## 5. Migration sequence
 0001 users
 0002 profiles_and_centres

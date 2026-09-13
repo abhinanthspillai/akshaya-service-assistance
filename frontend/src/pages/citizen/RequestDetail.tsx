@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
-import { Loader2, ArrowLeft, MapPin, Upload, FileText } from 'lucide-react';
+import { Loader2, ArrowLeft, MapPin, Upload, FileText, CalendarClock } from 'lucide-react';
 
 interface ServiceRequest {
   id: string;
@@ -44,6 +44,15 @@ interface DocumentReview {
   created_at: string;
 }
 
+interface RequestInteraction {
+  id: string;
+  status: string;
+  reason: string;
+  instructions: string | null;
+  scheduled_at: string | null;
+  outcome_note: string | null;
+}
+
 interface PreValidationResult {
   is_valid: boolean;
   warnings: string[];
@@ -71,6 +80,8 @@ export function RequestDetail() {
   const [requirements, setRequirements] = useState<ServiceRequirement[]>([]);
   const [documents, setDocuments] = useState<RequestDocument[]>([]);
   const [reviews, setReviews] = useState<DocumentReview[]>([]);
+  const [interactions, setInteractions] = useState<RequestInteraction[]>([]);
+  const [scheduleValues, setScheduleValues] = useState<Record<string, string>>({});
   const [preValidation, setPreValidation] = useState<PreValidationResult | null>(null);
   const [centres, setCentres] = useState<Array<{ id: string; name: string; district: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -84,14 +95,16 @@ export function RequestDetail() {
       try {
         const res = await api.get('/requests/' + (id || ''));
         setRequest(res.data);
-        const [serviceRes, documentsRes, reviewsRes] = await Promise.all([
+        const [serviceRes, documentsRes, reviewsRes, interactionsRes] = await Promise.all([
           api.get('/services/' + res.data.service_id),
           api.get('/requests/' + res.data.id + '/documents'),
           api.get('/requests/' + res.data.id + '/document-reviews'),
+          api.get('/requests/' + res.data.id + '/interactions'),
         ]);
         setRequirements(serviceRes.data.document_requirements || []);
         setDocuments(documentsRes.data || []);
         setReviews(reviewsRes.data || []);
+        setInteractions(interactionsRes.data || []);
         if (res.data.status === 'DRAFT' || res.data.status === 'CORRECTION_REQUIRED') {
           const validationRes = await api.post('/requests/' + res.data.id + '/pre-validate');
           setPreValidation(validationRes.data);
@@ -116,6 +129,21 @@ export function RequestDetail() {
       setRequest(res.data);
     } catch {
       setError('Failed to select centre.');
+    }
+  };
+
+  const handleScheduleInteraction = async (interactionId: string) => {
+    if (!request || !scheduleValues[interactionId]) return;
+    try {
+      const res = await api.post('/requests/' + request.id + '/schedule-interaction', {
+        interaction_id: interactionId,
+        scheduled_at: new Date(scheduleValues[interactionId]).toISOString(),
+      });
+      setInteractions((current) => current.map((item) => item.id === interactionId ? res.data : item));
+      const reqRes = await api.get('/requests/' + request.id);
+      setRequest(reqRes.data);
+    } catch {
+      setError('Failed to schedule this interaction.');
     }
   };
 
@@ -353,6 +381,45 @@ export function RequestDetail() {
               >
                 {isSubmitting ? 'Submitting...' : 'Submit Request'}
               </button>
+            </div>
+          </div>
+        )}
+
+        {interactions.length > 0 && (
+          <div className="p-8 border-t border-slate-100">
+            <h2 className="text-lg font-semibold text-indigo-950 mb-4 flex items-center gap-2">
+              <CalendarClock size={20} className="text-purple-600" />
+              Centre Interactions
+            </h2>
+            <div className="grid gap-3">
+              {interactions.map((interaction) => (
+                <div key={interaction.id} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                  <div className="font-semibold text-slate-900">{interaction.reason}</div>
+                  {interaction.instructions && (
+                    <div className="text-sm text-slate-600 mt-1">{interaction.instructions}</div>
+                  )}
+                  <div className="text-sm text-slate-500 mt-2">
+                    Status: {interaction.status}
+                    {interaction.scheduled_at ? ' · ' + new Date(interaction.scheduled_at).toLocaleString() : ''}
+                  </div>
+                  {(interaction.status === 'REQUESTED' || interaction.status === 'MISSED') && request.status === 'INTERACTION_REQUIRED' && (
+                    <div className="mt-3 flex flex-col gap-2 md:flex-row">
+                      <input
+                        type="datetime-local"
+                        value={scheduleValues[interaction.id] || ''}
+                        onChange={(event) => setScheduleValues((current) => ({ ...current, [interaction.id]: event.target.value }))}
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                      />
+                      <button
+                        onClick={() => handleScheduleInteraction(interaction.id)}
+                        className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
+                      >
+                        Schedule
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}

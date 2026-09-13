@@ -17,14 +17,26 @@ from app.api.deps import (
 from app.core.config import get_settings
 from app.models.centre import AkshayaCentre
 from app.models.document import DOCUMENT_REVIEW_DECISIONS, RequestDocument, RequestDocumentReview
+from app.models.interaction import RequestInteraction
 from app.models.request import ServiceRequest
-from app.models.service import CentreSupportedService, Service, ServiceDocumentRequirement
+from app.models.service import (
+    CentreSupportedService,
+    Service,
+    ServiceDocumentRequirement,
+    ServiceInteractionRequirement,
+)
 from app.schemas.document import (
     RequestDocumentResponse,
     RequestDocumentReviewCreate,
     RequestDocumentReviewResponse,
 )
 from app.schemas.history import RequestHistoryResponse
+from app.schemas.interaction import (
+    InteractionOutcomeRequest,
+    RequestInteractionResponse,
+    RequireInteractionRequest,
+    ScheduleInteractionRequest,
+)
 from app.schemas.request import (
     RequestPreValidationItem,
     RequestPreValidationResponse,
@@ -512,6 +524,187 @@ def review_request_document(
     session.commit()
     session.refresh(review)
     return review
+
+
+@router.get("/{request_id}/interactions", response_model=list[RequestInteractionResponse])
+def list_request_interactions(
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    _verify_document_access(current_user, service_request, session)
+    interactions = session.scalars(
+        select(RequestInteraction)
+        .where(RequestInteraction.request_id == request_id)
+        .order_by(RequestInteraction.created_at.asc())
+    ).all()
+    return interactions
+
+
+@router.post(
+    "/{request_id}/require-interaction",
+    response_model=RequestInteractionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def require_request_interaction(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+    body: RequireInteractionRequest,
+) -> Any:
+    from app.models.assignment import RequestHistory
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    _verify_active_assignment(current_user, service_request, session)
+    if service_request.status not in {"UNDER_REVIEW", "CORRECTION_REQUIRED"}:
+        raise HTTPException(status_code=409, detail="Request is not ready for interaction request")
+
+    requirement = session.scalar(
+        select(ServiceInteractionRequirement).where(
+            ServiceInteractionRequirement.id == body.requirement_id,
+            ServiceInteractionRequirement.service_id == service_request.service_id,
+            ServiceInteractionRequirement.is_active.is_(True),
+        )
+    )
+    if not requirement:
+        raise HTTPException(status_code=404, detail="Interaction requirement not found")
+
+    interaction = RequestInteraction(
+        request_id=request_id,
+        requirement_id=body.requirement_id,
+        requested_by_id=current_user.id,
+        status="REQUESTED",
+        reason=body.reason,
+        instructions=body.instructions,
+    )
+    session.add(interaction)
+    history = RequestHistory(
+        request_id=request_id,
+        actor_id=current_user.id,
+        action="interaction_required",
+        from_status=service_request.status,
+        to_status="INTERACTION_REQUIRED",
+        note=body.reason,
+    )
+    session.add(history)
+    service_request.status = "INTERACTION_REQUIRED"
+    session.add(service_request)
+    session.commit()
+    session.refresh(interaction)
+    return interaction
+
+
+@router.post("/{request_id}/schedule-interaction", response_model=RequestInteractionResponse)
+def schedule_request_interaction(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    body: ScheduleInteractionRequest,
+) -> Any:
+    from app.models.assignment import RequestHistory
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if current_user.role == "citizen":
+        if service_request.citizen_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+    elif current_user.role == "centre_employee":
+        _verify_active_assignment(current_user, service_request, session)
+    else:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if service_request.status != "INTERACTION_REQUIRED":
+        raise HTTPException(status_code=409, detail="Request must require interaction")
+
+    interaction = session.scalar(
+        select(RequestInteraction).where(
+            RequestInteraction.id == body.interaction_id,
+            RequestInteraction.request_id == request_id,
+            RequestInteraction.status.in_(["REQUESTED", "MISSED"]),
+        )
+    )
+    if not interaction:
+        raise HTTPException(status_code=404, detail="Schedulable interaction not found")
+
+    interaction.status = "SCHEDULED"
+    interaction.scheduled_at = body.scheduled_at
+    interaction.scheduled_by_id = current_user.id
+    session.add(interaction)
+    history = RequestHistory(
+        request_id=request_id,
+        actor_id=current_user.id,
+        action="interaction_scheduled",
+        from_status=service_request.status,
+        to_status="INTERACTION_SCHEDULED",
+    )
+    session.add(history)
+    service_request.status = "INTERACTION_SCHEDULED"
+    session.add(service_request)
+    session.commit()
+    session.refresh(interaction)
+    return interaction
+
+
+@router.post(
+    "/{request_id}/interactions/{interaction_id}/outcome",
+    response_model=RequestInteractionResponse,
+)
+def record_interaction_outcome(
+    *,
+    request_id: UUID,
+    interaction_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+    body: InteractionOutcomeRequest,
+) -> Any:
+    from app.models.assignment import RequestHistory
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    _verify_active_assignment(current_user, service_request, session)
+    if service_request.status != "INTERACTION_SCHEDULED":
+        raise HTTPException(status_code=409, detail="Request must have scheduled interaction")
+    if body.outcome not in {"COMPLETED", "MISSED"}:
+        raise HTTPException(status_code=422, detail="Unsupported interaction outcome")
+
+    interaction = session.scalar(
+        select(RequestInteraction).where(
+            RequestInteraction.id == interaction_id,
+            RequestInteraction.request_id == request_id,
+            RequestInteraction.status == "SCHEDULED",
+        )
+    )
+    if not interaction:
+        raise HTTPException(status_code=404, detail="Scheduled interaction not found")
+
+    interaction.status = body.outcome
+    interaction.outcome_note = body.note
+    interaction.outcome_recorded_by_id = current_user.id
+    session.add(interaction)
+
+    next_status = "UNDER_REVIEW" if body.outcome == "COMPLETED" else "INTERACTION_REQUIRED"
+    history = RequestHistory(
+        request_id=request_id,
+        actor_id=current_user.id,
+        action="interaction_" + body.outcome.lower(),
+        from_status=service_request.status,
+        to_status=next_status,
+        note=body.note,
+    )
+    session.add(history)
+    service_request.status = next_status
+    session.add(service_request)
+    session.commit()
+    session.refresh(interaction)
+    return interaction
 
 
 @router.post("/{request_id}/accept", response_model=ServiceRequestResponse)

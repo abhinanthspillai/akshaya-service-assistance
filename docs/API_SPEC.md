@@ -139,6 +139,25 @@ Centre Employee with active assignment while request is UNDER_REVIEW.
 Request: decision and optional reason. Supported Phase 1 decisions are APPROVED, REJECTED, REPLACEMENT_REQUESTED and SUSPICIOUS.
 Non-approval decisions require a reason and transition the request to CORRECTION_REQUIRED with history evidence. Approval records review evidence without advancing the primary request state.
 
+### GET /requests/{request_id}/interactions
+Authorized request participants.
+Returns request interaction records, including requested reason, instructions, schedule, outcome status and outcome note.
+
+### POST /requests/{request_id}/require-interaction
+Centre Employee with active assignment.
+Precondition: UNDER_REVIEW or CORRECTION_REQUIRED.
+Creates a request interaction record and transitions the request to INTERACTION_REQUIRED.
+
+### POST /requests/{request_id}/schedule-interaction
+Citizen owner or active assigned Centre Employee.
+Precondition: INTERACTION_REQUIRED and a REQUESTED/MISSED interaction record.
+Schedules the interaction and transitions the request to INTERACTION_SCHEDULED.
+
+### POST /requests/{request_id}/interactions/{interaction_id}/outcome
+Centre Employee with active assignment.
+Precondition: INTERACTION_SCHEDULED.
+Records COMPLETED or MISSED on the interaction record. COMPLETED returns the request to UNDER_REVIEW; MISSED returns it to INTERACTION_REQUIRED for rescheduling. There is no primary MISSED state.
+
 ## Later business-action endpoint pattern
 Use actions, not arbitrary status PATCH:
 - POST /requests/{id}/accept

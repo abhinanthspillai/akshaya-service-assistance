@@ -2,10 +2,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
-import { Loader2, ArrowLeft, Clock, FileText, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Loader2, ArrowLeft, Clock, FileText, CheckCircle, AlertTriangle, CalendarClock } from 'lucide-react';
 
 interface ServiceRequest {
   id: string;
+  service_id: string;
   status: string;
   service_name_snapshot: string;
   service_type_snapshot: string;
@@ -40,6 +41,21 @@ interface DocumentReview {
   created_at: string;
 }
 
+interface InteractionRequirement {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
+interface RequestInteraction {
+  id: string;
+  status: string;
+  reason: string;
+  instructions: string | null;
+  scheduled_at: string | null;
+  outcome_note: string | null;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   SUBMITTED: 'bg-blue-50 text-blue-700',
   WAITING_FOR_CENTRE: 'bg-yellow-50 text-yellow-800',
@@ -53,6 +69,8 @@ export function RequestWorkspace() {
   const [history, setHistory] = useState<RequestHistory[]>([]);
   const [documents, setDocuments] = useState<RequestDocument[]>([]);
   const [reviews, setReviews] = useState<DocumentReview[]>([]);
+  const [interactionRequirements, setInteractionRequirements] = useState<InteractionRequirement[]>([]);
+  const [interactions, setInteractions] = useState<RequestInteraction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAccepting, setIsAccepting] = useState(false);
   const [isStartingReview, setIsStartingReview] = useState(false);
@@ -69,15 +87,20 @@ export function RequestWorkspace() {
         setRequest(reqRes.data);
         setHistory(histRes.data);
         try {
-          const [docsRes, reviewsRes] = await Promise.all([
+          const [docsRes, reviewsRes, serviceRes, interactionsRes] = await Promise.all([
             api.get('/requests/' + id + '/documents'),
-            api.get('/requests/' + id + '/document-reviews')
+            api.get('/requests/' + id + '/document-reviews'),
+            api.get('/services/' + reqRes.data.service_id),
+            api.get('/requests/' + id + '/interactions')
           ]);
           setDocuments(docsRes.data);
           setReviews(reviewsRes.data);
+          setInteractionRequirements(serviceRes.data.interaction_requirements || []);
+          setInteractions(interactionsRes.data || []);
         } catch {
           setDocuments([]);
           setReviews([]);
+          setInteractions([]);
         }
       } catch {
         setError('Failed to load request workspace.');
@@ -107,16 +130,20 @@ export function RequestWorkspace() {
   };
 
   const refreshWorkspace = async (requestId: string) => {
-    const [reqRes, histRes, docsRes, reviewsRes] = await Promise.all([
+    const [reqRes, histRes, docsRes, reviewsRes, serviceRes, interactionsRes] = await Promise.all([
       api.get('/requests/' + requestId),
       api.get('/requests/' + requestId + '/history'),
       api.get('/requests/' + requestId + '/documents'),
-      api.get('/requests/' + requestId + '/document-reviews')
+      api.get('/requests/' + requestId + '/document-reviews'),
+      request ? api.get('/services/' + request.service_id) : Promise.resolve({ data: { interaction_requirements: [] } }),
+      api.get('/requests/' + requestId + '/interactions')
     ]);
     setRequest(reqRes.data);
     setHistory(histRes.data);
     setDocuments(docsRes.data);
     setReviews(reviewsRes.data);
+    setInteractionRequirements(serviceRes.data.interaction_requirements || []);
+    setInteractions(interactionsRes.data || []);
   };
 
   const handleStartReview = async () => {
@@ -141,6 +168,37 @@ export function RequestWorkspace() {
       await refreshWorkspace(request.id);
     } catch {
       setError('Failed to save document review decision.');
+    }
+  };
+
+  const handleRequireInteraction = async (requirementId: string) => {
+    if (!request) return;
+    const reason = window.prompt('Reason for required interaction');
+    if (!reason) return;
+    const instructions = window.prompt('Instructions for the citizen') || null;
+    try {
+      await api.post('/requests/' + request.id + '/require-interaction', {
+        requirement_id: requirementId,
+        reason,
+        instructions,
+      });
+      await refreshWorkspace(request.id);
+    } catch {
+      setError('Failed to require interaction.');
+    }
+  };
+
+  const handleInteractionOutcome = async (interactionId: string, outcome: 'COMPLETED' | 'MISSED') => {
+    if (!request) return;
+    const note = window.prompt('Outcome note') || null;
+    try {
+      await api.post('/requests/' + request.id + '/interactions/' + interactionId + '/outcome', {
+        outcome,
+        note,
+      });
+      await refreshWorkspace(request.id);
+    } catch {
+      setError('Failed to record interaction outcome.');
     }
   };
 
@@ -260,6 +318,62 @@ export function RequestWorkspace() {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+
+        <div className="p-8 border-b border-slate-100">
+          <h2 className="text-lg font-semibold text-indigo-950 mb-6 flex items-center gap-2">
+            <CalendarClock size={20} className="text-indigo-600" />
+            Interactions
+          </h2>
+
+          {request.status === 'UNDER_REVIEW' && interactionRequirements.length > 0 && (
+            <div className="mb-5 flex flex-wrap gap-2">
+              {interactionRequirements.map((requirement) => (
+                <button
+                  key={requirement.id}
+                  onClick={() => handleRequireInteraction(requirement.id)}
+                  className="rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-700"
+                >
+                  Require {requirement.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {interactions.length === 0 ? (
+            <p className="text-slate-500 text-sm">No interactions requested yet.</p>
+          ) : (
+            <div className="grid gap-3">
+              {interactions.map((interaction) => (
+                <div key={interaction.id} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                  <div className="font-semibold text-slate-900">{interaction.reason}</div>
+                  {interaction.instructions && (
+                    <div className="text-sm text-slate-600 mt-1">{interaction.instructions}</div>
+                  )}
+                  <div className="text-sm text-slate-500 mt-2">
+                    Status: {interaction.status}
+                    {interaction.scheduled_at ? ' · ' + new Date(interaction.scheduled_at).toLocaleString() : ''}
+                  </div>
+                  {request.status === 'INTERACTION_SCHEDULED' && interaction.status === 'SCHEDULED' && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        onClick={() => handleInteractionOutcome(interaction.id, 'COMPLETED')}
+                        className="rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700"
+                      >
+                        Mark Completed
+                      </button>
+                      <button
+                        onClick={() => handleInteractionOutcome(interaction.id, 'MISSED')}
+                        className="rounded-lg bg-yellow-500 px-3 py-2 text-sm font-medium text-white hover:bg-yellow-600"
+                      >
+                        Mark Missed
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>

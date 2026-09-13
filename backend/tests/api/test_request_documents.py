@@ -12,6 +12,7 @@ from app.models.service import (
     CentreSupportedService,
     Service,
     ServiceDocumentRequirement,
+    ServiceInteractionRequirement,
     ServiceRequirementAllowedFileType,
 )
 from app.models.user import User
@@ -383,3 +384,120 @@ def test_review_requires_current_assignment_and_under_review_state(
         headers=employee_headers,
     )
     assert wrong_state.status_code == 409
+
+
+def test_interaction_required_scheduled_and_completed_flow(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    citizen_headers, employee_headers, request_id, requirement_id = _document_fixture(
+        client, db_session, tmp_path
+    )
+    doc_requirement = db_session.get(ServiceDocumentRequirement, requirement_id)
+    assert doc_requirement is not None
+    interaction_requirement = ServiceInteractionRequirement(
+        service_id=doc_requirement.service_id,
+        name="Centre visit",
+        description="Visit centre for verification",
+        is_mandatory=True,
+    )
+    db_session.add(interaction_requirement)
+    db_session.commit()
+
+    client.post(
+        f"/api/v1/requests/{request_id}/documents",
+        data={"requirement_id": str(requirement_id)},
+        files={"file": ("identity.pdf", b"%PDF-1.4 document", "application/pdf")},
+        headers=citizen_headers,
+    )
+    client.post(f"/api/v1/requests/{request_id}/submit", headers=citizen_headers)
+    client.post(f"/api/v1/requests/{request_id}/accept", headers=employee_headers)
+    client.post(f"/api/v1/requests/{request_id}/start-review", headers=employee_headers)
+
+    required = client.post(
+        f"/api/v1/requests/{request_id}/require-interaction",
+        json={
+            "requirement_id": str(interaction_requirement.id),
+            "reason": "Original certificate must be verified.",
+            "instructions": "Bring the original certificate.",
+        },
+        headers=employee_headers,
+    )
+    assert required.status_code == 201
+    interaction_id = required.json()["id"]
+    request_after_required = client.get(f"/api/v1/requests/{request_id}", headers=citizen_headers)
+    assert request_after_required.json()["status"] == "INTERACTION_REQUIRED"
+
+    visible = client.get(f"/api/v1/requests/{request_id}/interactions", headers=citizen_headers)
+    assert visible.status_code == 200
+    assert visible.json()[0]["reason"] == "Original certificate must be verified."
+
+    scheduled = client.post(
+        f"/api/v1/requests/{request_id}/schedule-interaction",
+        json={"interaction_id": interaction_id, "scheduled_at": "2026-09-14T10:00:00+05:30"},
+        headers=citizen_headers,
+    )
+    assert scheduled.status_code == 200
+    assert scheduled.json()["status"] == "SCHEDULED"
+    request_after_scheduled = client.get(f"/api/v1/requests/{request_id}", headers=citizen_headers)
+    assert request_after_scheduled.json()["status"] == "INTERACTION_SCHEDULED"
+
+    completed = client.post(
+        f"/api/v1/requests/{request_id}/interactions/{interaction_id}/outcome",
+        json={"outcome": "COMPLETED", "note": "Citizen attended."},
+        headers=employee_headers,
+    )
+    assert completed.status_code == 200
+    assert completed.json()["status"] == "COMPLETED"
+    request_after_completed = client.get(f"/api/v1/requests/{request_id}", headers=citizen_headers)
+    assert request_after_completed.json()["status"] == "UNDER_REVIEW"
+
+
+def test_missed_interaction_uses_record_not_primary_missed_state(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    citizen_headers, employee_headers, request_id, requirement_id = _document_fixture(
+        client, db_session, tmp_path
+    )
+    doc_requirement = db_session.get(ServiceDocumentRequirement, requirement_id)
+    assert doc_requirement is not None
+    interaction_requirement = ServiceInteractionRequirement(
+        service_id=doc_requirement.service_id,
+        name="Biometric visit",
+        is_mandatory=True,
+    )
+    db_session.add(interaction_requirement)
+    db_session.commit()
+
+    client.post(
+        f"/api/v1/requests/{request_id}/documents",
+        data={"requirement_id": str(requirement_id)},
+        files={"file": ("identity.pdf", b"%PDF-1.4 document", "application/pdf")},
+        headers=citizen_headers,
+    )
+    client.post(f"/api/v1/requests/{request_id}/submit", headers=citizen_headers)
+    client.post(f"/api/v1/requests/{request_id}/accept", headers=employee_headers)
+    client.post(f"/api/v1/requests/{request_id}/start-review", headers=employee_headers)
+    required = client.post(
+        f"/api/v1/requests/{request_id}/require-interaction",
+        json={
+            "requirement_id": str(interaction_requirement.id),
+            "reason": "Biometric capture is mandatory.",
+        },
+        headers=employee_headers,
+    )
+    interaction_id = required.json()["id"]
+    client.post(
+        f"/api/v1/requests/{request_id}/schedule-interaction",
+        json={"interaction_id": interaction_id, "scheduled_at": "2026-09-14T10:00:00+05:30"},
+        headers=citizen_headers,
+    )
+
+    missed = client.post(
+        f"/api/v1/requests/{request_id}/interactions/{interaction_id}/outcome",
+        json={"outcome": "MISSED", "note": "Citizen did not attend."},
+        headers=employee_headers,
+    )
+    assert missed.status_code == 200
+    assert missed.json()["status"] == "MISSED"
+    request_after_missed = client.get(f"/api/v1/requests/{request_id}", headers=citizen_headers)
+    assert request_after_missed.json()["status"] == "INTERACTION_REQUIRED"
