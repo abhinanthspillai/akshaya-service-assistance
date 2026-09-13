@@ -259,6 +259,18 @@ export function RequestWorkspace() {
     }
   };
 
+  const handleCompleteRequest = async () => {
+    if (!request) return;
+    const instructions = window.prompt('Collection instructions for the output');
+    if (instructions === null) return;
+    try {
+      await api.post('/requests/' + request.id + '/complete', { collection_instructions: instructions });
+      await refreshWorkspace(request.id);
+    } catch (e: any) {
+      setError(e.response?.data?.detail || 'Failed to complete request.');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -344,6 +356,14 @@ export function RequestWorkspace() {
                 className="bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
               >
                 Request Payment
+              </button>
+            )}
+            {(request.status === 'PROCESSING' || request.status === 'PAYMENT_PENDING') && (
+              <button
+                onClick={handleCompleteRequest}
+                className="bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
+              >
+                Complete Request
               </button>
             )}
           </div>

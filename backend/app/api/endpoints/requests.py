@@ -45,12 +45,14 @@ from app.schemas.payment import RequestPaymentResponse
 from app.schemas.request import (
     RequestPreValidationItem,
     RequestPreValidationResponse,
-    SelectCentreRequest,
+    RequestPaymentResponse,
     ServiceRequestCreate,
     ServiceRequestResponse,
     UnableToProceedRequest,
     ReassignRequest,
 )
+from app.schemas.output import CompletedOutputCreate, CompletedOutputResponse
+from app.models.output import CompletedOutput
 
 router = APIRouter()
 
@@ -1609,3 +1611,138 @@ def _resolve_storage_path(storage_key: str) -> Path:
     if root != path and root not in path.parents:
         raise HTTPException(status_code=500, detail="Invalid storage path")
     return path
+
+
+@router.post("/{request_id}/complete", response_model=CompletedOutputResponse)
+def complete_request(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    body: CompletedOutputCreate,
+) -> Any:
+    from datetime import datetime
+    from app.models.assignment import RequestHistory
+
+    if current_user.role not in {"centre_employee", "centre_administrator", "system_administrator"}:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    _verify_active_assignment(session, current_user, service_request)
+
+    if service_request.status not in {"PROCESSING", "PAYMENT_PENDING"}:
+        raise HTTPException(status_code=409, detail="Request cannot be completed from its current state")
+        
+    # If payment is pending, it must be confirmed first
+    if service_request.status == "PAYMENT_PENDING":
+        has_pending = session.scalar(
+            select(func.count()).select_from(RequestPayment).where(
+                RequestPayment.request_id == request_id,
+                RequestPayment.status == "PENDING"
+            )
+        )
+        if has_pending > 0:
+            raise HTTPException(status_code=409, detail="Cannot complete request with pending payments")
+
+    existing_output = session.scalar(
+        select(CompletedOutput).where(CompletedOutput.request_id == request_id)
+    )
+    if existing_output:
+        raise HTTPException(status_code=409, detail="Request is already completed")
+
+    now = datetime.now(tz=UTC)
+    
+    output = CompletedOutput(
+        request_id=request_id,
+        created_by_id=current_user.id,
+        collection_instructions=body.collection_instructions,
+    )
+    session.add(output)
+
+    history = RequestHistory(
+        request_id=request_id,
+        actor_id=current_user.id,
+        action="complete",
+        from_status=service_request.status,
+        to_status="COMPLETED",
+        note="Request completed",
+    )
+    session.add(history)
+
+    service_request.status = "COMPLETED"
+    service_request.completed_at = now
+    session.add(service_request)
+
+    _safe_add_notification(
+        session,
+        user_id=service_request.citizen_id,
+        request_id=request_id,
+        event_type="request_completed",
+        title="Request completed",
+        body=f"Your request {request_id} has been completed.",
+    )
+
+    session.commit()
+    session.refresh(output)
+    return output
+
+@router.post("/{request_id}/close", response_model=ServiceRequestResponse)
+def close_request(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserCitizen,
+) -> Any:
+    from datetime import datetime
+    from app.models.assignment import RequestHistory
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if service_request.citizen_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if service_request.status != "COMPLETED":
+        raise HTTPException(status_code=409, detail="Only completed requests can be closed")
+
+    now = datetime.now(tz=UTC)
+    
+    history = RequestHistory(
+        request_id=request_id,
+        actor_id=current_user.id,
+        action="close",
+        from_status=service_request.status,
+        to_status="CLOSED",
+        note="Request closed by citizen",
+    )
+    session.add(history)
+
+    service_request.status = "CLOSED"
+    session.add(service_request)
+    session.commit()
+    session.refresh(service_request)
+    return service_request
+
+@router.get("/{request_id}/output", response_model=CompletedOutputResponse)
+def get_request_output(
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+        
+    _verify_active_assignment(session, current_user, service_request)
+    
+    output = session.scalar(
+        select(CompletedOutput).where(CompletedOutput.request_id == request_id)
+    )
+    if not output:
+        raise HTTPException(status_code=404, detail="Output not found")
+        
+    return output
+

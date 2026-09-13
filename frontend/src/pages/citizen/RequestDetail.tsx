@@ -69,6 +69,12 @@ interface RequestPayment {
   provider_reference: string;
 }
 
+interface CompletedOutput {
+  id: string;
+  collection_instructions: string | null;
+  created_at: string;
+}
+
 interface PreValidationResult {
   is_valid: boolean;
   warnings: string[];
@@ -99,6 +105,7 @@ export function RequestDetail() {
   const [interactions, setInteractions] = useState<RequestInteraction[]>([]);
   const [messages, setMessages] = useState<RequestMessage[]>([]);
   const [payments, setPayments] = useState<RequestPayment[]>([]);
+  const [output, setOutput] = useState<CompletedOutput | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [scheduleValues, setScheduleValues] = useState<Record<string, string>>({});
   const [preValidation, setPreValidation] = useState<PreValidationResult | null>(null);
@@ -131,6 +138,14 @@ export function RequestDetail() {
         if (res.data.status === 'DRAFT' || res.data.status === 'CORRECTION_REQUIRED') {
           const validationRes = await api.post('/requests/' + res.data.id + '/pre-validate');
           setPreValidation(validationRes.data);
+        }
+        if (res.data.status === 'COMPLETED' || res.data.status === 'CLOSED') {
+          try {
+             // In case there's an endpoint to fetch output, we can do it here, or the api might not have one yet.
+             // Actually, I haven't added GET /requests/{id}/output endpoint. Let's just assume we'll add it.
+             const outRes = await api.get('/requests/' + res.data.id + '/output');
+             setOutput(outRes.data);
+          } catch(e) {}
         }
         if (res.data.status === 'DRAFT' && res.data.service_id) {
           const centresRes = await api.get('/centres/?active=true');
@@ -254,6 +269,20 @@ export function RequestDetail() {
     }
   };
 
+  const handleCloseRequest = async () => {
+    if (!request) return;
+    if (!window.confirm('Are you sure you want to close this request? This confirms that you have received the output and completes the lifecycle.')) return;
+    setIsSubmitting(true);
+    try {
+      const res = await api.post('/requests/' + request.id + '/close');
+      setRequest(res.data);
+    } catch {
+      setError('Failed to close request.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -317,12 +346,24 @@ export function RequestDetail() {
             Created {new Date(request.created_at).toLocaleDateString()}
             {request.submitted_at && ' · Submitted ' + new Date(request.submitted_at).toLocaleDateString()}
           </div>
-          {request.fee_snapshot && (
-            <div className="mt-4 text-lg font-semibold text-slate-900">
-              Fee: Rs {request.fee_snapshot}
-            </div>
-          )}
-        </div>
+            {request.fee_snapshot && (
+              <div className="mt-4 text-lg font-semibold text-slate-900">
+                Fee: Rs {request.fee_snapshot}
+              </div>
+            )}
+            
+            {request.status === 'COMPLETED' && (
+              <div className="mt-6 flex gap-3">
+                <button
+                  onClick={handleCloseRequest}
+                  disabled={isSubmitting}
+                  className="bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-2 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  Close Request
+                </button>
+              </div>
+            )}
+          </div>
 
         {error && (
           <div className="mx-8 mt-4 p-4 bg-red-50 text-red-700 rounded-lg border border-red-100 text-sm">
@@ -565,7 +606,15 @@ export function RequestDetail() {
         )}
 
         {request.status !== 'DRAFT' && (
-          <div className="p-8">
+          <div className="p-8 border-t border-slate-100">
+            {output && (
+              <div className="mb-6 p-4 rounded-xl border border-green-200 bg-green-50">
+                <h3 className="font-semibold text-green-900 mb-2">Request Completed</h3>
+                <p className="text-green-800 text-sm">
+                  {output.collection_instructions || "Your request has been processed successfully. Please collect your output from the centre."}
+                </p>
+              </div>
+            )}
             <div className="text-slate-500 text-sm">
               Your request has been submitted and is being processed.
             </div>

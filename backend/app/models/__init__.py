@@ -16,6 +16,7 @@ from app.models.service import (
     ServiceRequirementAllowedFileType,
 )
 from app.models.ticket import SupportTicket, TicketMessage
+from app.models.output import CompletedOutput
 from app.models.user import User
 
 __all__ = [
@@ -39,4 +40,7 @@ __all__ = [
     "Notification",
     "RequestPayment",
     "Escalation",
+    "SupportTicket",
+    "TicketMessage",
+    "CompletedOutput",
 ]
