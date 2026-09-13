@@ -1,7 +1,6 @@
-import { LifeBuoy, Mail, Phone, Loader2, MessageSquare } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { LifeBuoy, Mail, Phone, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
-import { Link } from 'react-router-dom';
 
 interface Ticket {
   id: string;
@@ -42,7 +41,7 @@ export function Support() {
       setTickets([...tickets, res.data]);
       setSubject('');
       setDescription('');
-    } catch (err) {
+    } catch {
       setError('Failed to create ticket.');
     } finally {
       setIsCreating(false);

@@ -266,8 +266,9 @@ export function RequestWorkspace() {
     try {
       await api.post('/requests/' + request.id + '/complete', { collection_instructions: instructions });
       await refreshWorkspace(request.id);
-    } catch (e: any) {
-      setError(e.response?.data?.detail || 'Failed to complete request.');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { detail?: string } } };
+      setError(error.response?.data?.detail || 'Failed to complete request.');
     }
   };
 

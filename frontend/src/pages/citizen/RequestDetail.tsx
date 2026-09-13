@@ -145,7 +145,9 @@ export function RequestDetail() {
              // Actually, I haven't added GET /requests/{id}/output endpoint. Let's just assume we'll add it.
              const outRes = await api.get('/requests/' + res.data.id + '/output');
              setOutput(outRes.data);
-          } catch(e) {}
+          } catch {
+      // ignore
+    }
         }
         if (res.data.status === 'DRAFT' && res.data.service_id) {
           const centresRes = await api.get('/centres/?active=true');
