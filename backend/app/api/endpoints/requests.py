@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path, PurePath
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
@@ -19,6 +19,7 @@ from app.models.centre import AkshayaCentre
 from app.models.document import DOCUMENT_REVIEW_DECISIONS, RequestDocument, RequestDocumentReview
 from app.models.interaction import RequestInteraction
 from app.models.message import RequestMessage
+from app.models.payment import RequestPayment
 from app.models.request import ServiceRequest
 from app.models.service import (
     CentreSupportedService,
@@ -39,6 +40,7 @@ from app.schemas.interaction import (
     ScheduleInteractionRequest,
 )
 from app.schemas.message import RequestMessageCreate, RequestMessageResponse
+from app.schemas.payment import RequestPaymentResponse
 from app.schemas.request import (
     RequestPreValidationItem,
     RequestPreValidationResponse,
@@ -859,6 +861,133 @@ def mark_unable_to_proceed(
     return service_request
 
 
+@router.get("/{request_id}/payments", response_model=list[RequestPaymentResponse])
+def list_request_payments(
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if current_user.role == "citizen":
+        if service_request.citizen_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+    elif current_user.role == "centre_employee":
+        _verify_active_assignment(current_user, service_request, session)
+    else:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return session.scalars(
+        select(RequestPayment)
+        .where(RequestPayment.request_id == request_id)
+        .order_by(RequestPayment.requested_at.asc())
+    ).all()
+
+
+@router.post("/{request_id}/request-payment", response_model=RequestPaymentResponse)
+def request_payment(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+) -> Any:
+    from app.models.assignment import RequestHistory
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    _verify_active_assignment(current_user, service_request, session)
+    if service_request.status != "PROCESSING":
+        raise HTTPException(status_code=409, detail="Request must be PROCESSING")
+    if not service_request.fee_snapshot or service_request.fee_snapshot <= 0:
+        raise HTTPException(status_code=409, detail="No payment is required for this request")
+
+    existing = session.scalar(
+        select(RequestPayment).where(
+            RequestPayment.request_id == request_id,
+            RequestPayment.status == "PENDING",
+        )
+    )
+    if existing:
+        return existing
+
+    payment = RequestPayment(
+        request_id=request_id,
+        amount=service_request.fee_snapshot,
+        currency="INR",
+        status="PENDING",
+        provider="mock",
+        provider_reference="mock-" + uuid4().hex,
+        components_json='{"mode":"development_mock"}',
+    )
+    session.add(payment)
+    history = RequestHistory(
+        request_id=request_id,
+        actor_id=current_user.id,
+        action="payment_requested",
+        from_status=service_request.status,
+        to_status="PAYMENT_PENDING",
+        note="Development mock payment requested",
+    )
+    session.add(history)
+    service_request.status = "PAYMENT_PENDING"
+    session.add(service_request)
+    session.commit()
+    session.refresh(payment)
+    return payment
+
+
+@router.post(
+    "/{request_id}/payments/{payment_id}/confirm",
+    response_model=RequestPaymentResponse,
+)
+def confirm_payment(
+    request_id: UUID,
+    payment_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserCitizen,
+) -> Any:
+    return _complete_mock_payment(
+        request_id=request_id,
+        payment_id=payment_id,
+        session=session,
+        current_user=current_user,
+        outcome="CONFIRMED",
+    )
+
+
+@router.post("/{request_id}/payments/{payment_id}/fail", response_model=RequestPaymentResponse)
+def fail_payment(
+    request_id: UUID,
+    payment_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserCitizen,
+) -> Any:
+    return _complete_mock_payment(
+        request_id=request_id,
+        payment_id=payment_id,
+        session=session,
+        current_user=current_user,
+        outcome="FAILED",
+    )
+
+
+@router.post("/{request_id}/payments/{payment_id}/cancel", response_model=RequestPaymentResponse)
+def cancel_payment(
+    request_id: UUID,
+    payment_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserCitizen,
+) -> Any:
+    return _complete_mock_payment(
+        request_id=request_id,
+        payment_id=payment_id,
+        session=session,
+        current_user=current_user,
+        outcome="CANCELLED",
+    )
+
+
 @router.post("/{request_id}/accept", response_model=ServiceRequestResponse)
 def accept_request(
     *,
@@ -1071,6 +1200,69 @@ def _verify_ready_for_processing_preconditions(
     )
     if blocking_interaction:
         raise HTTPException(status_code=409, detail="Required interactions are unresolved")
+
+
+def _complete_mock_payment(
+    *,
+    request_id: UUID,
+    payment_id: UUID,
+    session: Any,
+    current_user: Any,
+    outcome: str,
+) -> RequestPayment:
+    from datetime import datetime
+
+    from app.models.assignment import RequestHistory
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if service_request.citizen_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    payment = cast(
+        RequestPayment | None,
+        session.scalar(
+            select(RequestPayment).where(
+                RequestPayment.id == payment_id,
+                RequestPayment.request_id == request_id,
+            )
+        ),
+    )
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    if payment.status == outcome:
+        return payment
+    if payment.status != "PENDING":
+        raise HTTPException(status_code=409, detail="Payment is already finalized")
+
+    now = datetime.now(tz=UTC)
+    payment.status = outcome
+    if outcome == "CONFIRMED":
+        payment.confirmed_at = now
+        next_status = "PROCESSING"
+    elif outcome == "FAILED":
+        payment.failed_at = now
+        next_status = "PAYMENT_PENDING"
+    else:
+        payment.cancelled_at = now
+        next_status = "PROCESSING"
+    session.add(payment)
+
+    history = RequestHistory(
+        request_id=request_id,
+        actor_id=current_user.id,
+        action="payment_" + outcome.lower(),
+        from_status=service_request.status,
+        to_status=next_status,
+        note="Development mock payment " + outcome.lower(),
+    )
+    session.add(history)
+    service_request.status = next_status
+    session.add(service_request)
+    session.commit()
+    session.refresh(payment)
+    return payment
 
 
 def _run_request_pre_validation(

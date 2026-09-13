@@ -55,7 +55,7 @@ def _document_fixture(
     )
     db_session.add(employee_profile)
 
-    service = Service(name="Document Service", code="DOCSVC", service_type="A")
+    service = Service(name="Document Service", code="DOCSVC", service_type="A", base_fee=100)
     db_session.add(service)
     db_session.commit()
     requirement = ServiceDocumentRequirement(
@@ -621,3 +621,88 @@ def test_unable_to_proceed_requires_reason_and_assignment(
     )
     assert unable.status_code == 200
     assert unable.json()["status"] == "UNABLE_TO_PROCEED"
+
+
+def _move_request_to_processing(
+    client: TestClient,
+    citizen_headers: dict[str, str],
+    employee_headers: dict[str, str],
+    request_id: UUID,
+    requirement_id: UUID,
+) -> None:
+    upload = client.post(
+        f"/api/v1/requests/{request_id}/documents",
+        data={"requirement_id": str(requirement_id)},
+        files={"file": ("identity.pdf", b"%PDF-1.4 document", "application/pdf")},
+        headers=citizen_headers,
+    )
+    document_id = upload.json()["id"]
+    client.post(f"/api/v1/requests/{request_id}/submit", headers=citizen_headers)
+    client.post(f"/api/v1/requests/{request_id}/accept", headers=employee_headers)
+    client.post(f"/api/v1/requests/{request_id}/start-review", headers=employee_headers)
+    client.post(
+        f"/api/v1/requests/{request_id}/documents/{document_id}/review",
+        json={"decision": "APPROVED"},
+        headers=employee_headers,
+    )
+    client.post(f"/api/v1/requests/{request_id}/mark-ready", headers=employee_headers)
+    client.post(f"/api/v1/requests/{request_id}/start-processing", headers=employee_headers)
+
+
+def test_mock_payment_request_and_idempotent_confirmation(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    citizen_headers, employee_headers, request_id, requirement_id = _document_fixture(
+        client, db_session, tmp_path
+    )
+    _move_request_to_processing(
+        client, citizen_headers, employee_headers, request_id, requirement_id
+    )
+
+    payment = client.post(
+        f"/api/v1/requests/{request_id}/request-payment", headers=employee_headers
+    )
+    assert payment.status_code == 200
+    body = payment.json()
+    assert body["status"] == "PENDING"
+    assert body["provider"] == "mock"
+
+    request_after_payment = client.get(f"/api/v1/requests/{request_id}", headers=citizen_headers)
+    assert request_after_payment.json()["status"] == "PAYMENT_PENDING"
+
+    confirmed = client.post(
+        f"/api/v1/requests/{request_id}/payments/{body['id']}/confirm",
+        headers=citizen_headers,
+    )
+    assert confirmed.status_code == 200
+    assert confirmed.json()["status"] == "CONFIRMED"
+    confirmed_again = client.post(
+        f"/api/v1/requests/{request_id}/payments/{body['id']}/confirm",
+        headers=citizen_headers,
+    )
+    assert confirmed_again.status_code == 200
+    assert confirmed_again.json()["status"] == "CONFIRMED"
+
+
+def test_mock_payment_failure_keeps_request_payment_pending(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    citizen_headers, employee_headers, request_id, requirement_id = _document_fixture(
+        client, db_session, tmp_path
+    )
+    _move_request_to_processing(
+        client, citizen_headers, employee_headers, request_id, requirement_id
+    )
+
+    payment = client.post(
+        f"/api/v1/requests/{request_id}/request-payment", headers=employee_headers
+    )
+    payment_id = payment.json()["id"]
+    failed = client.post(
+        f"/api/v1/requests/{request_id}/payments/{payment_id}/fail",
+        headers=citizen_headers,
+    )
+    assert failed.status_code == 200
+    assert failed.json()["status"] == "FAILED"
+    request_after_failure = client.get(f"/api/v1/requests/{request_id}", headers=citizen_headers)
+    assert request_after_failure.json()["status"] == "PAYMENT_PENDING"

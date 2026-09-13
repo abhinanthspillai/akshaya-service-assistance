@@ -181,6 +181,27 @@ Centre Employee with active assignment.
 Precondition: request is in an active review/interaction/processing state and a non-empty reason is supplied.
 Transitions request to UNABLE_TO_PROCEED and records history evidence. External portal downtime or operational blockers must be represented through reason/history, not invented primary states.
 
+### GET /requests/{request_id}/payments
+Citizen owner or active assigned Centre Employee.
+Returns request payment records.
+
+### POST /requests/{request_id}/request-payment
+Centre Employee with active assignment.
+Precondition: PROCESSING and positive fee snapshot.
+Creates or returns a pending development/mock payment and transitions request to PAYMENT_PENDING.
+
+### POST /requests/{request_id}/payments/{payment_id}/confirm
+Citizen owner.
+Idempotently confirms a pending mock payment and returns request to PROCESSING.
+
+### POST /requests/{request_id}/payments/{payment_id}/fail
+Citizen owner.
+Records mock payment failure and keeps request in PAYMENT_PENDING.
+
+### POST /requests/{request_id}/payments/{payment_id}/cancel
+Citizen owner.
+Records mock payment cancellation and returns request to PROCESSING.
+
 ## Later business-action endpoint pattern
 Use actions, not arbitrary status PATCH:
 - POST /requests/{id}/accept
@@ -215,8 +236,7 @@ Backend validates Citizen ownership, request state, requirement/service relation
 Download is served only through the authorized backend endpoint. Citizen owners, active assigned employees, same-centre administrators and system administrators may access according to role scope. Responses expose metadata only and never expose unrestricted storage paths.
 
 ## Payments (later slice)
-Payment intent/mock initiation only after allowed workflow point.
-Original payment records are immutable; refunds are separate records.
+Implemented Phase 1 development/mock payment flow. It does not process real money and stores no card/bank data. Original payment records preserve provider reference, amount, status and timestamps; refunds, when added, must be separate records.
 
 ## Rate limits baseline
 At minimum: register/login, document upload and support/contact endpoints. Exact production limits may be environment configurable.

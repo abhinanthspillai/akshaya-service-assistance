@@ -17,7 +17,7 @@
 | R4 - Interaction Requirements and Scheduling | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `alembic upgrade head`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
 | R5 - Request-Specific Communication | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `alembic upgrade head`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
 | R6 - Readiness and Processing Flow | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
-| R7 - Consolidated Payment Workflow | NOT STARTED | Pending |
+| R7 - Consolidated Payment Workflow | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `alembic upgrade head`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
 | R8 - Notification System | NOT STARTED | Pending |
 | R9 - Cancellation, Escalation and Reassignment | NOT STARTED | Pending |
 | R10 - Support Tickets | NOT STARTED | Pending |
@@ -73,3 +73,11 @@
 - Enforced approved document and unresolved-interaction preconditions before READY_FOR_PROCESSING.
 - Added history evidence for readiness, processing and unable-to-proceed decisions.
 - Added Employee workspace controls for readiness, processing and unable-to-proceed actions.
+
+## R7 Notes
+
+- Added request payments in migration 0011.
+- Added development/mock payment request, confirm, fail and cancel endpoints.
+- Payment request is gated to PROCESSING and positive request fee snapshot.
+- Confirmation is idempotent and no card/banking data is stored.
+- Added Employee payment request control and Citizen mock payment confirmation UI.

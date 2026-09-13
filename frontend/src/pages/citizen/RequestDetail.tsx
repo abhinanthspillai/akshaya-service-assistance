@@ -60,6 +60,15 @@ interface RequestMessage {
   created_at: string;
 }
 
+interface RequestPayment {
+  id: string;
+  amount: string;
+  currency: string;
+  status: string;
+  provider: string;
+  provider_reference: string;
+}
+
 interface PreValidationResult {
   is_valid: boolean;
   warnings: string[];
@@ -89,6 +98,7 @@ export function RequestDetail() {
   const [reviews, setReviews] = useState<DocumentReview[]>([]);
   const [interactions, setInteractions] = useState<RequestInteraction[]>([]);
   const [messages, setMessages] = useState<RequestMessage[]>([]);
+  const [payments, setPayments] = useState<RequestPayment[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [scheduleValues, setScheduleValues] = useState<Record<string, string>>({});
   const [preValidation, setPreValidation] = useState<PreValidationResult | null>(null);
@@ -104,18 +114,20 @@ export function RequestDetail() {
       try {
         const res = await api.get('/requests/' + (id || ''));
         setRequest(res.data);
-        const [serviceRes, documentsRes, reviewsRes, interactionsRes, messagesRes] = await Promise.all([
+        const [serviceRes, documentsRes, reviewsRes, interactionsRes, messagesRes, paymentsRes] = await Promise.all([
           api.get('/services/' + res.data.service_id),
           api.get('/requests/' + res.data.id + '/documents'),
           api.get('/requests/' + res.data.id + '/document-reviews'),
           api.get('/requests/' + res.data.id + '/interactions'),
           api.get('/requests/' + res.data.id + '/messages'),
+          api.get('/requests/' + res.data.id + '/payments'),
         ]);
         setRequirements(serviceRes.data.document_requirements || []);
         setDocuments(documentsRes.data || []);
         setReviews(reviewsRes.data || []);
         setInteractions(interactionsRes.data || []);
         setMessages(messagesRes.data || []);
+        setPayments(paymentsRes.data || []);
         if (res.data.status === 'DRAFT' || res.data.status === 'CORRECTION_REQUIRED') {
           const validationRes = await api.post('/requests/' + res.data.id + '/pre-validate');
           setPreValidation(validationRes.data);
@@ -151,6 +163,18 @@ export function RequestDetail() {
       setNewMessage('');
     } catch {
       setError('Failed to send message.');
+    }
+  };
+
+  const handleConfirmPayment = async (paymentId: string) => {
+    if (!request) return;
+    try {
+      const res = await api.post('/requests/' + request.id + '/payments/' + paymentId + '/confirm');
+      setPayments((current) => current.map((payment) => payment.id === paymentId ? res.data : payment));
+      const reqRes = await api.get('/requests/' + request.id);
+      setRequest(reqRes.data);
+    } catch {
+      setError('Mock payment confirmation failed.');
     }
   };
 
@@ -443,6 +467,36 @@ export function RequestDetail() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {request.status !== 'DRAFT' && (
+          <div className="p-8 border-t border-slate-100">
+            <h2 className="text-lg font-semibold text-indigo-950 mb-4">Payments</h2>
+            {payments.length === 0 ? (
+              <p className="text-sm text-slate-500">No payment requested yet.</p>
+            ) : (
+              <div className="grid gap-3">
+                {payments.map((payment) => (
+                  <div key={payment.id} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                    <div className="font-semibold text-slate-900">
+                      {payment.currency} {payment.amount} · {payment.status}
+                    </div>
+                    <div className="text-sm text-slate-500 mt-1">
+                      {payment.provider} · {payment.provider_reference}
+                    </div>
+                    {payment.status === 'PENDING' && request.status === 'PAYMENT_PENDING' && (
+                      <button
+                        onClick={() => handleConfirmPayment(payment.id)}
+                        className="mt-3 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+                      >
+                        Confirm Mock Payment
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

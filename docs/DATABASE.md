@@ -229,6 +229,28 @@ Rules:
 - reassignment revokes old Employee access because access is checked against active assignment.
 - message bodies are request data and must not be emitted to application logs.
 
+### request_payments
+Implemented in migration 0011.
+
+- id UUID PK
+- request_id UUID NOT NULL FK -> service_requests.id
+- amount NUMERIC(12,2) NOT NULL CHECK >= 0
+- currency VARCHAR(3) NOT NULL
+- status VARCHAR(40) NOT NULL CHECK in PENDING, CONFIRMED, FAILED, CANCELLED
+- provider VARCHAR(80) NOT NULL
+- provider_reference VARCHAR(120) NOT NULL UNIQUE
+- components_json TEXT NULL
+- requested_at TIMESTAMPTZ NOT NULL
+- confirmed_at TIMESTAMPTZ NULL
+- failed_at TIMESTAMPTZ NULL
+- cancelled_at TIMESTAMPTZ NULL
+
+Rules:
+- Phase 1 payment provider is development/mock only.
+- no card, banking or settlement secrets are stored.
+- request fee snapshot is used as the payment amount.
+- repeated confirmation of an already confirmed payment is idempotent.
+
 ## 5. Migration sequence
 0001 users
 0002 profiles_and_centres
