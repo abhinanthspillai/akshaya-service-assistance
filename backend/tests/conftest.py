@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-import app.models  # noqa
+import app.models as _models  # noqa
 from app.core.database import Base, get_db
 from app.main import app
 

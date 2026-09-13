@@ -706,3 +706,37 @@ def test_mock_payment_failure_keeps_request_payment_pending(
     assert failed.json()["status"] == "FAILED"
     request_after_failure = client.get(f"/api/v1/requests/{request_id}", headers=citizen_headers)
     assert request_after_failure.json()["status"] == "PAYMENT_PENDING"
+
+
+def test_notifications_are_user_scoped_and_readable(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    citizen_headers, employee_headers, request_id, requirement_id = _document_fixture(
+        client, db_session, tmp_path
+    )
+    other = _create_user(db_session, "notificationother@example.com", "citizen")
+    other_headers = _login(client, other.email)
+
+    client.post(
+        f"/api/v1/requests/{request_id}/documents",
+        data={"requirement_id": str(requirement_id)},
+        files={"file": ("identity.pdf", b"%PDF-1.4 document", "application/pdf")},
+        headers=citizen_headers,
+    )
+    client.post(f"/api/v1/requests/{request_id}/submit", headers=citizen_headers)
+    client.post(f"/api/v1/requests/{request_id}/accept", headers=employee_headers)
+
+    notifications = client.get("/api/v1/notifications/", headers=citizen_headers)
+    assert notifications.status_code == 200
+    bodies = notifications.json()
+    assert {item["event_type"] for item in bodies} >= {"request_submitted", "request_accepted"}
+    assert all(item["user_id"] != str(other.id) for item in bodies)
+
+    other_notifications = client.get("/api/v1/notifications/", headers=other_headers)
+    assert other_notifications.status_code == 200
+    assert other_notifications.json() == []
+
+    notification_id = bodies[0]["id"]
+    marked = client.post(f"/api/v1/notifications/{notification_id}/read", headers=citizen_headers)
+    assert marked.status_code == 200
+    assert marked.json()["is_read"] is True

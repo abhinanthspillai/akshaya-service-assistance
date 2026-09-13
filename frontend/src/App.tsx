@@ -5,6 +5,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { ServiceCatalogue } from './pages/citizen/ServiceCatalogue';
 import { ServiceDetail } from './pages/citizen/ServiceDetail';
 import { MyRequests } from './pages/citizen/MyRequests';
+import { Notifications } from './pages/citizen/Notifications';
 import { RequestDetail } from './pages/citizen/RequestDetail';
 import { Queue } from './pages/employee/Queue';
 import { RequestWorkspace } from './pages/employee/RequestWorkspace';
@@ -45,7 +46,7 @@ export default function App() {
           <Route path="/queue" element={<ProtectedRoute><Queue /></ProtectedRoute>} />
           <Route path="/employee/requests/:id" element={<ProtectedRoute><RequestWorkspace /></ProtectedRoute>} />
 
-          <Route path="/notifications" element={<ProtectedRoute><div className="p-4 text-slate-600">Notifications (pending)</div></ProtectedRoute>} />
+          <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
           <Route path="/support" element={<ProtectedRoute><div className="p-4 text-slate-600">Support (pending)</div></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><div className="p-4 text-slate-600">Profile (pending)</div></ProtectedRoute>} />
         </Routes>

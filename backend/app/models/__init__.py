@@ -3,6 +3,7 @@ from app.models.centre import AkshayaCentre
 from app.models.document import RequestDocument, RequestDocumentReview
 from app.models.interaction import RequestInteraction
 from app.models.message import RequestMessage
+from app.models.notification import Notification
 from app.models.payment import RequestPayment
 from app.models.profile import CentreAdministrator, CitizenProfile, EmployeeProfile
 from app.models.request import ServiceRequest
@@ -33,5 +34,6 @@ __all__ = [
     "RequestDocumentReview",
     "RequestInteraction",
     "RequestMessage",
+    "Notification",
     "RequestPayment",
 ]

@@ -19,6 +19,7 @@ from app.models.centre import AkshayaCentre
 from app.models.document import DOCUMENT_REVIEW_DECISIONS, RequestDocument, RequestDocumentReview
 from app.models.interaction import RequestInteraction
 from app.models.message import RequestMessage
+from app.models.notification import Notification
 from app.models.payment import RequestPayment
 from app.models.request import ServiceRequest
 from app.models.service import (
@@ -206,6 +207,14 @@ def submit_request(
 
     # Atomic transition to WAITING_FOR_CENTRE after routing succeeds
     service_request.status = "WAITING_FOR_CENTRE"
+    _safe_add_notification(
+        session,
+        user_id=service_request.citizen_id,
+        request_id=service_request.id,
+        event_type="request_submitted",
+        title="Request submitted",
+        body="Your request has been submitted to the selected centre.",
+    )
     session.add(service_request)
     session.commit()
     session.refresh(service_request)
@@ -514,6 +523,14 @@ def review_request_document(
         )
         session.add(history)
         service_request.status = "CORRECTION_REQUIRED"
+        _safe_add_notification(
+            session,
+            user_id=service_request.citizen_id,
+            request_id=service_request.id,
+            event_type="correction_required",
+            title="Correction required",
+            body=body.reason,
+        )
         session.add(service_request)
     else:
         history = RequestHistory(
@@ -599,6 +616,14 @@ def require_request_interaction(
     )
     session.add(history)
     service_request.status = "INTERACTION_REQUIRED"
+    _safe_add_notification(
+        session,
+        user_id=service_request.citizen_id,
+        request_id=service_request.id,
+        event_type="interaction_required",
+        title="Interaction required",
+        body=body.reason,
+    )
     session.add(service_request)
     session.commit()
     session.refresh(interaction)
@@ -651,6 +676,14 @@ def schedule_request_interaction(
     )
     session.add(history)
     service_request.status = "INTERACTION_SCHEDULED"
+    _safe_add_notification(
+        session,
+        user_id=service_request.citizen_id,
+        request_id=service_request.id,
+        event_type="interaction_scheduled",
+        title="Interaction scheduled",
+        body="Your centre interaction has been scheduled.",
+    )
     session.add(service_request)
     session.commit()
     session.refresh(interaction)
@@ -931,6 +964,14 @@ def request_payment(
     )
     session.add(history)
     service_request.status = "PAYMENT_PENDING"
+    _safe_add_notification(
+        session,
+        user_id=service_request.citizen_id,
+        request_id=service_request.id,
+        event_type="payment_pending",
+        title="Payment pending",
+        body="A development mock payment is ready for this request.",
+    )
     session.add(service_request)
     session.commit()
     session.refresh(payment)
@@ -1060,6 +1101,14 @@ def accept_request(
     session.add(history)
 
     service_request.status = "ACCEPTED"
+    _safe_add_notification(
+        session,
+        user_id=service_request.citizen_id,
+        request_id=service_request.id,
+        event_type="request_accepted",
+        title="Request accepted",
+        body="A centre employee accepted your request.",
+    )
     session.add(service_request)
     session.commit()
     session.refresh(service_request)
@@ -1259,6 +1308,15 @@ def _complete_mock_payment(
     )
     session.add(history)
     service_request.status = next_status
+    if outcome == "CONFIRMED":
+        _safe_add_notification(
+            session,
+            user_id=service_request.citizen_id,
+            request_id=service_request.id,
+            event_type="payment_confirmed",
+            title="Payment confirmed",
+            body="Development mock payment was confirmed.",
+        )
     session.add(service_request)
     session.commit()
     session.refresh(payment)
@@ -1342,6 +1400,30 @@ def _run_request_pre_validation(
         items=items,
         warnings=warnings,
     )
+
+
+def _safe_add_notification(
+    session: Any,
+    *,
+    user_id: UUID,
+    request_id: UUID,
+    event_type: str,
+    title: str,
+    body: str | None = None,
+) -> None:
+    try:
+        session.add(
+            Notification(
+                user_id=user_id,
+                request_id=request_id,
+                event_type=event_type,
+                title=title,
+                body=body,
+                is_read=False,
+            )
+        )
+    except Exception:
+        return
 
 
 def _write_private_upload(*, request_id: UUID, original_filename: str, data: bytes) -> str:
