@@ -17,6 +17,7 @@ from app.models.service import (
 )
 from app.models.ticket import SupportTicket, TicketMessage
 from app.models.output import CompletedOutput
+from app.models.audit import AuditLog
 from app.models.user import User
 
 __all__ = [
@@ -43,4 +44,5 @@ __all__ = [
     "SupportTicket",
     "TicketMessage",
     "CompletedOutput",
+    "AuditLog",
 ]

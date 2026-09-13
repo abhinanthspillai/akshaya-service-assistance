@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, CurrentUserSysAdmin, SessionDep
 from app.core.security import get_password_hash
+from app.core.audit import log_audit
 from app.models.centre import AkshayaCentre
 from app.models.profile import CentreAdministrator, EmployeeProfile
 from app.models.user import User
@@ -65,6 +66,14 @@ def create_employee(
         full_name=employee_in.full_name,
     )
     session.add(profile)
+    log_audit(
+        session,
+        actor_id=current_user.id,
+        action="create_employee",
+        target_resource_type="User",
+        target_resource_id=user.id,
+        details={"email": user.email, "centre_id": str(centre_id)}
+    )
     session.commit()
     session.refresh(user)
     session.refresh(profile)
@@ -101,6 +110,14 @@ def create_centre_admin(
         full_name=admin_in.full_name,
     )
     session.add(profile)
+    log_audit(
+        session,
+        actor_id=current_user.id,
+        action="create_centre_admin",
+        target_resource_type="User",
+        target_resource_id=user.id,
+        details={"email": user.email, "centre_id": str(centre_id)}
+    )
     session.commit()
     session.refresh(user)
     session.refresh(profile)
@@ -138,6 +155,14 @@ def update_user_status(
 
     target_user.is_active = status_in.is_active
     session.add(target_user)
+    log_audit(
+        session,
+        actor_id=current_user.id,
+        action="update_user_status",
+        target_resource_type="User",
+        target_resource_id=target_user.id,
+        details={"email": target_user.email, "is_active": status_in.is_active}
+    )
     session.commit()
     session.refresh(target_user)
     return target_user
