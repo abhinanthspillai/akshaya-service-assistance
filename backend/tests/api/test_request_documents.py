@@ -550,3 +550,74 @@ def test_request_messages_are_scoped_to_owner_and_active_assignment(
         "Please review my uploaded document.",
         "We have started reviewing your request.",
     ]
+
+
+def test_ready_and_processing_require_approved_documents(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    citizen_headers, employee_headers, request_id, requirement_id = _document_fixture(
+        client, db_session, tmp_path
+    )
+    upload = client.post(
+        f"/api/v1/requests/{request_id}/documents",
+        data={"requirement_id": str(requirement_id)},
+        files={"file": ("identity.pdf", b"%PDF-1.4 document", "application/pdf")},
+        headers=citizen_headers,
+    )
+    document_id = upload.json()["id"]
+    client.post(f"/api/v1/requests/{request_id}/submit", headers=citizen_headers)
+    client.post(f"/api/v1/requests/{request_id}/accept", headers=employee_headers)
+    client.post(f"/api/v1/requests/{request_id}/start-review", headers=employee_headers)
+
+    blocked = client.post(f"/api/v1/requests/{request_id}/mark-ready", headers=employee_headers)
+    assert blocked.status_code == 409
+
+    approved = client.post(
+        f"/api/v1/requests/{request_id}/documents/{document_id}/review",
+        json={"decision": "APPROVED"},
+        headers=employee_headers,
+    )
+    assert approved.status_code == 201
+
+    ready = client.post(f"/api/v1/requests/{request_id}/mark-ready", headers=employee_headers)
+    assert ready.status_code == 200
+    assert ready.json()["status"] == "READY_FOR_PROCESSING"
+
+    processing = client.post(
+        f"/api/v1/requests/{request_id}/start-processing",
+        headers=employee_headers,
+    )
+    assert processing.status_code == 200
+    assert processing.json()["status"] == "PROCESSING"
+
+
+def test_unable_to_proceed_requires_reason_and_assignment(
+    client: TestClient, db_session: Session, tmp_path: Path
+) -> None:
+    citizen_headers, employee_headers, request_id, requirement_id = _document_fixture(
+        client, db_session, tmp_path
+    )
+    client.post(
+        f"/api/v1/requests/{request_id}/documents",
+        data={"requirement_id": str(requirement_id)},
+        files={"file": ("identity.pdf", b"%PDF-1.4 document", "application/pdf")},
+        headers=citizen_headers,
+    )
+    client.post(f"/api/v1/requests/{request_id}/submit", headers=citizen_headers)
+    client.post(f"/api/v1/requests/{request_id}/accept", headers=employee_headers)
+    client.post(f"/api/v1/requests/{request_id}/start-review", headers=employee_headers)
+
+    missing_reason = client.post(
+        f"/api/v1/requests/{request_id}/unable-to-proceed",
+        json={"reason": "   "},
+        headers=employee_headers,
+    )
+    assert missing_reason.status_code == 422
+
+    unable = client.post(
+        f"/api/v1/requests/{request_id}/unable-to-proceed",
+        json={"reason": "External portal rejected the supplied reference number."},
+        headers=employee_headers,
+    )
+    assert unable.status_code == 200
+    assert unable.json()["status"] == "UNABLE_TO_PROCEED"

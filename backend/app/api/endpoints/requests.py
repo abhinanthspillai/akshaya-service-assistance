@@ -45,6 +45,7 @@ from app.schemas.request import (
     SelectCentreRequest,
     ServiceRequestCreate,
     ServiceRequestResponse,
+    UnableToProceedRequest,
 )
 
 router = APIRouter()
@@ -754,6 +755,110 @@ def create_request_message(
     return message
 
 
+@router.post("/{request_id}/mark-ready", response_model=ServiceRequestResponse)
+def mark_request_ready(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+) -> Any:
+    from app.models.assignment import RequestHistory
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    _verify_active_assignment(current_user, service_request, session)
+    if service_request.status != "UNDER_REVIEW":
+        raise HTTPException(status_code=409, detail="Request must be in UNDER_REVIEW state")
+    _verify_ready_for_processing_preconditions(session, service_request)
+
+    history = RequestHistory(
+        request_id=request_id,
+        actor_id=current_user.id,
+        action="mark_ready",
+        from_status=service_request.status,
+        to_status="READY_FOR_PROCESSING",
+    )
+    session.add(history)
+    service_request.status = "READY_FOR_PROCESSING"
+    session.add(service_request)
+    session.commit()
+    session.refresh(service_request)
+    return service_request
+
+
+@router.post("/{request_id}/start-processing", response_model=ServiceRequestResponse)
+def start_request_processing(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+) -> Any:
+    from app.models.assignment import RequestHistory
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    _verify_active_assignment(current_user, service_request, session)
+    if service_request.status != "READY_FOR_PROCESSING":
+        raise HTTPException(status_code=409, detail="Request must be READY_FOR_PROCESSING")
+
+    history = RequestHistory(
+        request_id=request_id,
+        actor_id=current_user.id,
+        action="start_processing",
+        from_status=service_request.status,
+        to_status="PROCESSING",
+    )
+    session.add(history)
+    service_request.status = "PROCESSING"
+    session.add(service_request)
+    session.commit()
+    session.refresh(service_request)
+    return service_request
+
+
+@router.post("/{request_id}/unable-to-proceed", response_model=ServiceRequestResponse)
+def mark_unable_to_proceed(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+    body: UnableToProceedRequest,
+) -> Any:
+    from app.models.assignment import RequestHistory
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    _verify_active_assignment(current_user, service_request, session)
+    if service_request.status not in {
+        "UNDER_REVIEW",
+        "INTERACTION_REQUIRED",
+        "INTERACTION_SCHEDULED",
+        "READY_FOR_PROCESSING",
+        "PROCESSING",
+    }:
+        raise HTTPException(status_code=409, detail="Request cannot be marked unable to proceed")
+    if not body.reason.strip():
+        raise HTTPException(status_code=422, detail="Reason is required")
+
+    history = RequestHistory(
+        request_id=request_id,
+        actor_id=current_user.id,
+        action="unable_to_proceed",
+        from_status=service_request.status,
+        to_status="UNABLE_TO_PROCEED",
+        note=body.reason,
+    )
+    session.add(history)
+    service_request.status = "UNABLE_TO_PROCEED"
+    session.add(service_request)
+    session.commit()
+    session.refresh(service_request)
+    return service_request
+
+
 @router.post("/{request_id}/accept", response_model=ServiceRequestResponse)
 def accept_request(
     *,
@@ -926,6 +1031,46 @@ def _verify_message_access(user: Any, service_request: ServiceRequest, session: 
         _verify_active_assignment(user, service_request, session)
         return
     raise HTTPException(status_code=403, detail="Not authorized")
+
+
+def _verify_ready_for_processing_preconditions(
+    session: Any, service_request: ServiceRequest
+) -> None:
+    requirements = session.scalars(
+        select(ServiceDocumentRequirement).where(
+            ServiceDocumentRequirement.service_id == service_request.service_id,
+            ServiceDocumentRequirement.is_active.is_(True),
+            ServiceDocumentRequirement.is_required.is_(True),
+        )
+    ).all()
+    for requirement in requirements:
+        document = session.scalar(
+            select(RequestDocument).where(
+                RequestDocument.request_id == service_request.id,
+                RequestDocument.requirement_id == requirement.id,
+                RequestDocument.is_current.is_(True),
+            )
+        )
+        if not document:
+            raise HTTPException(status_code=409, detail="Required documents are incomplete")
+        approved_review = session.scalar(
+            select(RequestDocumentReview).where(
+                RequestDocumentReview.request_id == service_request.id,
+                RequestDocumentReview.document_id == document.id,
+                RequestDocumentReview.decision == "APPROVED",
+            )
+        )
+        if not approved_review:
+            raise HTTPException(status_code=409, detail="Required documents are not approved")
+
+    blocking_interaction = session.scalar(
+        select(RequestInteraction).where(
+            RequestInteraction.request_id == service_request.id,
+            RequestInteraction.status.in_(["REQUESTED", "SCHEDULED", "MISSED"]),
+        )
+    )
+    if blocking_interaction:
+        raise HTTPException(status_code=409, detail="Required interactions are unresolved")
 
 
 def _run_request_pre_validation(

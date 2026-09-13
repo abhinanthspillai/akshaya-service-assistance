@@ -227,6 +227,28 @@ export function RequestWorkspace() {
     }
   };
 
+  const handleRequestAction = async (action: 'mark-ready' | 'start-processing') => {
+    if (!request) return;
+    try {
+      await api.post('/requests/' + request.id + '/' + action);
+      await refreshWorkspace(request.id);
+    } catch {
+      setError('Request action failed.');
+    }
+  };
+
+  const handleUnableToProceed = async () => {
+    if (!request) return;
+    const reason = window.prompt('Reason this request cannot proceed');
+    if (!reason) return;
+    try {
+      await api.post('/requests/' + request.id + '/unable-to-proceed', { reason });
+      await refreshWorkspace(request.id);
+    } catch {
+      setError('Failed to mark request unable to proceed.');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -280,6 +302,30 @@ export function RequestWorkspace() {
                 className="bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors disabled:opacity-50"
               >
                 {isStartingReview ? 'Starting...' : 'Start Review'}
+              </button>
+            )}
+            {request.status === 'UNDER_REVIEW' && (
+              <button
+                onClick={() => handleRequestAction('mark-ready')}
+                className="bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
+              >
+                Mark Ready
+              </button>
+            )}
+            {request.status === 'READY_FOR_PROCESSING' && (
+              <button
+                onClick={() => handleRequestAction('start-processing')}
+                className="bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
+              >
+                Start Processing
+              </button>
+            )}
+            {['UNDER_REVIEW', 'INTERACTION_REQUIRED', 'INTERACTION_SCHEDULED', 'READY_FOR_PROCESSING', 'PROCESSING'].includes(request.status) && (
+              <button
+                onClick={handleUnableToProceed}
+                className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
+              >
+                Unable to Proceed
               </button>
             )}
           </div>

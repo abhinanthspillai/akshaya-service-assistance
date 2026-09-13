@@ -166,6 +166,21 @@ Returns request-scoped messages ordered by timestamp.
 Citizen owner or active assigned Centre Employee.
 Creates a request-scoped message. Message bodies are stored as request data and must not be written to application logs.
 
+### POST /requests/{request_id}/mark-ready
+Centre Employee with active assignment.
+Precondition: UNDER_REVIEW, required current documents uploaded and approved, no unresolved request interactions.
+Transitions request to READY_FOR_PROCESSING.
+
+### POST /requests/{request_id}/start-processing
+Centre Employee with active assignment.
+Precondition: READY_FOR_PROCESSING.
+Transitions request to PROCESSING.
+
+### POST /requests/{request_id}/unable-to-proceed
+Centre Employee with active assignment.
+Precondition: request is in an active review/interaction/processing state and a non-empty reason is supplied.
+Transitions request to UNABLE_TO_PROCEED and records history evidence. External portal downtime or operational blockers must be represented through reason/history, not invented primary states.
+
 ## Later business-action endpoint pattern
 Use actions, not arbitrary status PATCH:
 - POST /requests/{id}/accept

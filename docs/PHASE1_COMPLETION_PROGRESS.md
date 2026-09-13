@@ -16,7 +16,7 @@
 | R3 - Document Review and Correction Cycle | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `alembic upgrade head`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
 | R4 - Interaction Requirements and Scheduling | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `alembic upgrade head`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
 | R5 - Request-Specific Communication | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `alembic upgrade head`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
-| R6 - Readiness and Processing Flow | NOT STARTED | Pending |
+| R6 - Readiness and Processing Flow | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
 | R7 - Consolidated Payment Workflow | NOT STARTED | Pending |
 | R8 - Notification System | NOT STARTED | Pending |
 | R9 - Cancellation, Escalation and Reassignment | NOT STARTED | Pending |
@@ -66,3 +66,10 @@
 - Added request-scoped list/send endpoints for Citizen owners and current active assigned Employees.
 - Added authorization tests for cross-Citizen denial and employee access only after assignment.
 - Added Citizen and Employee request workspace message panels.
+
+## R6 Notes
+
+- Added controlled `mark-ready`, `start-processing` and `unable-to-proceed` business actions.
+- Enforced approved document and unresolved-interaction preconditions before READY_FOR_PROCESSING.
+- Added history evidence for readiness, processing and unable-to-proceed decisions.
+- Added Employee workspace controls for readiness, processing and unable-to-proceed actions.

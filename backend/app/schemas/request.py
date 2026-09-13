@@ -27,6 +27,10 @@ class RequestPreValidationResponse(BaseModel):
     warnings: list[str] = []
 
 
+class UnableToProceedRequest(BaseModel):
+    reason: str
+
+
 class ServiceRequestResponse(BaseModel):
     id: UUID
     citizen_id: UUID
