@@ -15,7 +15,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     navigate('/login');
   };
 
-  let navItems: Array<{ name: string; path: string; icon: any }> = [];
+  let navItems: Array<{ name: string; path: string; icon: React.ElementType }> = [];
   if (user?.role === 'citizen') {
     navItems = [
       { name: 'Dashboard', path: '/', icon: LayoutDashboard },
