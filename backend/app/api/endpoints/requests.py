@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from app.api.deps import (
     CurrentUser,
@@ -22,6 +22,7 @@ from app.models.message import RequestMessage
 from app.models.notification import Notification
 from app.models.payment import RequestPayment
 from app.models.request import ServiceRequest
+from app.models.assignment import RequestHistory, RequestAssignment
 from app.models.service import (
     CentreSupportedService,
     Service,
@@ -549,6 +550,195 @@ def review_request_document(
     session.commit()
     session.refresh(review)
     return review
+
+
+@router.post("/{request_id}/cancel", response_model=ServiceRequestResponse)
+def cancel_request(
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserCitizen,
+) -> Any:
+    req = session.get(ServiceRequest, request_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if req.citizen_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    allowed_states = {
+        "DRAFT", "SUBMITTED", "WAITING_FOR_CENTRE", 
+        "ACCEPTED", "UNDER_REVIEW", "CORRECTION_REQUIRED",
+        "INTERACTION_REQUIRED", "INTERACTION_SCHEDULED"
+    }
+    if req.status not in allowed_states:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot cancel request in state: {req.status}",
+        )
+
+    req.status = "CANCELLED"
+    req.cancelled_at = datetime.now(tz=UTC)
+    
+    # Record history
+    history = RequestHistory(
+        request_id=req.id,
+        actor_id=current_user.id,
+        action="CANCELLED",
+        note="Citizen cancelled the request.",
+    )
+    session.add(history)
+    session.add(req)
+    session.commit()
+    session.refresh(req)
+    return req
+
+
+@router.post("/{request_id}/unable_to_proceed", response_model=ServiceRequestResponse)
+def unable_to_proceed(
+    request_id: UUID,
+    payload: UnableToProceedRequest,
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+) -> Any:
+    req = session.get(ServiceRequest, request_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    # Only assigned employee, centre admin, or system admin can mark this
+    from app.models.assignment import RequestAssignment
+    from app.models.profile import CentreAdministrator, EmployeeProfile
+
+    is_authorized = False
+    if current_user.role == "centre_employee":
+        emp = session.get(EmployeeProfile, current_user.id)
+        if emp and req.selected_centre_id == emp.centre_id:
+            assignment = session.scalar(
+                select(RequestAssignment).where(
+                    RequestAssignment.request_id == req.id,
+                    RequestAssignment.is_active.is_(True),
+                )
+            )
+            if assignment and assignment.employee_id == current_user.id:
+                is_authorized = True
+    elif current_user.role == "centre_administrator":
+        admin = session.get(CentreAdministrator, current_user.id)
+        if admin and req.selected_centre_id == admin.centre_id:
+            is_authorized = True
+    elif current_user.role == "system_administrator":
+        is_authorized = True
+
+    if not is_authorized:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    req.status = "UNABLE_TO_PROCEED"
+
+    history = RequestHistory(
+        request_id=req.id,
+        actor_id=current_user.id,
+        action="UNABLE_TO_PROCEED",
+        note=payload.reason,
+    )
+    session.add(history)
+    session.add(req)
+    
+    _safe_add_notification(
+        session,
+        user_id=req.citizen_id,
+        request_id=req.id,
+        event_type="request_unable_to_proceed",
+        title="Request Unable to Proceed",
+        body=f"Your request could not proceed. Reason: {payload.reason}",
+    )
+    
+    session.commit()
+    session.refresh(req)
+    return req
+
+
+@router.post("/{request_id}/reassign", response_model=ServiceRequestResponse)
+def reassign_request(
+    request_id: UUID,
+    payload: ReassignRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    if current_user.role not in {"centre_administrator", "system_administrator"}:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    req = session.get(ServiceRequest, request_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    from app.models.profile import CentreAdministrator, EmployeeProfile
+    if current_user.role == "centre_administrator":
+        admin = session.get(CentreAdministrator, current_user.id)
+        if not admin or req.selected_centre_id != admin.centre_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+    new_emp = session.get(EmployeeProfile, payload.employee_id)
+    if not new_emp or new_emp.centre_id != req.selected_centre_id or not new_emp.is_available:
+        raise HTTPException(status_code=400, detail="Invalid employee for reassignment")
+
+    # Check capacity limit
+    from app.models.assignment import RequestAssignment
+    active_assignments = session.scalar(
+        select(func.count()).where(
+            RequestAssignment.employee_id == payload.employee_id,
+            RequestAssignment.is_active.is_(True),
+        )
+    )
+    if active_assignments and active_assignments >= 10:
+        raise HTTPException(status_code=400, detail="Employee is at maximum capacity")
+
+    # Revoke current
+    current_assignment = session.scalar(
+        select(RequestAssignment).where(
+            RequestAssignment.request_id == req.id,
+            RequestAssignment.is_active.is_(True),
+        )
+    )
+    if current_assignment:
+        current_assignment.is_active = False
+        current_assignment.revoked_at = datetime.now(tz=UTC)
+        session.add(current_assignment)
+        
+        _safe_add_notification(
+            session,
+            user_id=current_assignment.employee_id,
+            request_id=req.id,
+            event_type="assignment_revoked",
+            title="Request Reassigned",
+            body=f"Request {req.id} has been reassigned to another employee.",
+        )
+
+    # Create new assignment
+    new_assignment = RequestAssignment(
+        request_id=req.id,
+        employee_id=payload.employee_id,
+        is_active=True,
+    )
+    session.add(new_assignment)
+
+    # Record history
+    history = RequestHistory(
+        request_id=req.id,
+        actor_id=current_user.id,
+        action="REASSIGNED",
+        note=f"Reassigned to {payload.employee_id}",
+    )
+    session.add(history)
+    
+    _safe_add_notification(
+        session,
+        user_id=payload.employee_id,
+        request_id=req.id,
+        event_type="request_assigned",
+        title="New Request Assigned",
+        body=f"Request {req.id} has been reassigned to you.",
+    )
+
+    session.commit()
+    session.refresh(req)
+    return req
 
 
 @router.get("/{request_id}/interactions", response_model=list[RequestInteractionResponse])

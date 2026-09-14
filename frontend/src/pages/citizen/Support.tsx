@@ -1,5 +1,6 @@
 import { LifeBuoy, Mail, Phone, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 
 interface Ticket {
@@ -16,13 +17,20 @@ export function Support() {
   const [isCreating, setIsCreating] = useState(false);
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
+  const [requestId, setRequestId] = useState('');
+  const [myRequests, setMyRequests] = useState<Array<{id: string, service_name_snapshot: string}>>([]);
   const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchTickets = async () => {
       try {
-        const res = await api.get('/tickets/');
-        setTickets(res.data);
+        const [ticketsRes, requestsRes] = await Promise.all([
+          api.get('/tickets/'),
+          api.get('/requests/')
+        ]);
+        setTickets(ticketsRes.data);
+        setMyRequests(requestsRes.data);
       } catch (err) {
         console.error('Failed to load tickets', err);
       } finally {
@@ -37,10 +45,12 @@ export function Support() {
     setError('');
     setIsCreating(true);
     try {
-      const res = await api.post('/tickets/', { subject, description });
+      const payload = { subject, description, request_id: requestId || null };
+      const res = await api.post('/tickets/', payload);
       setTickets([...tickets, res.data]);
       setSubject('');
       setDescription('');
+      setRequestId('');
     } catch {
       setError('Failed to create ticket.');
     } finally {
@@ -79,6 +89,21 @@ export function Support() {
               />
             </div>
             <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Link to Request (Optional)</label>
+              <select
+                value={requestId}
+                onChange={(e) => setRequestId(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white"
+              >
+                <option value="">-- No Request Linked --</option>
+                {myRequests.map(req => (
+                  <option key={req.id} value={req.id}>
+                    {req.service_name_snapshot} ({req.id.substring(0, 8)}...)
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
               <textarea
                 value={description}
@@ -109,7 +134,11 @@ export function Support() {
             ) : (
               <div className="space-y-3 max-h-64 overflow-y-auto">
                 {tickets.map(ticket => (
-                  <div key={ticket.id} className="p-3 border border-slate-100 rounded-lg bg-slate-50">
+                  <div 
+                    key={ticket.id} 
+                    onClick={() => navigate('/support/' + ticket.id)}
+                    className="p-3 border border-slate-100 rounded-lg bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors"
+                  >
                     <div className="flex justify-between items-start mb-1">
                       <div className="font-medium text-sm text-slate-900">{ticket.subject}</div>
                       <span className="text-xs px-2 py-0.5 bg-slate-200 rounded-full font-medium">{ticket.status}</span>

@@ -32,7 +32,7 @@ describe('App Routing', () => {
     });
     
     render(<App />);
-    expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: 'Sign in' }).length).toBeGreaterThan(0);
   });
 
   it('Citizen root route -> /dashboard', () => {

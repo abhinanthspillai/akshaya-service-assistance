@@ -85,6 +85,18 @@ def update_ticket_status(
         
     ticket.status = update_in.status
     session.add(ticket)
+    
+    # Notify citizen of ticket update
+    from app.api.endpoints.requests import _safe_add_notification
+    _safe_add_notification(
+        session,
+        user_id=ticket.citizen_id,
+        request_id=ticket.request_id,
+        event_type="ticket_updated",
+        title="Support Ticket Updated",
+        body=f"Your support ticket '{ticket.subject}' status changed to {ticket.status}.",
+    )
+    
     session.commit()
     session.refresh(ticket)
     return ticket
@@ -126,6 +138,19 @@ def add_ticket_message(
         body=message_in.body
     )
     session.add(message)
+    
+    # Notify citizen if the message is from an admin
+    if current_user.role != "citizen":
+        from app.api.endpoints.requests import _safe_add_notification
+        _safe_add_notification(
+            session,
+            user_id=ticket.citizen_id,
+            request_id=ticket.request_id,
+            event_type="ticket_updated",
+            title="New Support Ticket Message",
+            body=f"A new message was added to your ticket '{ticket.subject}'.",
+        )
+
     session.commit()
     session.refresh(message)
     return message

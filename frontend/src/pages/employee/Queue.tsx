@@ -1,8 +1,8 @@
-
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
-import { Loader2, FileText, ChevronRight, Users } from 'lucide-react';
+import { Search, Loader2, FileText, Filter, AlertCircle, PlayCircle, Users, ChevronRight } from 'lucide-react';
+import { formatStatus } from '../../utils/format';
 
 interface ServiceRequest {
   id: string;
@@ -89,7 +89,7 @@ export function Queue() {
                     <div className="flex items-center gap-3 mb-1">
                       <span className="font-semibold text-slate-900 truncate">{req.service_name_snapshot}</span>
                       <span className={('px-2 py-0.5 rounded-full text-xs font-medium ' + (STATUS_COLORS[req.status] || 'bg-slate-100 text-slate-600'))}>
-                        {req.status.replace(/_/g, ' ')}
+                        {formatStatus(req.status)}
                       </span>
                     </div>
                     <div className="text-sm text-slate-500">

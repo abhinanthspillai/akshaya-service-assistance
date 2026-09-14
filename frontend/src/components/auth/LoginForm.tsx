@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../lib/api';
+import { getRoleLandingPage } from '../../App';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
-import { AuthLayout } from './AuthLayout';
 
-export function Login() {
+export function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -14,16 +14,6 @@ export function Login() {
   
   const { login } = useAuth();
   const navigate = useNavigate();
-
-  const handleRoleRouting = (role: string) => {
-    switch(role) {
-      case 'citizen': return '/';
-      case 'centre_employee': return '/queue';
-      case 'centre_admin': return '/admin/dashboard';
-      case 'sys_admin': return '/sysadmin/dashboard';
-      default: return '/';
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,7 +36,7 @@ export function Login() {
       });
 
       login(access_token, userRes.data);
-      navigate(handleRoleRouting(userRes.data.role));
+      navigate(getRoleLandingPage(userRes.data.role), { replace: true });
     } catch (error) {
       const e = error as { response?: { data?: { detail?: string } } };
       if (!e.response) {
@@ -65,9 +55,9 @@ export function Login() {
   };
 
   return (
-    <AuthLayout>
-      <h2 className="text-3xl font-bold text-slate-900 mb-2">Sign in</h2>
-      <p className="text-slate-500 mb-8 text-sm">
+    <div className="w-full max-w-sm mx-auto flex flex-col justify-center h-full">
+      <h2 className="text-3xl font-bold text-slate-900 mb-2 text-center md:text-left">Sign in</h2>
+      <p className="text-slate-500 mb-8 text-sm text-center md:text-left">
         Access your requests, services, and profile anytime, anywhere.
       </p>
 
@@ -85,7 +75,7 @@ export function Login() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all placeholder:text-slate-400 text-slate-900"
+            className="w-full px-4 py-3 bg-slate-50/50 rounded-xl border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-slate-400 text-slate-900"
             placeholder="example@gmail.com"
           />
         </div>
@@ -98,7 +88,7 @@ export function Login() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all placeholder:text-slate-400 text-slate-900"
+              className="w-full px-4 py-3 bg-slate-50/50 rounded-xl border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-slate-400 text-slate-900 pr-10"
               placeholder="••••••••••"
             />
             <button
@@ -110,7 +100,7 @@ export function Login() {
             </button>
           </div>
           <div className="mt-2 text-right">
-            <Link to="/forgot-password" className="text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors">
+            <Link to="/forgot-password" className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">
               Forgot Password?
             </Link>
           </div>
@@ -125,13 +115,6 @@ export function Login() {
           {isLoading ? 'Signing in...' : 'Sign in'}
         </button>
       </form>
-      
-      <div className="mt-8 text-center text-sm text-slate-500">
-        Don't have an account?{' '}
-        <Link to="/register" className="font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">
-          Create Account
-        </Link>
-      </div>
-    </AuthLayout>
+    </div>
   );
 }

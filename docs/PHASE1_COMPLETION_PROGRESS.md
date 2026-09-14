@@ -18,7 +18,7 @@
 | R5 - Request-Specific Communication | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `alembic upgrade head`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
 | R6 - Readiness and Processing Flow | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
 | R7 - Consolidated Payment Workflow | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `alembic upgrade head`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
-| R8 - Notification System | NOT STARTED | Pending |
+| R8 - Notification System | COMPLETE | `pytest tests/api/test_request_documents.py tests/api/test_requests.py tests/api/test_e2e_regression.py`; `ruff check app tests`; `ruff format --check app tests`; `mypy app tests`; `alembic upgrade head`; `npm run typecheck`; `npm test -- --run`; `npm run build` |
 | R9 - Cancellation, Escalation and Reassignment | NOT STARTED | Pending |
 | R10 - Support Tickets | NOT STARTED | Pending |
 | R11 - Completed Output and Secure Delivery | NOT STARTED | Pending |

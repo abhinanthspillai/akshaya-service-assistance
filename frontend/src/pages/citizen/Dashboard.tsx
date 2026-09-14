@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../lib/api';
 import { Link, useNavigate } from 'react-router-dom';
 import { FileText, AlertCircle, CheckCircle, Search, ArrowRight, Loader2, Plus, Bell } from 'lucide-react';
+import { formatStatus } from '../../utils/format';
 
 interface RequestSummary {
   id: string;
@@ -12,23 +13,34 @@ interface RequestSummary {
   updated_at: string;
 }
 
+interface NotificationSummary {
+  id: string;
+  title: string;
+  event_type: string;
+  is_read: boolean;
+  created_at: string;
+}
+
 export function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [requests, setRequests] = useState<RequestSummary[]>([]);
   const [servicesCount, setServicesCount] = useState(0);
+  const [notifications, setNotifications] = useState<NotificationSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const [requestsRes, servicesRes] = await Promise.all([
+        const [requestsRes, servicesRes, notifsRes] = await Promise.all([
           api.get('/requests'),
-          api.get('/services')
+          api.get('/services'),
+          api.get('/notifications/?unread_only=true')
         ]);
         
         setRequests(requestsRes.data || []);
         setServicesCount(servicesRes.data?.length || 0);
+        setNotifications(notifsRes.data?.slice(0, 3) || []);
       } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
       } finally {
@@ -58,8 +70,6 @@ export function Dashboard() {
 
   // Get 3 most recent requests
   const recentRequests = [...requests].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()).slice(0, 3);
-
-  const formatStatus = (status: string) => status.replace(/_/g, ' ');
 
   return (
     <div className="space-y-8">
@@ -199,14 +209,29 @@ export function Dashboard() {
             </Link>
           </div>
           
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 text-center">
-            <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Bell className="text-indigo-400" size={24} />
-            </div>
-            <p className="text-sm font-medium text-slate-900 mb-1">You're all caught up!</p>
-            <p className="text-xs text-slate-500">
-              Future notifications will appear here. (Phase 2)
-            </p>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            {notifications.length === 0 ? (
+              <div className="p-6 text-center">
+                <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Bell className="text-indigo-400" size={24} />
+                </div>
+                <p className="text-sm font-medium text-slate-900 mb-1">You're all caught up!</p>
+                <p className="text-xs text-slate-500">
+                  No new notifications right now.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {notifications.map(notif => (
+                  <div key={notif.id} className="p-4 hover:bg-slate-50 transition-colors">
+                    <h3 className="text-sm font-bold text-slate-900 mb-1">{notif.title}</h3>
+                    <p className="text-xs text-slate-500">
+                      {new Date(notif.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

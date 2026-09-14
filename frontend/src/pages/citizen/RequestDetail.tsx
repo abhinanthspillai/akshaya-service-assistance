@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { Loader2, ArrowLeft, MapPin, Upload, FileText, CalendarClock, MessageSquare } from 'lucide-react';
+import { formatStatus } from '../../utils/format';
 
 interface ServiceRequest {
   id: string;
@@ -329,7 +330,7 @@ export function RequestDetail() {
           <div className="flex items-center gap-3 mb-4 justify-between">
             <div className="flex items-center gap-3">
               <span className={('px-3 py-1 rounded-full text-sm font-medium ' + statusColor)}>
-                {request.status.replace(/_/g, ' ')}
+                {formatStatus(request.status)}
               </span>
               <span className="text-sm text-slate-400">Type {request.service_type_snapshot}</span>
             </div>

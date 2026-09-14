@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { formatStatus } from '../../utils/format';
 import { api } from '../../lib/api';
 import { Loader2, ChevronRight, AlertCircle, Search, Plus } from 'lucide-react';
 import clsx from 'clsx';
@@ -168,7 +169,7 @@ export function MyRequests() {
                   "px-2.5 py-1 rounded-md text-xs font-semibold border uppercase tracking-wider",
                   STATUS_COLORS[req.status] || 'bg-slate-50 text-slate-600 border-slate-200'
                 )}>
-                  {req.status.replace(/_/g, ' ')}
+                  {formatStatus(req.status)}
                 </span>
                 <span className="text-xs font-semibold text-slate-400 bg-slate-50 px-2 py-1 rounded-md">Type {req.service_type_snapshot}</span>
               </div>

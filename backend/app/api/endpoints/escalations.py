@@ -50,56 +50,30 @@ def detect_stale_requests(
     if current_user.role not in {"centre_administrator", "system_administrator"}:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    now = datetime.now(tz=UTC)
-    stale_threshold = now - timedelta(hours=24)
-
-    # Find requests that have been WAITING_FOR_CENTRE for more than 24 hours
-    stmt = select(ServiceRequest).where(
-        ServiceRequest.status == "WAITING_FOR_CENTRE",
-        ServiceRequest.submitted_at < stale_threshold,
-    )
+    centre_id = None
     if current_user.role == "centre_administrator":
         from app.models.profile import CentreAdministrator
-
         admin = session.get(CentreAdministrator, current_user.id)
         if not admin:
             raise HTTPException(status_code=403, detail="Admin profile not found")
-        stmt = stmt.where(ServiceRequest.selected_centre_id == admin.centre_id)
+        centre_id = admin.centre_id
 
-    stale_requests = session.scalars(stmt).all()
-    created_escalations = []
+    from app.services.escalation import run_stale_request_detection
+    created_escalations = run_stale_request_detection(session, centre_id=centre_id)
 
-    for req in stale_requests:
-        existing = session.scalar(
-            select(Escalation).where(
-                Escalation.request_id == req.id,
-                Escalation.is_resolved.is_(False),
-            )
-        )
-        if not existing:
-            escalation = Escalation(
-                request_id=req.id,
-                reason="Request remained unaccepted for more than 24 hours",
-                is_resolved=False,
-            )
-            session.add(escalation)
-            created_escalations.append(escalation)
-            
-            # Optionally add a notification for admin
-            from app.api.endpoints.requests import _safe_add_notification
+    # Optionally add a notification for admin
+    if created_escalations:
+        from app.api.endpoints.requests import _safe_add_notification
+        for req in created_escalations:
             _safe_add_notification(
                 session,
                 user_id=current_user.id,
-                request_id=req.id,
+                request_id=req.request_id,
                 event_type="request_escalated",
                 title="Request Escalated",
-                body=f"Request {req.id} is stale and has been escalated.",
+                body=f"Request {req.request_id} is stale and has been escalated.",
             )
-
-    if created_escalations:
         session.commit()
-        for e in created_escalations:
-            session.refresh(e)
 
     return created_escalations
 

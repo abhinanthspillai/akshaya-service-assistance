@@ -1,8 +1,8 @@
-
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
-import { Loader2, ArrowLeft, Clock, FileText, CheckCircle, AlertTriangle, CalendarClock, MessageSquare } from 'lucide-react';
+import { Loader2, ArrowLeft, CheckCircle, Clock, AlertCircle, FileText, CalendarClock, MessageSquare, AlertTriangle } from 'lucide-react';
+import { formatStatus } from '../../utils/format';
 
 interface ServiceRequest {
   id: string;
@@ -242,7 +242,7 @@ export function RequestWorkspace() {
     const reason = window.prompt('Reason this request cannot proceed');
     if (!reason) return;
     try {
-      await api.post('/requests/' + request.id + '/unable-to-proceed', { reason });
+      await api.post('/requests/' + request.id + '/unable_to_proceed', { reason });
       await refreshWorkspace(request.id);
     } catch {
       setError('Failed to mark request unable to proceed.');
@@ -305,7 +305,7 @@ export function RequestWorkspace() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <span className={('px-3 py-1 rounded-full text-sm font-medium ' + statusColor)}>
-                {request.status.replace(/_/g, ' ')}
+                {formatStatus(request.status)}
               </span>
               <span className="text-sm text-slate-400">Type {request.service_type_snapshot}</span>
             </div>
@@ -539,7 +539,7 @@ export function RequestWorkspace() {
                   <div className="font-medium text-slate-900 capitalize">{item.action}</div>
                   <div className="text-sm text-slate-500 mt-0.5">
                     {new Date(item.created_at).toLocaleString()}
-                    {item.to_status && ' · Changed to ' + item.to_status.replace(/_/g, ' ')}
+                    {item.to_status && ' · Changed to ' + formatStatus(item.to_status)}
                   </div>
                 </div>
               ))}
