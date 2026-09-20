@@ -1,4 +1,18 @@
 /** @type {import('tailwindcss').Config} */
+const grayscalePalette = {
+  50: '#f5f7fa',
+  100: '#f3f4f6',
+  200: '#e5e7eb',
+  300: '#d1d5db',
+  400: '#9ca3af',
+  500: '#6b7280',
+  600: '#4b5563',
+  700: '#374151',
+  800: '#333333',
+  900: '#2d2d2d',
+  950: '#1a1a1a',
+};
+
 export default {
   content: [
     "./index.html",
@@ -7,23 +21,26 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: {
-          50: '#faf5ff',
-          100: '#f3e8ff',
-          200: '#e9d5ff',
-          300: '#d8b4fe',
-          400: '#c084fc',
-          500: '#a855f7',
-          600: '#9333ea',
-          700: '#7e22ce',
-          800: '#6b21a8',
-          900: '#581c87',
-          950: '#3b0764',
+        mono: {
+          bg: '#FFFFFF',
+          surface: '#F5F5F7',
+          text: '#1D1D1F',
+          muted: '#6E6E73',
+          border: '#E5E5EA',
         },
-        indigo: {
-          900: '#312e81',
-          950: '#1e1b4b',
-        }
+        primary: grayscalePalette,
+        accent: grayscalePalette,
+        ink: grayscalePalette,
+        indigo: grayscalePalette,
+        red: grayscalePalette,
+        emerald: grayscalePalette,
+        purple: grayscalePalette,
+        blue: grayscalePalette,
+        green: grayscalePalette,
+        yellow: grayscalePalette,
+        amber: grayscalePalette,
+        teal: grayscalePalette,
+        cyan: grayscalePalette,
       }
     },
   },

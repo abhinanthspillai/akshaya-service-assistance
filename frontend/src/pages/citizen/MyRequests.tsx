@@ -1,199 +1,318 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { formatStatus } from '../../utils/format';
 import { api } from '../../lib/api';
-import { Loader2, ChevronRight, AlertCircle, Search, Plus } from 'lucide-react';
+import { Loader2, Search, Plus, MoreVertical, ChevronDown, ChevronLeft, ChevronRight, FileText, Users, Home, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
 
 interface ServiceRequest {
-  id: string;
-  status: string;
-  service_name_snapshot: string;
-  service_type_snapshot: string;
-  fee_snapshot: number | null;
-  submitted_at: string | null;
-  created_at: string;
-  updated_at: string;
-  selected_centre_id: string | null;
+ id: string;
+ status: string;
+ service_name_snapshot: string;
+ service_type_snapshot: string;
+ fee_snapshot: number | null;
+ submitted_at: string | null;
+ created_at: string;
+ updated_at: string;
+ selected_centre_id: string | null;
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  DRAFT: 'bg-slate-100 text-slate-700 border-slate-200',
-  SUBMITTED: 'bg-blue-50 text-blue-700 border-blue-200',
-  WAITING_FOR_CENTRE: 'bg-yellow-50 text-yellow-800 border-yellow-200',
-  ACCEPTED: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-  UNDER_REVIEW: 'bg-purple-50 text-purple-700 border-purple-200',
-  COMPLETED: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-  CLOSED: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-  CANCELLED: 'bg-red-50 text-red-700 border-red-200',
-  UNABLE_TO_PROCEED: 'bg-red-100 text-red-800 border-red-200',
-  CORRECTION_REQUIRED: 'bg-amber-50 text-amber-800 border-amber-200',
-  INTERACTION_REQUIRED: 'bg-orange-50 text-orange-800 border-orange-200',
-  PAYMENT_PENDING: 'bg-pink-50 text-pink-800 border-pink-200'
-};
-
-type Tab = 'Active' | 'Needs Attention' | 'Completed' | 'Cancelled';
+type Tab = 'All' | 'Needs Action' | 'In Progress' | 'Completed' | 'Drafts' | 'Cancelled';
 
 export function MyRequests() {
-  const [requests, setRequests] = useState<ServiceRequest[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState<Tab>('Active');
-  const navigate = useNavigate();
+ const [requests, setRequests] = useState<ServiceRequest[]>([]);
+ const [isLoading, setIsLoading] = useState(true);
+ const [error, setError] = useState('');
+ const [activeTab, setActiveTab] = useState<Tab>('All');
+ const [searchQuery, setSearchQuery] = useState('');
+ const [currentPage, setCurrentPage] = useState(1);
+ const itemsPerPage = 10;
+ const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchRequests = async () => {
-      try {
-        const res = await api.get('/requests/');
-        setRequests(res.data);
-      } catch {
-        setError('Failed to load requests. Please try again later.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchRequests();
-  }, []);
+ useEffect(() => {
+ const fetchRequests = async () => {
+ try {
+ const res = await api.get('/requests/');
+ setRequests(res.data);
+ } catch {
+ setError('Failed to load requests. Please try again later.');
+ } finally {
+ setIsLoading(false);
+ }
+ };
+ fetchRequests();
+ }, []);
 
-  const getFilteredRequests = () => {
-    const needsAttentionStates = ['CORRECTION_REQUIRED', 'INTERACTION_REQUIRED', 'PAYMENT_PENDING'];
-    const completedStates = ['COMPLETED', 'CLOSED'];
-    const cancelledStates = ['CANCELLED', 'UNABLE_TO_PROCEED'];
-    const activeStates = ['SUBMITTED', 'WAITING_FOR_CENTRE', 'ACCEPTED', 'UNDER_REVIEW', 'INTERACTION_SCHEDULED', 'READY_FOR_PROCESSING', 'PROCESSING', 'DRAFT'];
+ const getFilteredRequests = () => {
+ const needsAttentionStates = ['CORRECTION_REQUIRED', 'INTERACTION_REQUIRED', 'PAYMENT_PENDING'];
+ const inProgressStates = ['SUBMITTED', 'WAITING_FOR_CENTRE', 'ACCEPTED', 'UNDER_REVIEW', 'INTERACTION_SCHEDULED', 'READY_FOR_PROCESSING', 'PROCESSING'];
+ const completedStates = ['COMPLETED', 'CLOSED'];
+ const cancelledStates = ['CANCELLED', 'UNABLE_TO_PROCEED'];
+ const draftStates = ['DRAFT'];
 
-    return requests.filter(r => {
-      if (activeTab === 'Active') return activeStates.includes(r.status);
-      if (activeTab === 'Needs Attention') return needsAttentionStates.includes(r.status);
-      if (activeTab === 'Completed') return completedStates.includes(r.status);
-      if (activeTab === 'Cancelled') return cancelledStates.includes(r.status);
-      return false;
-    });
-  };
+ let filtered = requests;
 
-  const filteredRequests = getFilteredRequests();
+ if (activeTab !== 'All') {
+ filtered = filtered.filter(r => {
+ if (activeTab === 'Needs Action') return needsAttentionStates.includes(r.status);
+ if (activeTab === 'In Progress') return inProgressStates.includes(r.status);
+ if (activeTab === 'Completed') return completedStates.includes(r.status);
+ if (activeTab === 'Cancelled') return cancelledStates.includes(r.status);
+ if (activeTab === 'Drafts') return draftStates.includes(r.status);
+ return false;
+ });
+ }
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="animate-spin text-indigo-600" size={32} />
-      </div>
-    );
-  }
+ if (searchQuery) {
+ const query = searchQuery.toLowerCase();
+ filtered = filtered.filter(r => 
+ r.service_name_snapshot.toLowerCase().includes(query) || 
+ r.id.toLowerCase().includes(query)
+ );
+ }
 
-  return (
-    <div className="max-w-5xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">My Requests</h1>
-          <p className="text-slate-500 mt-1">Track and manage your service requests.</p>
-        </div>
-        <button
-          onClick={() => navigate('/services')}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 w-full sm:w-auto"
-        >
-          <Plus size={18} />
-          New Request
-        </button>
-      </div>
+ return filtered;
+ };
 
-      {error && (
-        <div className="bg-red-50 text-red-700 p-4 rounded-xl mb-6 border border-red-100 text-sm flex items-start gap-3">
-          <AlertCircle size={20} className="shrink-0 mt-0.5" />
-          <span>{error}</span>
-        </div>
-      )}
+ const filteredRequests = getFilteredRequests();
+ const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
+ const paginatedRequests = filteredRequests.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-      {/* Tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-2 mb-6 hide-scrollbar">
-        {(['Active', 'Needs Attention', 'Completed', 'Cancelled'] as Tab[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={clsx(
-              "px-4 py-2 text-sm font-medium rounded-xl whitespace-nowrap transition-colors",
-              activeTab === tab
-                ? "bg-indigo-600 text-white shadow-sm"
-                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-indigo-600"
-            )}
-          >
-            {tab}
-            <span className={clsx(
-              "ml-2 px-2 py-0.5 rounded-full text-xs",
-              activeTab === tab ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-500"
-            )}>
-              {(() => {
-                const needsAttentionStates = ['CORRECTION_REQUIRED', 'INTERACTION_REQUIRED', 'PAYMENT_PENDING'];
-                const completedStates = ['COMPLETED', 'CLOSED'];
-                const cancelledStates = ['CANCELLED', 'UNABLE_TO_PROCEED'];
-                const activeStates = ['SUBMITTED', 'WAITING_FOR_CENTRE', 'ACCEPTED', 'UNDER_REVIEW', 'INTERACTION_SCHEDULED', 'READY_FOR_PROCESSING', 'PROCESSING', 'DRAFT'];
-                
-                return requests.filter(r => {
-                  if (tab === 'Active') return activeStates.includes(r.status);
-                  if (tab === 'Needs Attention') return needsAttentionStates.includes(r.status);
-                  if (tab === 'Completed') return completedStates.includes(r.status);
-                  if (tab === 'Cancelled') return cancelledStates.includes(r.status);
-                  return false;
-                }).length;
-              })()}
-            </span>
-          </button>
-        ))}
-      </div>
+ const getStatusDisplay = (status: string) => {
+ const formatted = status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+ return formatted;
+ };
 
-      {filteredRequests.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 shadow-sm">
-          <Search className="mx-auto text-slate-300 mb-4" size={48} />
-          <h3 className="text-lg font-semibold text-slate-900 mb-2">No {activeTab.toLowerCase()} requests</h3>
-          <p className="text-slate-500 mb-6 max-w-sm mx-auto">
-            You don't have any requests in this category right now.
-          </p>
-          {activeTab === 'Active' && (
-            <button
-              onClick={() => navigate('/services')}
-              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold px-5 py-2.5 rounded-xl transition-colors border border-indigo-200"
-            >
-              Browse Services
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredRequests.map((req) => (
-            <button
-              key={req.id}
-              onClick={() => navigate(`/requests/${req.id}`)}
-              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all text-left flex flex-col h-full group"
-            >
-              <div className="flex justify-between items-start mb-4">
-                <span className={clsx(
-                  "px-2.5 py-1 rounded-md text-xs font-semibold border uppercase tracking-wider",
-                  STATUS_COLORS[req.status] || 'bg-slate-50 text-slate-600 border-slate-200'
-                )}>
-                  {formatStatus(req.status)}
-                </span>
-                <span className="text-xs font-semibold text-slate-400 bg-slate-50 px-2 py-1 rounded-md">Type {req.service_type_snapshot}</span>
-              </div>
-              
-              <h3 className="font-bold text-slate-900 text-lg mb-2 leading-snug group-hover:text-indigo-600 transition-colors">
-                {req.service_name_snapshot}
-              </h3>
-              
-              <div className="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between">
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Last Updated</span>
-                  <span className="text-sm font-medium text-slate-700">
-                    {new Date(req.updated_at || req.created_at).toLocaleDateString()}
-                  </span>
-                </div>
-                
-                <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
-                  <ChevronRight size={18} />
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+ const getServiceIcon = (name: string) => {
+ const lower = name.toLowerCase();
+ if (lower.includes('card') || lower.includes('member')) return <Users size={18} strokeWidth={2} />;
+ if (lower.includes('residence') || lower.includes('address')) return <Home size={18} strokeWidth={2} />;
+ return <FileText size={18} strokeWidth={2} />;
+ };
+
+ if (isLoading) {
+ return (
+ <div className="flex justify-center items-center h-64">
+ <Loader2 className="animate-spin text-mono-text" size={32} />
+ </div>
+ );
+ }
+
+ const tabs: Tab[] = ['All', 'Needs Action', 'In Progress', 'Completed', 'Drafts', 'Cancelled'];
+
+ return (
+ <div className="space-y-6 pb-12 max-w-[1400px] mx-auto">
+ <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-4">
+ <div>
+ <h1 className="text-3xl font-bold text-mono-text tracking-tight">My Requests</h1>
+ <p className="text-sm font-medium text-mono-muted mt-2">Track and manage all your service requests in one place.</p>
+ </div>
+ <button
+ onClick={() => navigate('/services')}
+ className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-mono-text text-mono-bg text-sm font-bold hover:opacity-90 shadow-sm transition-opacity"
+ >
+ <Plus size={18} strokeWidth={2.5} />
+ New Request
+ </button>
+ </div>
+
+ {error && (
+ <div className="bg-mono-surface text-mono-text p-4 rounded-xl mb-6 border border-mono-border text-sm flex items-start gap-3">
+ <AlertCircle size={20} className="shrink-0 mt-0.5" />
+ <span>{error}</span>
+ </div>
+ )}
+
+ {/* Tabs */}
+ <div className="flex gap-6 overflow-x-auto border-b border-mono-border mb-6 hide-scrollbar">
+ {tabs.map((tab) => {
+ let count = 0;
+ const needsAttentionStates = ['CORRECTION_REQUIRED', 'INTERACTION_REQUIRED', 'PAYMENT_PENDING'];
+ const inProgressStates = ['SUBMITTED', 'WAITING_FOR_CENTRE', 'ACCEPTED', 'UNDER_REVIEW', 'INTERACTION_SCHEDULED', 'READY_FOR_PROCESSING', 'PROCESSING'];
+ const completedStates = ['COMPLETED', 'CLOSED'];
+ const cancelledStates = ['CANCELLED', 'UNABLE_TO_PROCEED'];
+ const draftStates = ['DRAFT'];
+
+ if (tab === 'All') count = requests.length;
+ else if (tab === 'Needs Action') count = requests.filter(r => needsAttentionStates.includes(r.status)).length;
+ else if (tab === 'In Progress') count = requests.filter(r => inProgressStates.includes(r.status)).length;
+ else if (tab === 'Completed') count = requests.filter(r => completedStates.includes(r.status)).length;
+ else if (tab === 'Drafts') count = requests.filter(r => draftStates.includes(r.status)).length;
+ else if (tab === 'Cancelled') count = requests.filter(r => cancelledStates.includes(r.status)).length;
+
+ const isActive = activeTab === tab;
+
+ return (
+ <button
+ key={tab}
+ onClick={() => { setActiveTab(tab); setCurrentPage(1); }}
+ className={clsx(
+ "pb-4 text-sm flex items-center gap-2 whitespace-nowrap transition-colors border-b-2 relative top-[1px]",
+ isActive
+ ? "text-mono-text font-bold border-mono-text"
+ : "text-mono-muted font-medium border-transparent hover:text-mono-text"
+ )}
+ >
+ {tab}
+ <span className={clsx(
+ "px-2 py-0.5 rounded-full text-xs font-bold",
+ isActive ? "bg-mono-text text-mono-bg" : "bg-mono-surface text-mono-text"
+ )}>
+ {count}
+ </span>
+ </button>
+ );
+ })}
+ </div>
+
+ <div className="bg-mono-bg rounded-2xl border border-mono-border shadow-sm overflow-hidden">
+ {/* Filters */}
+ <div className="p-4 border-b border-mono-border flex flex-col sm:flex-row gap-4">
+ <div className="relative flex-1 max-w-sm">
+ <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-mono-muted" size={18} />
+ <input
+ type="text"
+ placeholder="Search by service name or request ID..."
+ value={searchQuery}
+ onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+ className="w-full pl-10 pr-4 py-2 bg-mono-bg border border-mono-border rounded-lg text-sm font-medium placeholder:text-mono-muted focus:outline-none focus:border-mono-text transition-all"
+ />
+ </div>
+ <div className="flex gap-4 flex-1">
+ <div className="relative flex-1 max-w-[200px]">
+ <select className="w-full appearance-none pl-4 pr-10 py-2 bg-mono-bg border border-mono-border rounded-lg text-sm font-bold text-mono-text focus:outline-none focus:border-mono-text transition-all">
+ <option>All Services</option>
+ </select>
+ <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-mono-muted pointer-events-none" size={16} />
+ </div>
+ <div className="relative flex-1 max-w-[200px]">
+ <select className="w-full appearance-none pl-4 pr-10 py-2 bg-mono-bg border border-mono-border rounded-lg text-sm font-bold text-mono-text focus:outline-none focus:border-mono-text transition-all">
+ <option>All Statuses</option>
+ </select>
+ <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-mono-muted pointer-events-none" size={16} />
+ </div>
+ <div className="relative flex-1 max-w-[200px]">
+ <select className="w-full appearance-none pl-4 pr-10 py-2 bg-mono-bg border border-mono-border rounded-lg text-sm font-bold text-mono-text focus:outline-none focus:border-mono-text transition-all">
+ <option>All Time</option>
+ </select>
+ <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-mono-muted pointer-events-none" size={16} />
+ </div>
+ </div>
+ <button className="px-4 py-2 border border-mono-border rounded-lg text-sm font-bold text-mono-text hover:bg-mono-surface transition-colors">
+ Reset
+ </button>
+ </div>
+
+ {/* Table */}
+ <div className="overflow-x-auto">
+ <table className="w-full text-left border-collapse">
+ <thead>
+ <tr className="bg-mono-surface">
+ <th className="px-6 py-4 text-xs font-bold text-mono-muted uppercase tracking-wider">#</th>
+ <th className="px-6 py-4 text-xs font-bold text-mono-muted uppercase tracking-wider">Service</th>
+ <th className="px-6 py-4 text-xs font-bold text-mono-muted uppercase tracking-wider">Request ID</th>
+ <th className="px-6 py-4 text-xs font-bold text-mono-muted uppercase tracking-wider">Submitted On</th>
+ <th className="px-6 py-4 text-xs font-bold text-mono-muted uppercase tracking-wider">Status</th>
+ <th className="px-6 py-4 text-xs font-bold text-mono-muted uppercase tracking-wider">Last Updated</th>
+ <th className="px-6 py-4 text-xs font-bold text-mono-muted uppercase tracking-wider text-right">Actions</th>
+ </tr>
+ </thead>
+ <tbody className="divide-y divide-mono-border">
+ {paginatedRequests.length === 0 ? (
+ <tr>
+ <td colSpan={7} className="px-6 py-16 text-center text-mono-muted text-sm font-medium">
+ No requests found matching your filters.
+ </td>
+ </tr>
+ ) : (
+ paginatedRequests.map((req, idx) => (
+ <tr key={req.id} className="hover:bg-mono-surface/50 transition-colors">
+ <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-mono-muted">
+ {(currentPage - 1) * itemsPerPage + idx + 1}
+ </td>
+ <td className="px-6 py-4 whitespace-nowrap">
+ <div className="flex items-center gap-3">
+ <div className="text-mono-text">
+ {getServiceIcon(req.service_name_snapshot)}
+ </div>
+ <span className="text-sm font-bold text-mono-text">{req.service_name_snapshot}</span>
+ </div>
+ </td>
+ <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-mono-muted">
+ {req.id.split('-').pop()?.padStart(4, '0') ? `#REQ-2025-${req.id.split('-').pop()?.padStart(4, '0')}` : req.id}
+ </td>
+ <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-mono-muted">
+ {req.submitted_at ? new Date(req.submitted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+ </td>
+ <td className="px-6 py-4 whitespace-nowrap">
+ <span className={clsx(
+ "px-3 py-1 text-[11px] font-bold rounded-full bg-mono-surface text-mono-text",
+ req.status === 'CORRECTION_REQUIRED' || req.status === 'INTERACTION_REQUIRED' ? "border border-mono-border" : ""
+ )}>
+ {getStatusDisplay(req.status)}
+ </span>
+ </td>
+ <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-mono-muted">
+ {new Date(req.updated_at || req.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+ </td>
+ <td className="px-6 py-4 whitespace-nowrap text-right">
+ <div className="flex items-center justify-end gap-2">
+ <button
+ onClick={() => navigate(`/requests/${req.id}`)}
+ className="px-4 py-1.5 border border-mono-border rounded-lg text-xs font-bold text-mono-text hover:bg-mono-surface transition-colors"
+ >
+ {req.status === 'DRAFT' ? 'Edit' : 'View'}
+ </button>
+ <button className="p-1.5 text-mono-muted hover:text-mono-text rounded-md hover:bg-mono-surface transition-colors">
+ <MoreVertical size={16} />
+ </button>
+ </div>
+ </td>
+ </tr>
+ ))
+ )}
+ </tbody>
+ </table>
+ </div>
+
+ {/* Pagination */}
+ {filteredRequests.length > 0 && (
+ <div className="px-6 py-4 border-t border-mono-border flex items-center justify-between">
+ <p className="text-sm font-medium text-mono-muted">
+ Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredRequests.length)} of {filteredRequests.length} requests
+ </p>
+ <div className="flex items-center gap-1">
+ <button 
+ onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+ disabled={currentPage === 1}
+ className="w-8 h-8 flex items-center justify-center rounded-lg border border-mono-border text-mono-muted hover:text-mono-text hover:bg-mono-surface disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
+ >
+ <ChevronLeft size={16} />
+ </button>
+ {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+ <button
+ key={page}
+ onClick={() => setCurrentPage(page)}
+ className={clsx(
+ "w-8 h-8 flex items-center justify-center rounded-lg text-sm font-bold transition-colors",
+ currentPage === page 
+ ? "bg-mono-text text-mono-bg" 
+ : "border border-mono-border text-mono-text hover:bg-mono-surface"
+ )}
+ >
+ {page}
+ </button>
+ ))}
+ <button 
+ onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+ disabled={currentPage === totalPages}
+ className="w-8 h-8 flex items-center justify-center rounded-lg border border-mono-border text-mono-muted hover:text-mono-text hover:bg-mono-surface disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
+ >
+ <ChevronRight size={16} />
+ </button>
+ </div>
+ </div>
+ )}
+ </div>
+ </div>
+ );
 }

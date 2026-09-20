@@ -4,8 +4,8 @@
 @layer base {
   body {
     margin: 0;
-    background: #f8fafc;
-    color: #0f172a;
+    background: #FFFFFF;
+    color: #1D1D1F;
     font-family: ui-sans-serif, system-ui, sans-serif;
   }
 }
