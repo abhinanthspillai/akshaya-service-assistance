@@ -1,7 +1,13 @@
 from app.models.assignment import RequestAssignment, RequestHistory
 from app.models.centre import AkshayaCentre
+from app.models.document import RequestDocument, RequestDocumentReview
+from app.models.interaction import RequestInteraction
+from app.models.message import RequestMessage
+from app.models.notification import Notification
+from app.models.payment import RequestPayment
 from app.models.profile import CentreAdministrator, CitizenProfile, EmployeeProfile
 from app.models.request import ServiceRequest
+from app.models.escalation import Escalation
 from app.models.service import (
     CentreSupportedService,
     Service,
@@ -9,6 +15,9 @@ from app.models.service import (
     ServiceInteractionRequirement,
     ServiceRequirementAllowedFileType,
 )
+from app.models.ticket import SupportTicket, TicketMessage
+from app.models.output import CompletedOutput
+from app.models.audit import AuditLog
 from app.models.user import User
 
 __all__ = [
@@ -25,4 +34,15 @@ __all__ = [
     "ServiceRequest",
     "RequestAssignment",
     "RequestHistory",
+    "RequestDocument",
+    "RequestDocumentReview",
+    "RequestInteraction",
+    "RequestMessage",
+    "Notification",
+    "RequestPayment",
+    "Escalation",
+    "SupportTicket",
+    "TicketMessage",
+    "CompletedOutput",
+    "AuditLog",
 ]

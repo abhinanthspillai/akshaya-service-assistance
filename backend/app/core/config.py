@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     cors_origins: str = "http://localhost:5173"
     file_storage_path: str = "./storage"
+    max_upload_size_bytes: int = 10 * 1024 * 1024
 
 
 @lru_cache

@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, CurrentUserSysAdmin, SessionDep
+from app.core.audit import log_audit
 from app.models.centre import AkshayaCentre
 from app.models.profile import CentreAdministrator
 from app.models.service import CentreSupportedService, Service
@@ -65,6 +66,14 @@ def create_centre(
 
     centre = AkshayaCentre(**centre_in.model_dump())
     session.add(centre)
+    log_audit(
+        session,
+        actor_id=current_user.id,
+        action="create_centre",
+        target_resource_type="AkshayaCentre",
+        target_resource_id=str(centre.id),
+        details={"code": centre.code, "name": centre.name}
+    )
     session.commit()
     session.refresh(centre)
     return centre
@@ -95,6 +104,14 @@ def update_centre(
         setattr(centre, field, value)
 
     session.add(centre)
+    log_audit(
+        session,
+        actor_id=current_user.id,
+        action="update_centre",
+        target_resource_type="AkshayaCentre",
+        target_resource_id=str(centre.id),
+        details=update_data
+    )
     session.commit()
     session.refresh(centre)
     return centre
@@ -153,6 +170,14 @@ def add_centre_service(
 
     supported_service = CentreSupportedService(centre_id=centre_id, **service_in.model_dump())
     session.add(supported_service)
+    log_audit(
+        session,
+        actor_id=current_user.id,
+        action="add_centre_service",
+        target_resource_type="CentreSupportedService",
+        target_resource_id=f"{centre_id}:{service_in.service_id}",
+        details={"service_id": str(service_in.service_id)}
+    )
     session.commit()
     session.refresh(supported_service)
     return supported_service
@@ -178,6 +203,14 @@ def update_centre_service(
         setattr(supported_service, field, value)
 
     session.add(supported_service)
+    log_audit(
+        session,
+        actor_id=current_user.id,
+        action="update_centre_service",
+        target_resource_type="CentreSupportedService",
+        target_resource_id=f"{centre_id}:{service_id}",
+        details=update_data
+    )
     session.commit()
     session.refresh(supported_service)
     return supported_service
@@ -202,5 +235,13 @@ def remove_centre_service(
         raise HTTPException(status_code=404, detail="Supported service not found")
 
     session.delete(supported_service)
+    log_audit(
+        session,
+        actor_id=current_user.id,
+        action="remove_centre_service",
+        target_resource_type="CentreSupportedService",
+        target_resource_id=f"{centre_id}:{service_id}",
+        details={"service_id": str(service_id)}
+    )
     session.commit()
     return None

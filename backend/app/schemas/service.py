@@ -8,7 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 class ServiceDocumentRequirementBase(BaseModel):
     name: str = Field(..., max_length=200)
     description: str | None = None
-    is_required: bool = True
+    requirement_type: str = Field("REQUIRED", pattern="^(REQUIRED|OPTIONAL|CONDITIONAL)$")
+    conditional_rule: str | None = None
     is_reusable: bool = False
     max_file_size_bytes: int | None = Field(None, gt=0)
     sort_order: int = 0

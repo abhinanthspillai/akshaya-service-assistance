@@ -119,6 +119,89 @@ Preconditions: DRAFT, centre selected where required, all mandatory pre-submissi
 Atomic transition to SUBMITTED then WAITING_FOR_CENTRE when routing succeeds.
 409 on invalid state/precondition.
 
+### POST /requests/{request_id}/pre-validate
+Citizen owner while request is DRAFT or CORRECTION_REQUIRED.
+Runs deterministic Phase 1 document checks only: required document presence, configured MIME type, non-empty file, configured/default size limits and deterministic duplicate-content warning.
+Response: request_id, is_valid, itemized requirement statuses/messages and warnings.
+The endpoint must not claim government authenticity, OCR extraction or AI verification.
+
+### POST /requests/{request_id}/start-review
+Centre Employee with active assignment.
+Precondition: ACCEPTED.
+Transitions request to UNDER_REVIEW and writes history evidence.
+
+### GET /requests/{request_id}/document-reviews
+Authorized request participants.
+Returns document review evidence, including Citizen-visible correction reasons for the request owner.
+
+### POST /requests/{request_id}/documents/{document_id}/review
+Centre Employee with active assignment while request is UNDER_REVIEW.
+Request: decision and optional reason. Supported Phase 1 decisions are APPROVED, REJECTED, REPLACEMENT_REQUESTED and SUSPICIOUS.
+Non-approval decisions require a reason and transition the request to CORRECTION_REQUIRED with history evidence. Approval records review evidence without advancing the primary request state.
+
+### GET /requests/{request_id}/interactions
+Authorized request participants.
+Returns request interaction records, including requested reason, instructions, schedule, outcome status and outcome note.
+
+### POST /requests/{request_id}/require-interaction
+Centre Employee with active assignment.
+Precondition: UNDER_REVIEW or CORRECTION_REQUIRED.
+Creates a request interaction record and transitions the request to INTERACTION_REQUIRED.
+
+### POST /requests/{request_id}/schedule-interaction
+Citizen owner or active assigned Centre Employee.
+Precondition: INTERACTION_REQUIRED and a REQUESTED/MISSED interaction record.
+Schedules the interaction and transitions the request to INTERACTION_SCHEDULED.
+
+### POST /requests/{request_id}/interactions/{interaction_id}/outcome
+Centre Employee with active assignment.
+Precondition: INTERACTION_SCHEDULED.
+Records COMPLETED or MISSED on the interaction record. COMPLETED returns the request to UNDER_REVIEW; MISSED returns it to INTERACTION_REQUIRED for rescheduling. There is no primary MISSED state.
+
+### GET /requests/{request_id}/messages
+Citizen owner or active assigned Centre Employee.
+Returns request-scoped messages ordered by timestamp.
+
+### POST /requests/{request_id}/messages
+Citizen owner or active assigned Centre Employee.
+Creates a request-scoped message. Message bodies are stored as request data and must not be written to application logs.
+
+### POST /requests/{request_id}/mark-ready
+Centre Employee with active assignment.
+Precondition: UNDER_REVIEW, required current documents uploaded and approved, no unresolved request interactions.
+Transitions request to READY_FOR_PROCESSING.
+
+### POST /requests/{request_id}/start-processing
+Centre Employee with active assignment.
+Precondition: READY_FOR_PROCESSING.
+Transitions request to PROCESSING.
+
+### POST /requests/{request_id}/unable-to-proceed
+Centre Employee with active assignment.
+Precondition: request is in an active review/interaction/processing state and a non-empty reason is supplied.
+Transitions request to UNABLE_TO_PROCEED and records history evidence. External portal downtime or operational blockers must be represented through reason/history, not invented primary states.
+
+### GET /requests/{request_id}/payments
+Citizen owner or active assigned Centre Employee.
+Returns request payment records.
+
+### POST /requests/{request_id}/request-payment
+Centre Employee with active assignment.
+Precondition: PROCESSING and positive fee snapshot.
+Creates or returns a pending development/mock payment and transitions request to PAYMENT_PENDING.
+
+### POST /requests/{request_id}/payments/{payment_id}/confirm
+Citizen owner.
+Idempotently confirms a pending mock payment and returns request to PROCESSING.
+
+### POST /requests/{request_id}/payments/{payment_id}/fail
+Citizen owner.
+Records mock payment failure and keeps request in PAYMENT_PENDING.
+
+### POST /requests/{request_id}/payments/{payment_id}/cancel
+Citizen owner.
+Records mock payment cancellation and returns request to PROCESSING.
+
 ## Later business-action endpoint pattern
 Use actions, not arbitrary status PATCH:
 - POST /requests/{id}/accept
@@ -139,12 +222,21 @@ Use actions, not arbitrary status PATCH:
 Every action validates current state, caller role/scope, required evidence and concurrency version/transaction assumptions.
 
 ## Documents (later slice)
-Multipart upload with requirement_id.
-Backend validates authorization, MIME type, configured max size, safe generated storage name, malware policy if available, and metadata persistence. Download uses authorized backend endpoint or short-lived signed URL; never expose unrestricted storage paths.
+Implemented Phase 1 request-document endpoints:
+
+- GET /requests/{request_id}/documents
+- POST /requests/{request_id}/documents
+- GET /requests/{request_id}/documents/{document_id}/download
+- POST /requests/{request_id}/documents/{document_id}/review
+
+Upload is multipart form data with `requirement_id` and `file`.
+
+Backend validates Citizen ownership, request state, requirement/service relationship, MIME type, configured/default max size, non-empty file content, generated private storage key and metadata persistence. Replacement uploads create a new document version and mark prior current versions as replaced rather than deleting their evidence.
+
+Download is served only through the authorized backend endpoint. Citizen owners, active assigned employees, same-centre administrators and system administrators may access according to role scope. Responses expose metadata only and never expose unrestricted storage paths.
 
 ## Payments (later slice)
-Payment intent/mock initiation only after allowed workflow point.
-Original payment records are immutable; refunds are separate records.
+Implemented Phase 1 development/mock payment flow. It does not process real money and stores no card/bank data. Original payment records preserve provider reference, amount, status and timestamps; refunds, when added, must be separate records.
 
 ## Rate limits baseline
 At minimum: register/login, document upload and support/contact endpoints. Exact production limits may be environment configurable.

@@ -13,6 +13,29 @@ class SelectCentreRequest(BaseModel):
     centre_id: UUID
 
 
+class RequestPreValidationItem(BaseModel):
+    requirement_id: UUID
+    requirement_name: str
+    status: str
+    messages: list[str] = []
+
+
+class RequestPreValidationResponse(BaseModel):
+    request_id: UUID
+    is_valid: bool
+    items: list[RequestPreValidationItem]
+    warnings: list[str] = []
+
+
+class UnableToProceedRequest(BaseModel):
+    reason: str
+
+
+class ReassignRequest(BaseModel):
+    employee_id: UUID
+    centre_id: UUID | None = None
+
+
 class ServiceRequestResponse(BaseModel):
     id: UUID
     citizen_id: UUID

@@ -37,5 +37,6 @@ class AkshayaCentreResponse(AkshayaCentreBase):
     id: UUID
     created_at: datetime
     updated_at: datetime
+    distance_km: float | None = None
 
     model_config = ConfigDict(from_attributes=True)

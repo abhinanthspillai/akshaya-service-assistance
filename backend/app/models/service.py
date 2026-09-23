@@ -75,11 +75,21 @@ class ServiceDocumentRequirement(Base):
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    requirement_type: Mapped[str] = mapped_column(String(20), nullable=False, default="REQUIRED")
+    conditional_rule: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_reusable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     max_file_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
     service: Mapped["Service"] = relationship("Service", back_populates="document_requirements")
     allowed_file_types: Mapped[list["ServiceRequirementAllowedFileType"]] = relationship(
