@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Shield, LifeBuoy, FileText, Settings, Users, Activity } from 'lucide-react';
+import { Shield, LifeBuoy, FileText, Users } from 'lucide-react';
 
 export function SysAdminDashboard() {
  const navigate = useNavigate();

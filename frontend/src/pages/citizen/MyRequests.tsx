@@ -99,8 +99,9 @@ export function MyRequests() {
      setRequests(requests.filter(r => r.id !== id));
      setDeleteConfirm({ isOpen: false, id: '', status: '' });
      setError('');
-   } catch (err: any) {
-     const msg = err.response?.data?.detail || `Failed to ${action} request. Please try again.`;
+   } catch (err: unknown) {
+     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     const msg = (err as any).response?.data?.detail || `Failed to ${action} request. Please try again.`;
      setError(msg);
      setDeleteConfirm({ isOpen: false, id: '', status: '' });
    } finally {

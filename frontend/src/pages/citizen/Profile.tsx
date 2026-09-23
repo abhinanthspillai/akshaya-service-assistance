@@ -1,16 +1,12 @@
 import { useAuth } from '../../contexts/AuthContext';
 import { User, MapPin, ShieldCheck, Lock, Bell, Globe, FileText, Trash2, Edit2, ChevronRight } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import clsx from 'clsx';
+
+
 
 export function Profile() {
- const { user, logout } = useAuth();
- const navigate = useNavigate();
+ const { user } = useAuth();
+ 
 
- const handleLogout = () => {
- logout();
- navigate('/login');
- };
 
  // Safely parse name or fallback
  const fullName = user?.full_name || 'Sample';

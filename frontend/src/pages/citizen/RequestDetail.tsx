@@ -309,9 +309,9 @@ export function RequestDetail() {
        setRequest(res.data);
      }
      setConfirmAction(prev => ({ ...prev, isOpen: false }));
-   } catch (err: any) {
+   } catch (err: unknown) {
      const actionText = confirmAction.action === 'delete' ? (request.status === 'DRAFT' ? 'delete' : 'archive') : confirmAction.action;
-     setError(err.response?.data?.detail || `Failed to ${actionText} request.`);
+     setError((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || `Failed to ${actionText} request.`);
      setConfirmAction(prev => ({ ...prev, isOpen: false }));
    } finally {
      setIsSubmitting(false);

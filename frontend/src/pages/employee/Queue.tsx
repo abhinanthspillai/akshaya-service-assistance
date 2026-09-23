@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
-import { Search, Loader2, FileText, Filter, AlertCircle, PlayCircle, Users, ChevronRight } from 'lucide-react';
+import { Loader2, FileText, Users, ChevronRight } from 'lucide-react';
 import { formatStatus } from '../../utils/format';
 
 interface ServiceRequest {

@@ -342,7 +342,11 @@ async def upload_request_document(
     if allowed_extensions and suffix not in allowed_extensions:
         raise HTTPException(status_code=422, detail="File extension does not match content type")
 
-    data = await file.read()
+    try:
+        data = await file.read()
+    finally:
+        await file.close()
+
     size = len(data)
     max_size = requirement.max_file_size_bytes or get_settings().max_upload_size_bytes
     if size == 0:

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, FileText, MessageSquare, ChevronDown, ChevronUp, Phone, Mail, MapPin, ArrowRight, Loader2, ArrowLeft, LifeBuoy } from 'lucide-react';
 import { api } from '../../lib/api';
-import clsx from 'clsx';
+
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';

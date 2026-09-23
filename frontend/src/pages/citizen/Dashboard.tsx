@@ -21,7 +21,7 @@ export function Dashboard() {
  const { user } = useAuth();
  const navigate = useNavigate();
   const [requests, setRequests] = useState<RequestSummary[]>([]);
-  const [popularServices, setPopularServices] = useState<any[]>([]);
+  const [popularServices, setPopularServices] = useState<unknown[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [requestsError, setRequestsError] = useState(false);
   const [servicesError, setServicesError] = useState(false);

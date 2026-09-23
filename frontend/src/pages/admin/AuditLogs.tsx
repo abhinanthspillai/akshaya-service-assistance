@@ -8,7 +8,7 @@ interface AuditLog {
  action: string;
  target_resource_type: string;
  target_resource_id: string | null;
- details: Record<string, any> | null;
+ details: Record<string, unknown> | null;
  created_at: string;
 }
 

@@ -17,17 +17,12 @@ interface ServiceRequest {
  status: string;
 }
 
-interface Employee {
- id: string;
- full_name: string;
- is_available: boolean;
- max_active_requests: number;
-}
+
 
 export function Escalations() {
  const [escalations, setEscalations] = useState<Escalation[]>([]);
  const [requests, setRequests] = useState<Record<string, ServiceRequest>>({});
- const [employees, setEmployees] = useState<Employee[]>([]);
+
  const [isLoading, setIsLoading] = useState(true);
  const [error, setError] = useState('');
  const [selectedEmployee, setSelectedEmployee] = useState<Record<string, string>>({});
@@ -55,8 +50,7 @@ export function Escalations() {
 
  // Try fetching employees (assuming an endpoint exists)
  try {
- const empRes = await api.get('/employees'); // or however we list them
- setEmployees(empRes.data);
+ await api.get('/employees'); 
  } catch {
  // If no such endpoint, we might just use a generic approach or we need to add it.
  }
@@ -92,8 +86,9 @@ export function Escalations() {
  await api.post('/requests/' + requestId + '/reassign', { employee_id: employeeId });
  await api.post('/escalations/' + escalationId + '/resolve');
  setEscalations(escalations.filter(e => e.id !== escalationId));
- } catch (err: any) {
- setError(err.response?.data?.detail || 'Failed to reassign request.');
+ } catch (err: unknown) {
+ // eslint-disable-next-line @typescript-eslint/no-explicit-any
+ setError((err as any).response?.data?.detail || 'Failed to reassign request.');
  } finally {
  setIsProcessing(null);
  }
