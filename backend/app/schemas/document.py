@@ -17,6 +17,10 @@ class RequestDocumentResponse(BaseModel):
     is_current: bool
     uploaded_at: datetime
     replaced_at: datetime | None
+    status: str
+    employee_remarks: str | None
+    verified_at: datetime | None
+    verified_by_id: UUID | None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -61,7 +61,7 @@ def _document_fixture(
     requirement = ServiceDocumentRequirement(
         service_id=service.id,
         name="Proof of identity",
-        is_required=True,
+        requirement_type="REQUIRED",
         max_file_size_bytes=32,
         sort_order=1,
     )
@@ -258,7 +258,7 @@ def test_pre_validation_returns_deterministic_duplicate_warning(
     second_requirement = ServiceDocumentRequirement(
         service_id=first_requirement.service_id,
         name="Address proof",
-        is_required=True,
+        requirement_type="REQUIRED",
         max_file_size_bytes=32,
         sort_order=2,
     )

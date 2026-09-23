@@ -60,12 +60,19 @@ class RequestDocument(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     replaced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="PENDING")
+    employee_remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_by_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
 
     request: Mapped["ServiceRequest"] = relationship("ServiceRequest", foreign_keys=[request_id])
     requirement: Mapped["ServiceDocumentRequirement"] = relationship(
         "ServiceDocumentRequirement", foreign_keys=[requirement_id]
     )
     uploaded_by: Mapped["User"] = relationship("User", foreign_keys=[uploaded_by_id])
+    verified_by: Mapped["User | None"] = relationship("User", foreign_keys=[verified_by_id])
 
 
 DOCUMENT_REVIEW_DECISIONS = (

@@ -102,6 +102,7 @@ def list_requests(
 
     if current_user.role == "citizen":
         stmt = stmt.where(ServiceRequest.citizen_id == current_user.id)
+        stmt = stmt.where(ServiceRequest.is_archived_by_citizen.is_(False))
     elif current_user.role == "centre_employee":
         from app.models.profile import EmployeeProfile
 
@@ -515,6 +516,19 @@ def review_request_document(
         reason=body.reason,
     )
     session.add(review)
+
+    now = datetime.now(tz=UTC)
+    if body.decision == "APPROVED":
+        document.status = "VERIFIED"
+        document.verified_at = now
+        document.verified_by_id = current_user.id
+    elif body.decision == "REPLACEMENT_REQUESTED":
+        document.status = "REUPLOAD_REQUIRED"
+        document.employee_remarks = body.reason
+    elif body.decision == "REJECTED":
+        document.status = "REJECTED"
+        document.employee_remarks = body.reason
+    session.add(document)
 
     if body.decision != "APPROVED":
         history = RequestHistory(
@@ -1578,7 +1592,7 @@ def _verify_ready_for_processing_preconditions(
         select(ServiceDocumentRequirement).where(
             ServiceDocumentRequirement.service_id == service_request.service_id,
             ServiceDocumentRequirement.is_active.is_(True),
-            ServiceDocumentRequirement.is_required.is_(True),
+            ServiceDocumentRequirement.requirement_type == "REQUIRED",
         )
     ).all()
     for requirement in requirements:
@@ -1713,7 +1727,7 @@ def _run_request_pre_validation(
         max_size = requirement.max_file_size_bytes or get_settings().max_upload_size_bytes
 
         if not document:
-            if requirement.is_required:
+            if requirement.requirement_type == "REQUIRED":
                 messages.append("Required document has not been uploaded.")
                 is_valid = False
                 status_value = "FAIL"
@@ -1821,7 +1835,7 @@ def complete_request(
     if not service_request:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    _verify_active_assignment(session, current_user, service_request)
+    _verify_active_assignment(current_user, service_request, session)
 
     if service_request.status not in {"PROCESSING", "PAYMENT_PENDING"}:
         raise HTTPException(status_code=409, detail="Request cannot be completed from its current state")
@@ -1926,7 +1940,7 @@ def get_request_output(
     if not service_request:
         raise HTTPException(status_code=404, detail="Request not found")
         
-    _verify_active_assignment(session, current_user, service_request)
+    _verify_active_assignment(current_user, service_request, session)
     
     output = session.scalar(
         select(CompletedOutput).where(CompletedOutput.request_id == request_id)
@@ -1935,4 +1949,30 @@ def get_request_output(
         raise HTTPException(status_code=404, detail="Output not found")
         
     return output
+
+
+@router.delete("/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_request(
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserCitizen,
+) -> None:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if service_request.citizen_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    if service_request.status == "DRAFT":
+        session.delete(service_request)
+        session.commit()
+    elif service_request.status in ["COMPLETED", "CANCELLED"]:
+        service_request.is_archived_by_citizen = True
+        session.add(service_request)
+        session.commit()
+    else:
+        raise HTTPException(
+            status_code=400, 
+            detail="Only DRAFT, COMPLETED, or CANCELLED requests can be deleted/archived"
+        )
 

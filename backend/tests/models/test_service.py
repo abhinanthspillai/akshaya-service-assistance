@@ -20,11 +20,11 @@ def test_service_document_requirement_model() -> None:
     req = ServiceDocumentRequirement(
         service_id=uuid4(),
         name="ID Proof",
-        is_required=True,
+        requirement_type="REQUIRED",
         max_file_size_bytes=1048576,
     )
     assert req.name == "ID Proof"
-    assert req.is_required is True
+    assert req.requirement_type == "REQUIRED"
 
 
 def test_service_interaction_requirement_model() -> None:

@@ -104,42 +104,50 @@ export function DocumentUpload({ requestId, requirement, existingDocument, onUpl
   };
 
   return (
-    <div className="bg-apple-bg p-5 rounded-[16px] border border-apple-muted/20">
-      <div className="flex justify-between items-start mb-4">
-        <div>
-          <h3 className="font-semibold text-apple-text flex items-center gap-2">
+    <div className="bg-mono-bg p-4 rounded-xl border border-mono-border">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex-1">
+          <h3 className="font-semibold text-mono-text flex items-center gap-2 text-sm leading-tight">
             {requirement.name}
             {requirement.requirement_type === 'REQUIRED' && (
-              <span className="text-apple-red text-xs font-bold uppercase">Required</span>
+              <span className="text-red-600 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-red-50 rounded">Required</span>
             )}
             {requirement.requirement_type === 'CONDITIONAL' && (
-              <span className="text-orange-500 text-xs font-bold uppercase">Conditional</span>
+              <span className="text-orange-500 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-orange-50 rounded">Conditional</span>
             )}
             {requirement.requirement_type === 'OPTIONAL' && (
-              <span className="text-apple-muted text-xs font-bold uppercase">Optional</span>
+              <span className="text-mono-muted text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-mono-surface rounded">Optional</span>
             )}
           </h3>
           {requirement.description && (
-            <p className="text-sm text-apple-muted mt-1">{requirement.description}</p>
+            <p className="text-xs text-mono-muted mt-1">{requirement.description}</p>
           )}
           {requirement.conditional_rule && requirement.requirement_type === 'CONDITIONAL' && (
-            <p className="text-xs text-orange-500 mt-1 italic">When to upload: {requirement.conditional_rule}</p>
+            <p className="text-[11px] text-orange-500 mt-1 italic">When to upload: {requirement.conditional_rule}</p>
           )}
         </div>
+        {!existingDocument && !file && (
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="shrink-0 text-[13px] font-semibold bg-white border border-mono-border px-3 py-1.5 rounded-lg text-mono-text hover:bg-mono-surface transition-colors"
+          >
+            Choose File
+          </button>
+        )}
       </div>
 
       {existingDocument ? (
         <div className={clsx(
-          "border rounded-[12px] p-4 flex flex-col gap-3",
+          "mt-3 border rounded-lg p-3 flex flex-col gap-2",
           existingDocument.status === 'REJECTED' ? "bg-red-50 border-red-200" :
           existingDocument.status === 'REUPLOAD_REQUIRED' ? "bg-orange-50 border-orange-200" :
           "bg-green-50 border-green-200"
         )}>
           <div className="flex items-center gap-3">
             {existingDocument.status === 'REJECTED' || existingDocument.status === 'REUPLOAD_REQUIRED' ? (
-              <AlertCircle className={existingDocument.status === 'REJECTED' ? "text-red-600" : "text-orange-600"} size={24} />
+              <AlertCircle className={existingDocument.status === 'REJECTED' ? "text-red-600" : "text-orange-600"} size={20} />
             ) : (
-              <CheckCircle2 className="text-green-600" size={24} />
+              <CheckCircle2 className="text-green-600" size={20} />
             )}
             <div className="flex-1">
               <p className={clsx("text-sm font-semibold", 
@@ -149,17 +157,17 @@ export function DocumentUpload({ requestId, requirement, existingDocument, onUpl
               )}>
                 {existingDocument.original_filename}
               </p>
-              <p className={clsx("text-xs mt-0.5",
+              <p className={clsx("text-[11px] mt-0.5",
                 existingDocument.status === 'REJECTED' ? "text-red-700" :
                 existingDocument.status === 'REUPLOAD_REQUIRED' ? "text-orange-700" :
                 "text-green-700"
               )}>
-                Status: {existingDocument.status.replace('_', ' ')}
+                Status: {existingDocument.status.replace(/_/g, ' ')}
               </p>
             </div>
           </div>
           {existingDocument.employee_remarks && (
-            <div className="bg-white/60 p-3 rounded-[8px] text-sm text-ink-900">
+            <div className="bg-white/60 p-2.5 rounded-md text-xs text-ink-900 border border-black/5 mt-1">
               <span className="font-semibold">Remarks:</span> {existingDocument.employee_remarks}
             </div>
           )}
@@ -167,70 +175,61 @@ export function DocumentUpload({ requestId, requirement, existingDocument, onUpl
       ) : (
         <div
           className={clsx(
-            "border-2 border-dashed rounded-[12px] p-6 flex flex-col items-center justify-center transition-colors",
-            isDragging ? "border-apple-text bg-apple-blue/5" : "border-apple-muted/30 hover:bg-apple-bg hover:border-apple-muted/50",
-            error ? "border-apple-red/50 bg-apple-red/5" : ""
+            "transition-all duration-200 ease-in-out flex flex-col items-center justify-center",
+            (isDragging || error || file) ? "mt-3 p-4 border-2 border-dashed rounded-lg" : "h-0 overflow-hidden opacity-0 p-0 border-0",
+            isDragging ? "border-mono-text bg-blue-600/5" : "border-mono-border",
+            error ? "border-red-600/50 bg-red-50" : ""
           )}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
           {file ? (
-            <div className="w-full flex items-center justify-between bg-white p-3 rounded-[8px] shadow-sm border border-apple-muted/10">
-              <div className="flex items-center gap-3 truncate pr-4">
-                <FileIcon className="text-apple-blue" size={20} />
-                <span className="text-sm font-medium text-apple-text truncate">{file.name}</span>
-                <span className="text-xs text-apple-muted">({(file.size / 1024 / 1024).toFixed(1)} MB)</span>
+            <div className="w-full flex items-center justify-between bg-white p-2.5 rounded-lg shadow-sm border border-mono-border">
+              <div className="flex items-center gap-2.5 truncate pr-3">
+                <FileIcon className="text-blue-600 shrink-0" size={16} />
+                <span className="text-[13px] font-medium text-mono-text truncate">{file.name}</span>
+                <span className="text-[11px] text-mono-muted shrink-0">({(file.size / 1024 / 1024).toFixed(1)} MB)</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   onClick={() => setFile(null)}
-                  className="p-1.5 text-apple-muted hover:text-apple-red hover:bg-apple-red/10 rounded-full transition"
+                  className="p-1.5 text-mono-muted hover:text-red-600 hover:bg-red-50 rounded-md transition"
                   disabled={isUploading}
                 >
-                  <X size={16} />
+                  <X size={14} />
                 </button>
                 <button
                   onClick={handleUpload}
                   disabled={isUploading}
-                  className="bg-apple-text text-white text-xs font-semibold px-4 py-1.5 rounded-[8px] hover:bg-black transition flex items-center gap-1.5 disabled:opacity-70"
+                  className="bg-mono-text text-white text-[11px] font-semibold px-3 py-1.5 rounded-md hover:bg-black transition flex items-center gap-1.5 disabled:opacity-70"
                 >
-                  {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                  {isUploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
                   Upload
                 </button>
               </div>
             </div>
           ) : (
-            <>
-              <div className="w-12 h-12 rounded-full bg-apple-blue/10 flex items-center justify-center text-apple-text mb-3">
-                <Upload size={20} />
-              </div>
-              <p className="text-sm font-medium text-apple-text mb-1">
-                Drag and drop your file here
-              </p>
-              <p className="text-xs text-apple-muted mb-4">
-                Supported: {requirement.allowed_file_types.length > 0 ? requirement.allowed_file_types.map(t => t.mime_type.split('/')[1].toUpperCase()).join(', ') : 'Any file'} up to {maxMb} MB
-              </p>
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                accept={requirement.allowed_file_types.map(t => t.mime_type).join(',')}
-                onChange={handleFileChange}
-              />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="text-sm font-semibold bg-white border border-apple-muted/20 px-4 py-2 rounded-[8px] text-apple-text hover:bg-apple-blue/5 transition"
-              >
-                Choose File
-              </button>
-            </>
+            <div className="flex flex-col items-center text-center">
+              <Upload size={18} className="text-mono-muted mb-2" />
+              <p className="text-[13px] font-medium text-mono-text mb-0.5">Drop file here</p>
+              <p className="text-[11px] text-mono-muted">Up to {maxMb} MB</p>
+            </div>
           )}
         </div>
       )}
+      
+      <input
+        type="file"
+        ref={fileInputRef}
+        className="hidden"
+        accept={requirement.allowed_file_types.map(t => t.mime_type).join(',')}
+        onChange={handleFileChange}
+      />
+      
       {error && (
-        <div className="flex items-center gap-2 text-apple-red text-sm mt-3 bg-apple-red/10 p-2.5 rounded-[8px]">
-          <AlertCircle size={16} />
+        <div className="flex items-center gap-2 text-red-600 text-[13px] mt-3 bg-red-50 px-3 py-2 rounded-lg border border-red-100">
+          <AlertCircle size={14} className="shrink-0" />
           {error}
         </div>
       )}

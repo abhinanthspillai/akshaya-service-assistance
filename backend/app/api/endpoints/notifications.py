@@ -40,3 +40,20 @@ def mark_notification_read(
     session.commit()
     session.refresh(notification)
     return notification
+
+
+@router.post("/read-all", status_code=200)
+def mark_all_notifications_read(
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    from sqlalchemy import update
+    stmt = (
+        update(Notification)
+        .where(Notification.user_id == current_user.id)
+        .where(Notification.is_read.is_(False))
+        .values(is_read=True)
+    )
+    session.execute(stmt)
+    session.commit()
+    return {"detail": "All notifications marked as read"}

@@ -1,14 +1,30 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, LogOut, FileSearch, UserCircle, Bell, LifeBuoy, Menu, X, Search } from 'lucide-react';
+import { LayoutDashboard, FileText, LogOut, FileSearch, Bell, LifeBuoy, Menu, X, Search } from 'lucide-react';
 import clsx from 'clsx';
+import { api } from '../../lib/api';
 
 export function AppLayout({ children }: { children: ReactNode }) {
  const { user, logout } = useAuth();
  const navigate = useNavigate();
  const location = useLocation();
  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+ const [unreadCount, setUnreadCount] = useState(0);
+
+ useEffect(() => {
+   if (user) {
+     api.get('/notifications/?unread_only=true').then(res => {
+       setUnreadCount(res.data.length || 0);
+     }).catch(() => {
+       setUnreadCount(0);
+     });
+
+     const handleNotificationsRead = () => setUnreadCount(0);
+     window.addEventListener('notificationsRead', handleNotificationsRead);
+     return () => window.removeEventListener('notificationsRead', handleNotificationsRead);
+   }
+ }, [user]);
 
  const handleLogout = () => {
  logout();
@@ -110,8 +126,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
  >
  <Icon size={20} className={isActive ? "text-mono-text" : "text-mono-text"} strokeWidth={isActive ? 2.5 : 2} />
  {item.name}
- {item.name === 'Notifications' && (
-   <span className="ml-auto w-5 h-5 bg-mono-text text-mono-bg text-[10px] font-bold rounded-full flex items-center justify-center">3</span>
+ {item.name === 'Notifications' && unreadCount > 0 && (
+   <span className="ml-auto w-5 h-5 bg-mono-text text-mono-bg text-[10px] font-bold rounded-full flex items-center justify-center">{unreadCount}</span>
  )}
  </button>
  );
@@ -159,7 +175,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
  <div className="flex items-center gap-4">
  <button onClick={() => navigate('/notifications')} className="relative p-2 text-mono-text hover:bg-mono-surface rounded-full transition-colors">
  <Bell size={24} strokeWidth={2} />
- <span className="absolute top-1 right-1 w-4 h-4 bg-mono-text text-mono-bg text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-mono-bg">3</span>
+ {unreadCount > 0 && (
+   <span className="absolute top-1 right-1 w-4 h-4 bg-mono-text text-mono-bg text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-mono-bg">{unreadCount}</span>
+ )}
  </button>
  <div className="w-px h-6 bg-mono-border"></div>
  <button onClick={() => navigate('/profile')} className="flex items-center justify-center w-8 h-8 rounded-full bg-mono-text text-mono-bg text-sm font-bold hover:opacity-90 transition-opacity">
@@ -169,7 +187,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
  </header>
 
  <div className="flex-1 overflow-auto bg-mono-bg">
- <main className="p-4 md:p-8 max-w-[1400px] mx-auto min-h-full">
+ <main className="p-6 max-w-[1400px] mx-auto min-h-full">
  {children}
  </main>
  </div>
