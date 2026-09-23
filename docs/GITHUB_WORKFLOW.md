@@ -1,12 +1,9 @@
 # GITHUB_WORKFLOW
 
 ## Branch model
-Protected `main`.
-Task branches:
-- feat/<issue>-short-name
-- fix/<issue>-short-name
-- docs/<issue>-short-name
-- chore/<issue>-short-name
+Protected `main` for production-ready code.
+Working branch `develop` for all ongoing implementation work.
+No additional per-task branches are used unless explicitly required.
 
 ## Lifecycle
 Issue -> branch -> implementation -> local validation -> PR -> CI -> AI review -> fixes -> human approval -> squash merge.
