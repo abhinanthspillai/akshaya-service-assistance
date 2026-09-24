@@ -36,7 +36,8 @@ export function Queue() {
  try {
  const res = await api.get('/requests/');
  // Filter out drafts since employees shouldn't care about citizen drafts
- setRequests(res.data.filter((r: ServiceRequest) => r.status !== 'DRAFT'));
+ const items = res.data.items || (Array.isArray(res.data) ? res.data : []);
+ setRequests(items.filter((r: ServiceRequest) => r.status !== 'DRAFT'));
  } catch {
  setError('Failed to load queue.');
  } finally {

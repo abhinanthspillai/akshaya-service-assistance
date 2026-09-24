@@ -257,7 +257,7 @@ def test_archive_completed_request(client: TestClient, db_session: Session) -> N
     # Verify it doesn't show in list
     r2 = client.get("/api/v1/requests/", headers=citizen_headers)
     assert r2.status_code == 200
-    assert not any(req["id"] == req_id for req in r2.json())
+    assert not any(req["id"] == str(req_id) for req in r2.json()["items"])
     
     # But can still be fetched directly
     r3 = client.get(f"/api/v1/requests/{req_id}", headers=citizen_headers)
@@ -277,7 +277,7 @@ def test_archive_cancelled_request(client: TestClient, db_session: Session) -> N
     # Verify it doesn't show in list
     r2 = client.get("/api/v1/requests/", headers=citizen_headers)
     assert r2.status_code == 200
-    assert not any(req["id"] == req_id for req in r2.json())
+    assert not any(req["id"] == str(req_id) for req in r2.json()["items"])
 
 
 def test_delete_request_invalid_status(client: TestClient, db_session: Session) -> None:

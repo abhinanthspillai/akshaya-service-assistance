@@ -116,6 +116,21 @@ export function RequestDetail() {
  const [isSubmitting, setIsSubmitting] = useState(false);
  const [uploadingRequirementId, setUploadingRequirementId] = useState<string | null>(null);
  const [error, setError] = useState('');
+ const [confirmAction, setConfirmAction] = useState<{
+ isOpen: boolean;
+ action: 'cancel' | 'delete' | 'close';
+ title: string;
+ message: string;
+ label: string;
+ isDestructive: boolean;
+ }>({
+ isOpen: false,
+ action: 'cancel',
+ title: '',
+ message: '',
+ label: '',
+ isDestructive: false,
+ });
  const navigate = useNavigate();
 
  useEffect(() => {

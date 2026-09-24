@@ -245,7 +245,7 @@ export function RequestWorkspace() {
  const reason = window.prompt('Reason this request cannot proceed');
  if (!reason) return;
  try {
- await api.post('/requests/' + request.id + '/unable_to_proceed', { reason });
+ await api.post('/requests/' + request.id + '/unable-to-proceed', { reason });
  await refreshWorkspace(request.id);
  } catch {
  setError('Failed to mark request unable to proceed.');

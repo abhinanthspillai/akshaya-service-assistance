@@ -52,3 +52,30 @@ class ServiceRequestResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PaginatedRequests(BaseModel):
+    items: list[ServiceRequestResponse]
+    total: int
+    page: int
+    pages: int
+    status_counts: dict[str, int] | None = None
+
+
+class RecentActivityItem(BaseModel):
+    id: UUID
+    request_id: UUID
+    action: str
+    note: str | None
+    created_at: datetime
+    actor_id: UUID | None
+    request_service_name: str
+    request_citizen_id: UUID
+
+
+class DashboardResponse(BaseModel):
+    status_counts: dict[str, int]
+    completed_today: int
+    rejected_last_30_days: int
+    needs_attention: list[ServiceRequestResponse]
+    recent_activity: list[RecentActivityItem]

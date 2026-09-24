@@ -40,8 +40,8 @@ export function MyRequests() {
  useEffect(() => {
  const fetchRequests = async () => {
  try {
- const res = await api.get('/requests/');
- setRequests(res.data);
+ const res = await api.get('/requests/', { params: { limit: 100 } });
+ setRequests(res.data.items || (Array.isArray(res.data) ? res.data : []));
  } catch {
  setError('Failed to load requests. Please try again later.');
  } finally {

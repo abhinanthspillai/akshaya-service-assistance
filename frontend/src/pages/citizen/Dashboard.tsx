@@ -21,7 +21,13 @@ export function Dashboard() {
  const { user } = useAuth();
  const navigate = useNavigate();
   const [requests, setRequests] = useState<RequestSummary[]>([]);
-  const [popularServices, setPopularServices] = useState<unknown[]>([]);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  interface PopularService {
+    id: string;
+    name: string;
+    description?: string;
+  }
+  const [popularServices, setPopularServices] = useState<PopularService[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [requestsError, setRequestsError] = useState(false);
   const [servicesError, setServicesError] = useState(false);
@@ -31,7 +37,8 @@ export function Dashboard() {
     try {
       // Add trailing slash to prevent 307 redirect which causes CORS Network Error via Vite proxy
       const res = await api.get('/requests/');
-      setRequests(res.data || []);
+      setRequests(res.data.items || []);
+      setStatusCounts(res.data.status_counts || {});
     } catch (error) {
       console.error("Failed to fetch requests:", error);
       setRequestsError(true);
@@ -70,11 +77,19 @@ export function Dashboard() {
     );
   }
 
-  // Calculate summaries
+  // Calculate summaries using status counts from backend
+  const getCount = (statuses: string[]) => {
+    return statuses.reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
+  };
+  const needsActionCount = getCount(['CORRECTION_REQUIRED', 'INTERACTION_REQUIRED', 'PAYMENT_PENDING']);
+  const inProgressCount = getCount(['SUBMITTED', 'WAITING_FOR_CENTRE', 'ACCEPTED', 'UNDER_REVIEW', 'INTERACTION_SCHEDULED', 'READY_FOR_PROCESSING', 'PROCESSING']);
+  const completedCount = getCount(['COMPLETED', 'CLOSED']);
+  const draftCount = getCount(['DRAFT']);
+
+  // List previews
   const needsActionRequests = requests.filter(r => ['CORRECTION_REQUIRED', 'INTERACTION_REQUIRED', 'PAYMENT_PENDING'].includes(r.status));
   const inProgressRequests = requests.filter(r => ['SUBMITTED', 'WAITING_FOR_CENTRE', 'ACCEPTED', 'UNDER_REVIEW', 'INTERACTION_SCHEDULED', 'READY_FOR_PROCESSING', 'PROCESSING'].includes(r.status));
-  const completedRequests = requests.filter(r => ['COMPLETED', 'CLOSED'].includes(r.status));
-  const draftRequests = requests.filter(r => r.status === 'DRAFT');
+
 
   const getStatusText = (status: string) => {
     return status.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
@@ -116,7 +131,7 @@ export function Dashboard() {
  </div>
  <div className="flex items-center justify-between mt-2">
  <div>
- <span className="text-3xl font-bold text-mono-text">{needsActionRequests.length}</span>
+ <span className="text-3xl font-bold text-mono-text">{needsActionCount}</span>
  <p className="text-[13px] text-mono-muted mt-1">Requires your attention</p>
  </div>
  <ChevronRight size={20} className="text-mono-muted" />
@@ -134,7 +149,7 @@ export function Dashboard() {
  </div>
  <div className="flex items-center justify-between mt-2">
  <div>
- <span className="text-3xl font-bold text-mono-text">{inProgressRequests.length}</span>
+ <span className="text-3xl font-bold text-mono-text">{inProgressCount}</span>
  <p className="text-[13px] text-mono-muted mt-1">Being processed</p>
  </div>
  <ChevronRight size={20} className="text-mono-muted" />
@@ -152,7 +167,7 @@ export function Dashboard() {
  </div>
  <div className="flex items-center justify-between mt-2">
  <div>
- <span className="text-3xl font-bold text-mono-text">{completedRequests.length}</span>
+ <span className="text-3xl font-bold text-mono-text">{completedCount}</span>
  <p className="text-[13px] text-mono-muted mt-1">Successfully resolved</p>
  </div>
  <ChevronRight size={20} className="text-mono-muted" />
@@ -170,7 +185,7 @@ export function Dashboard() {
  </div>
  <div className="flex items-center justify-between mt-2">
  <div>
- <span className="text-3xl font-bold text-mono-text">{draftRequests.length}</span>
+ <span className="text-3xl font-bold text-mono-text">{draftCount}</span>
  <p className="text-[13px] text-mono-muted mt-1">Not yet submitted</p>
  </div>
  <ChevronRight size={20} className="text-mono-muted" />
