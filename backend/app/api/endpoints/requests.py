@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
 from app.api.deps import (
     CurrentUser,
@@ -15,14 +15,15 @@ from app.api.deps import (
     SessionDep,
 )
 from app.core.config import get_settings
+from app.models.assignment import RequestAssignment, RequestHistory
 from app.models.centre import AkshayaCentre
 from app.models.document import DOCUMENT_REVIEW_DECISIONS, RequestDocument, RequestDocumentReview
 from app.models.interaction import RequestInteraction
 from app.models.message import RequestMessage
 from app.models.notification import Notification
+from app.models.output import CompletedOutput
 from app.models.payment import RequestPayment
 from app.models.request import ServiceRequest
-from app.models.assignment import RequestHistory, RequestAssignment
 from app.models.service import (
     CentreSupportedService,
     Service,
@@ -42,18 +43,19 @@ from app.schemas.interaction import (
     ScheduleInteractionRequest,
 )
 from app.schemas.message import RequestMessageCreate, RequestMessageResponse
+from app.schemas.output import CompletedOutputCreate, CompletedOutputResponse
 from app.schemas.payment import RequestPaymentResponse
 from app.schemas.request import (
+    DashboardResponse,
+    PaginatedRequests,
+    ReassignRequest,
     RequestPreValidationItem,
     RequestPreValidationResponse,
+    SelectCentreRequest,
     ServiceRequestCreate,
     ServiceRequestResponse,
     UnableToProceedRequest,
-    ReassignRequest,
-    SelectCentreRequest,
 )
-from app.schemas.output import CompletedOutputCreate, CompletedOutputResponse
-from app.models.output import CompletedOutput
 
 router = APIRouter()
 
@@ -117,8 +119,9 @@ def _perform_transition(
     notification_body: str | None = None,
     notification_event: str | None = None,
 ) -> None:
-    from app.models.assignment import RequestHistory
     from fastapi import HTTPException
+
+    from app.models.assignment import RequestHistory
     
     # Lock the row for update to prevent concurrent transitions
     session.refresh(service_request, with_for_update=True)
@@ -184,15 +187,18 @@ def create_request(
     return service_request
 
 
-@router.get("/", response_model=list[ServiceRequestResponse])
+@router.get("/", response_model=PaginatedRequests)
 def list_requests(
     session: SessionDep,
     current_user: CurrentUser,
     req_status: str | None = Query(None, alias="status"),
     service_id: UUID | None = None,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    q: str | None = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100, alias="limit"),
+    size: int | None = Query(None, ge=1, le=100),
 ) -> Any:
+    page_size = size if size is not None else limit
     stmt = select(ServiceRequest)
 
     if current_user.role == "citizen":
@@ -214,13 +220,157 @@ def list_requests(
         stmt = stmt.where(ServiceRequest.selected_centre_id == admin.centre_id)
     # system_administrator: sees all, no filter
 
+    # Compute status counts for caller's scope before filters
+    counts_rows = session.execute(
+        select(ServiceRequest.status, func.count(ServiceRequest.id))
+        .where(*stmt._where_criteria)
+        .group_by(ServiceRequest.status)
+    ).all()
+    status_counts = {r[0]: r[1] for r in counts_rows}
+
     if req_status:
-        stmt = stmt.where(ServiceRequest.status == req_status)
+        if "," in req_status:
+            stmt = stmt.where(ServiceRequest.status.in_(req_status.split(",")))
+        else:
+            stmt = stmt.where(ServiceRequest.status == req_status)
     if service_id:
         stmt = stmt.where(ServiceRequest.service_id == service_id)
 
-    stmt = stmt.order_by(ServiceRequest.created_at.desc()).offset(skip).limit(limit)
-    return session.scalars(stmt).all()
+    if q:
+        clean_q = q.strip()
+        if clean_q.startswith("#"):
+            clean_q = clean_q[1:]
+        if clean_q:
+            escaped_q = clean_q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            search_pattern = f"%{escaped_q}%"
+            from sqlalchemy import String, cast
+
+            from app.models.profile import CitizenProfile
+
+            stmt = stmt.outerjoin(CitizenProfile, ServiceRequest.citizen_id == CitizenProfile.user_id)
+            stmt = stmt.where(
+                (CitizenProfile.full_name.ilike(search_pattern, escape="\\"))
+                | (CitizenProfile.phone.ilike(search_pattern, escape="\\"))
+                | (ServiceRequest.service_name_snapshot.ilike(search_pattern, escape="\\"))
+                | (cast(ServiceRequest.id, String).ilike(f"{escaped_q}%", escape="\\"))
+            )
+
+    # Get total count
+    total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    
+    import math
+    pages = math.ceil(total / page_size) if total > 0 else 1
+    
+    skip = (page - 1) * page_size
+    stmt = stmt.order_by(ServiceRequest.created_at.desc()).offset(skip).limit(page_size)
+    items = session.scalars(stmt).all()
+    
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "pages": pages,
+        "status_counts": status_counts,
+    }
+
+
+@router.get("/dashboard", response_model=DashboardResponse)
+def get_dashboard_data(
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    if current_user.role != "centre_employee":
+        raise HTTPException(status_code=403, detail="Dashboard is only for centre employees")
+
+    from app.models.profile import EmployeeProfile
+    employee = session.get(EmployeeProfile, current_user.id)
+    if not employee:
+        raise HTTPException(status_code=403, detail="Employee profile not found")
+
+    centre_id = employee.centre_id
+    
+    from datetime import datetime, timedelta
+
+    from sqlalchemy import func
+    
+    # 1. Status counts
+    counts = session.execute(
+        select(ServiceRequest.status, func.count(ServiceRequest.id))
+        .where(ServiceRequest.selected_centre_id == centre_id)
+        .group_by(ServiceRequest.status)
+    ).all()
+    status_counts = {row[0]: row[1] for row in counts}
+    
+    # 2. Completed today
+    now = datetime.now(UTC)
+    # Actually, Asia/Kolkata boundaries. For simplicity, just use last 24h or so, but let's do a naive UTC day for now or timedelta(hours=5, minutes=30)
+    # The requirement says Asia/Kolkata day boundaries.
+    kolkata_offset = timedelta(hours=5, minutes=30)
+    kolkata_now = now + kolkata_offset
+    start_of_day_kolkata = datetime(kolkata_now.year, kolkata_now.month, kolkata_now.day, tzinfo=UTC) - kolkata_offset
+    
+    completed_today = session.scalar(
+        select(func.count(ServiceRequest.id))
+        .where(
+            ServiceRequest.selected_centre_id == centre_id,
+            ServiceRequest.status == "COMPLETED",
+            ServiceRequest.completed_at >= start_of_day_kolkata
+        )
+    ) or 0
+    
+    # 3. Rejected last 30 days
+    thirty_days_ago = now - timedelta(days=30)
+    rejected_last_30_days = session.scalar(
+        select(func.count(ServiceRequest.id))
+        .where(
+            ServiceRequest.selected_centre_id == centre_id,
+            ServiceRequest.status == "UNABLE_TO_PROCEED",
+            ServiceRequest.updated_at >= thirty_days_ago
+        )
+    ) or 0
+    
+    # 4. Needs attention (WAITING_FOR_CENTRE, ACCEPTED, UNDER_REVIEW, READY_FOR_PROCESSING, PROCESSING)
+    attention_statuses = ["WAITING_FOR_CENTRE", "ACCEPTED", "UNDER_REVIEW", "READY_FOR_PROCESSING", "PROCESSING"]
+    needs_attention = session.scalars(
+        select(ServiceRequest)
+        .where(
+            ServiceRequest.selected_centre_id == centre_id,
+            ServiceRequest.status.in_(attention_statuses)
+        )
+        .order_by(ServiceRequest.updated_at.asc())
+        .limit(10)
+    ).all()
+    
+    # 5. Recent activity
+    recent_history = session.execute(
+        select(RequestHistory, ServiceRequest.service_name_snapshot, ServiceRequest.citizen_id)
+        .join(ServiceRequest, RequestHistory.request_id == ServiceRequest.id)
+        .where(ServiceRequest.selected_centre_id == centre_id)
+        .order_by(RequestHistory.created_at.desc())
+        .limit(20)
+    ).all()
+    
+    recent_activity = [
+        {
+            "id": h.RequestHistory.id,
+            "request_id": h.RequestHistory.request_id,
+            "action": h.RequestHistory.action,
+            "note": h.RequestHistory.note,
+            "created_at": h.RequestHistory.created_at,
+            "actor_id": h.RequestHistory.actor_id,
+            "request_service_name": h.service_name_snapshot,
+            "request_citizen_id": h.citizen_id,
+        }
+        for h in recent_history
+    ]
+
+    return {
+        "status_counts": status_counts,
+        "completed_today": completed_today,
+        "rejected_last_30_days": rejected_last_30_days,
+        "needs_attention": needs_attention,
+        "recent_activity": recent_activity,
+    }
 
 
 @router.get("/{request_id}", response_model=ServiceRequestResponse)
@@ -343,7 +493,6 @@ def start_request_review(
     session: SessionDep,
     current_user: CurrentUserEmployee,
 ) -> Any:
-    from app.models.assignment import RequestHistory
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -481,7 +630,16 @@ async def upload_request_document(
     session.add(document)
 
     if service_request.status == "CORRECTION_REQUIRED":
-        _perform_transition(session, service_request, current_user, "UNDER_REVIEW", "submit_correction", note=f"Replacement uploaded for {requirement.name}")
+        session.flush()
+        pending_reupload = session.scalar(
+            select(func.count()).select_from(RequestDocument).where(
+                RequestDocument.request_id == request_id,
+                RequestDocument.is_current.is_(True),
+                RequestDocument.status == "REUPLOAD_REQUIRED",
+            )
+        ) or 0
+        if pending_reupload == 0:
+            _perform_transition(session, service_request, current_user, "UNDER_REVIEW", "submit_correction", note="All replacements uploaded.")
 
     session.commit()
     session.refresh(document)
@@ -630,141 +788,9 @@ def review_request_document(
 
 
 
-@router.post("/{request_id}/unable_to_proceed", response_model=ServiceRequestResponse)
-def unable_to_proceed(
-    request_id: UUID,
-    payload: UnableToProceedRequest,
-    session: SessionDep,
-    current_user: CurrentUserEmployee,
-) -> Any:
-    req = session.get(ServiceRequest, request_id)
-    if not req:
-        raise HTTPException(status_code=404, detail="Request not found")
-
-    # Only assigned employee, centre admin, or system admin can mark this
-    from app.models.assignment import RequestAssignment
-    from app.models.profile import CentreAdministrator, EmployeeProfile
-
-    is_authorized = False
-    if current_user.role == "centre_employee":
-        emp = session.get(EmployeeProfile, current_user.id)
-        if emp and req.selected_centre_id == emp.centre_id:
-            assignment = session.scalar(
-                select(RequestAssignment).where(
-                    RequestAssignment.request_id == req.id,
-                    RequestAssignment.is_active.is_(True),
-                )
-            )
-            if assignment and assignment.employee_id == current_user.id:
-                is_authorized = True
-    elif current_user.role == "centre_administrator":
-        admin = session.get(CentreAdministrator, current_user.id)
-        if admin and req.selected_centre_id == admin.centre_id:
-            is_authorized = True
-    elif current_user.role == "system_administrator":
-        is_authorized = True
-
-    if not is_authorized:
-        raise HTTPException(status_code=403, detail="Not authorized")
-
-    _perform_transition(
-        session, req, current_user, "UNABLE_TO_PROCEED", "UNABLE_TO_PROCEED",
-        note=payload.reason,
-        notification_event="request_unable_to_proceed",
-        notification_title="Request Unable to Proceed",
-        notification_body=f"Your request could not proceed. Reason: {payload.reason}"
-    )
-    
-    session.commit()
-    session.refresh(req)
-    return req
 
 
-@router.post("/{request_id}/reassign", response_model=ServiceRequestResponse)
-def reassign_request(
-    request_id: UUID,
-    payload: ReassignRequest,
-    session: SessionDep,
-    current_user: CurrentUser,
-) -> Any:
-    if current_user.role not in {"centre_administrator", "system_administrator"}:
-        raise HTTPException(status_code=403, detail="Not authorized")
 
-    req = session.get(ServiceRequest, request_id)
-    if not req:
-        raise HTTPException(status_code=404, detail="Request not found")
-
-    from app.models.profile import CentreAdministrator, EmployeeProfile
-    if current_user.role == "centre_administrator":
-        admin = session.get(CentreAdministrator, current_user.id)
-        if not admin or req.selected_centre_id != admin.centre_id:
-            raise HTTPException(status_code=403, detail="Not authorized")
-
-    new_emp = session.get(EmployeeProfile, payload.employee_id)
-    if not new_emp or new_emp.centre_id != req.selected_centre_id or not new_emp.is_available:
-        raise HTTPException(status_code=400, detail="Invalid employee for reassignment")
-
-    # Check capacity limit
-    from app.models.assignment import RequestAssignment
-    active_assignments = session.scalar(
-        select(func.count()).where(
-            RequestAssignment.employee_id == payload.employee_id,
-            RequestAssignment.is_active.is_(True),
-        )
-    )
-    if active_assignments and active_assignments >= 10:
-        raise HTTPException(status_code=400, detail="Employee is at maximum capacity")
-
-    # Revoke current
-    current_assignment = session.scalar(
-        select(RequestAssignment).where(
-            RequestAssignment.request_id == req.id,
-            RequestAssignment.is_active.is_(True),
-        )
-    )
-    if current_assignment:
-        current_assignment.is_active = False
-        current_assignment.revoked_at = datetime.now(tz=UTC)
-        session.add(current_assignment)
-        
-        _safe_add_notification(
-            session,
-            user_id=current_assignment.employee_id,
-            request_id=req.id,
-            event_type="assignment_revoked",
-            title="Request Reassigned",
-            body=f"Request {req.id} has been reassigned to another employee.",
-        )
-
-    # Create new assignment
-    new_assignment = RequestAssignment(
-        request_id=req.id,
-        employee_id=payload.employee_id,
-        is_active=True,
-    )
-    session.add(new_assignment)
-
-    # Record history
-    history = RequestHistory(
-        request_id=req.id,
-        actor_id=current_user.id,
-        action="REASSIGNED",
-        note=f"Reassigned to {payload.employee_id}",
-    )
-    session.add(history)
-    
-    _safe_add_notification(
-        session,
-        user_id=payload.employee_id,
-        request_id=req.id,
-        event_type="request_assigned",
-        title="New Request Assigned",
-        body=f"Request {req.id} has been reassigned to you.",
-    )
-
-    session.commit()
-    session.refresh(req)
-    return req
 
 
 @router.get("/{request_id}/interactions", response_model=list[RequestInteractionResponse])
@@ -797,7 +823,6 @@ def require_request_interaction(
     current_user: CurrentUserEmployee,
     body: RequireInteractionRequest,
 ) -> Any:
-    from app.models.assignment import RequestHistory
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -845,7 +870,6 @@ def schedule_request_interaction(
     current_user: CurrentUser,
     body: ScheduleInteractionRequest,
 ) -> Any:
-    from app.models.assignment import RequestHistory
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -897,7 +921,6 @@ def record_interaction_outcome(
     current_user: CurrentUserEmployee,
     body: InteractionOutcomeRequest,
 ) -> Any:
-    from app.models.assignment import RequestHistory
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -982,7 +1005,6 @@ def mark_request_ready(
     session: SessionDep,
     current_user: CurrentUserEmployee,
 ) -> Any:
-    from app.models.assignment import RequestHistory
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -1005,7 +1027,6 @@ def start_request_processing(
     session: SessionDep,
     current_user: CurrentUserEmployee,
 ) -> Any:
-    from app.models.assignment import RequestHistory
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -1028,7 +1049,6 @@ def mark_unable_to_proceed(
     current_user: CurrentUserEmployee,
     body: UnableToProceedRequest,
 ) -> Any:
-    from app.models.assignment import RequestHistory
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -1065,7 +1085,7 @@ def cancel_request(
     current_user: CurrentUserCitizen,
 ) -> Any:
     from datetime import datetime
-    from app.models.assignment import RequestAssignment, RequestHistory
+
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -1116,9 +1136,11 @@ def reassign_request(
     body: ReassignRequest,
 ) -> Any:
     from datetime import datetime
+
     from sqlalchemy import func
-    from app.models.assignment import RequestAssignment, RequestHistory
-    from app.models.profile import EmployeeProfile, CentreAdministrator
+
+    from app.models.assignment import RequestHistory
+    from app.models.profile import CentreAdministrator, EmployeeProfile
 
     if current_user.role not in {"centre_administrator", "system_administrator"}:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -1191,10 +1213,10 @@ def reassign_request(
     history = RequestHistory(
         request_id=request_id,
         actor_id=current_user.id,
-        action="reassign",
+        action="REASSIGNED",
         from_status=service_request.status,
         to_status=service_request.status,
-        note=f"Reassigned to employee {body.employee_id}",
+        note=f"Reassigned to {body.employee_id}",
     )
     session.add(history)
 
@@ -1243,7 +1265,6 @@ def request_payment(
     session: SessionDep,
     current_user: CurrentUserEmployee,
 ) -> Any:
-    from app.models.assignment import RequestHistory
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -1347,7 +1368,6 @@ def accept_request(
 
     from sqlalchemy import func
 
-    from app.models.assignment import RequestAssignment, RequestHistory
     from app.models.profile import EmployeeProfile
 
     employee = session.get(EmployeeProfile, current_user.id)
@@ -1481,7 +1501,29 @@ def _verify_document_access(user: Any, service_request: ServiceRequest, session:
 
 
 def _verify_active_assignment(user: Any, service_request: ServiceRequest, session: Any) -> None:
-    from app.models.assignment import RequestAssignment
+    from datetime import UTC, datetime
+
+    from app.models.profile import EmployeeProfile
+
+    # 1. Centre-scoping check: Ensure employee's centre matches request's centre
+    if user.role == "centre_employee":
+        emp = session.get(EmployeeProfile, user.id)
+        if not emp or emp.centre_id != service_request.selected_centre_id:
+            # Centre mismatch (e.g. employee's centre changed or request reassigned to another centre)
+            # Revoke any active assignments for this employee on this request
+            assignment = session.scalar(
+                select(RequestAssignment).where(
+                    RequestAssignment.request_id == service_request.id,
+                    RequestAssignment.employee_id == user.id,
+                    RequestAssignment.is_active.is_(True),
+                ).with_for_update()
+            )
+            if assignment:
+                assignment.is_active = False
+                assignment.revoked_at = datetime.now(tz=UTC)
+                session.add(assignment)
+                session.commit()
+            raise HTTPException(status_code=403, detail="Not authorized for this centre")
 
     assignment = session.scalar(
         select(RequestAssignment).where(
@@ -1555,7 +1597,6 @@ def _complete_mock_payment(
 ) -> RequestPayment:
     from datetime import datetime
 
-    from app.models.assignment import RequestHistory
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -1738,7 +1779,7 @@ def complete_request(
     body: CompletedOutputCreate,
 ) -> Any:
     from datetime import datetime
-    from app.models.assignment import RequestHistory
+
 
     if current_user.role not in {"centre_employee", "centre_administrator", "system_administrator"}:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -1799,7 +1840,7 @@ def close_request(
     current_user: CurrentUserCitizen,
 ) -> Any:
     from datetime import datetime
-    from app.models.assignment import RequestHistory
+
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:

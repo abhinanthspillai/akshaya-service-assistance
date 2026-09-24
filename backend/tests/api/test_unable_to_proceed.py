@@ -13,7 +13,7 @@ def test_employee_unable_to_proceed(client: TestClient, db_session: Session, emp
         citizen_id=UUID(normal_user_id),
         service_id=uuid4(),
         selected_centre_id=UUID(test_centre_id),
-        status="ACCEPTED",
+        status="UNDER_REVIEW",
         service_type_snapshot="A",
         service_name_snapshot="Test",
     )
@@ -28,7 +28,7 @@ def test_employee_unable_to_proceed(client: TestClient, db_session: Session, emp
     db_session.commit()
     
     r = client.post(
-        f"/api/v1/requests/{req_id}/unable_to_proceed", 
+        f"/api/v1/requests/{req_id}/unable-to-proceed", 
         headers=employee_headers,
         json={"reason": "Missing documents"}
     )
@@ -38,7 +38,7 @@ def test_employee_unable_to_proceed(client: TestClient, db_session: Session, emp
     
     history = db_session.query(RequestHistory).filter_by(request_id=req_id).first()
     assert history is not None
-    assert history.action == "UNABLE_TO_PROCEED"
+    assert history.action == "unable_to_proceed"
     assert history.note == "Missing documents"
 
 def test_unauthorized_employee_unable_to_proceed(client: TestClient, db_session: Session, employee_headers: dict[str, str], normal_user_id: str, test_centre_id: str):
@@ -48,7 +48,7 @@ def test_unauthorized_employee_unable_to_proceed(client: TestClient, db_session:
         citizen_id=UUID(normal_user_id),
         service_id=uuid4(),
         selected_centre_id=UUID(test_centre_id),
-        status="ACCEPTED",
+        status="UNDER_REVIEW",
         service_type_snapshot="A",
         service_name_snapshot="Test",
     )
@@ -63,7 +63,7 @@ def test_unauthorized_employee_unable_to_proceed(client: TestClient, db_session:
     db_session.commit()
     
     r = client.post(
-        f"/api/v1/requests/{req_id}/unable_to_proceed", 
+        f"/api/v1/requests/{req_id}/unable-to-proceed", 
         headers=employee_headers,
         json={"reason": "Can't do this"}
     )
