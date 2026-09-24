@@ -57,6 +57,101 @@ from app.models.output import CompletedOutput
 
 router = APIRouter()
 
+ALLOWED_TRANSITIONS = {
+    "DRAFT": [("SUBMITTED", ["citizen"]), ("CANCELLED", ["citizen"])],
+    "SUBMITTED": [("WAITING_FOR_CENTRE", ["citizen", "system"]), ("CANCELLED", ["citizen"])],
+    "WAITING_FOR_CENTRE": [("ACCEPTED", ["centre_employee"]), ("CANCELLED", ["citizen"])],
+    "ACCEPTED": [("UNDER_REVIEW", ["centre_employee"]), ("UNABLE_TO_PROCEED", ["centre_employee", "centre_administrator", "system_administrator"]), ("CANCELLED", ["citizen"])],
+    "UNDER_REVIEW": [
+        ("CORRECTION_REQUIRED", ["centre_employee"]),
+        ("INTERACTION_REQUIRED", ["centre_employee"]),
+        ("READY_FOR_PROCESSING", ["centre_employee"]),
+        ("UNABLE_TO_PROCEED", ["centre_employee", "centre_administrator", "system_administrator"]),
+        ("CANCELLED", ["citizen"]),
+    ],
+    "CORRECTION_REQUIRED": [
+        ("UNDER_REVIEW", ["citizen", "centre_employee", "system"]),
+        ("INTERACTION_REQUIRED", ["centre_employee"]),
+        ("UNABLE_TO_PROCEED", ["centre_employee", "centre_administrator", "system_administrator"]),
+        ("CANCELLED", ["citizen"]),
+    ],
+    "INTERACTION_REQUIRED": [
+        ("INTERACTION_SCHEDULED", ["citizen", "centre_employee"]),
+        ("UNABLE_TO_PROCEED", ["centre_employee", "centre_administrator", "system_administrator"]),
+        ("CANCELLED", ["citizen"]),
+    ],
+    "INTERACTION_SCHEDULED": [
+        ("UNDER_REVIEW", ["centre_employee", "system"]),
+        ("INTERACTION_REQUIRED", ["centre_employee", "system"]),
+        ("UNABLE_TO_PROCEED", ["centre_employee", "centre_administrator", "system_administrator"]),
+        ("CANCELLED", ["citizen"]),
+    ],
+    "READY_FOR_PROCESSING": [
+        ("PROCESSING", ["centre_employee"]),
+        ("UNABLE_TO_PROCEED", ["centre_employee", "centre_administrator", "system_administrator"]),
+    ],
+    "PROCESSING": [
+        ("PAYMENT_PENDING", ["centre_employee"]),
+        ("COMPLETED", ["centre_employee", "centre_administrator", "system_administrator"]),
+        ("UNABLE_TO_PROCEED", ["centre_employee", "centre_administrator", "system_administrator"]),
+    ],
+    "PAYMENT_PENDING": [
+        ("PROCESSING", ["citizen", "centre_employee", "system"]),
+        ("PAYMENT_PENDING", ["citizen", "centre_employee", "system"]),
+        ("COMPLETED", ["centre_employee", "centre_administrator", "system_administrator"]),
+    ],
+    "COMPLETED": [("CLOSED", ["citizen", "system"])],
+    "CLOSED": [],
+    "CANCELLED": [],
+    "UNABLE_TO_PROCEED": [],
+}
+
+def _perform_transition(
+    session,
+    service_request,
+    current_user,
+    to_status: str,
+    action: str,
+    note: str | None = None,
+    notification_title: str | None = None,
+    notification_body: str | None = None,
+    notification_event: str | None = None,
+) -> None:
+    from app.models.assignment import RequestHistory
+    from fastapi import HTTPException
+    
+    # Lock the row for update to prevent concurrent transitions
+    session.refresh(service_request, with_for_update=True)
+    
+    if to_status not in [t[0] for t in ALLOWED_TRANSITIONS.get(service_request.status, [])]:
+        raise HTTPException(status_code=409, detail=f"Cannot transition from {service_request.status} to {to_status}")
+    
+    allowed_roles = next((t[1] for t in ALLOWED_TRANSITIONS.get(service_request.status, []) if t[0] == to_status), [])
+    if current_user.role not in allowed_roles and "system" not in allowed_roles:
+        raise HTTPException(status_code=403, detail=f"Role {current_user.role} not allowed to transition {service_request.status} -> {to_status}")
+
+    history = RequestHistory(
+        request_id=service_request.id,
+        actor_id=current_user.id,
+        action=action,
+        from_status=service_request.status,
+        to_status=to_status,
+        note=note,
+    )
+    session.add(history)
+    service_request.status = to_status
+    session.add(service_request)
+
+    if notification_title and notification_body and notification_event:
+        _safe_add_notification(
+            session,
+            user_id=service_request.citizen_id,
+            request_id=service_request.id,
+            event_type=notification_event,
+            title=notification_title,
+            body=notification_body,
+        )
+
 _ALLOWED_EXTENSIONS_BY_MIME = {
     "application/pdf": {".pdf"},
     "image/jpeg": {".jpg", ".jpeg"},
@@ -205,22 +300,17 @@ def submit_request(
         )
 
     now = datetime.now(tz=UTC)
-    service_request.status = "SUBMITTED"
     service_request.submitted_at = now
-    session.add(service_request)
+    _perform_transition(session, service_request, current_user, "SUBMITTED", "submit_request")
     session.flush()
 
     # Atomic transition to WAITING_FOR_CENTRE after routing succeeds
-    service_request.status = "WAITING_FOR_CENTRE"
-    _safe_add_notification(
-        session,
-        user_id=service_request.citizen_id,
-        request_id=service_request.id,
-        event_type="request_submitted",
-        title="Request submitted",
-        body="Your request has been submitted to the selected centre.",
+    _perform_transition(
+        session, service_request, current_user, "WAITING_FOR_CENTRE", "submit_request_routing",
+        notification_event="request_submitted",
+        notification_title="Request submitted",
+        notification_body="Your request has been submitted to the selected centre."
     )
-    session.add(service_request)
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -262,16 +352,7 @@ def start_request_review(
     if service_request.status != "ACCEPTED":
         raise HTTPException(status_code=409, detail="Request must be in ACCEPTED state")
 
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="start_review",
-        from_status=service_request.status,
-        to_status="UNDER_REVIEW",
-    )
-    session.add(history)
-    service_request.status = "UNDER_REVIEW"
-    session.add(service_request)
+    _perform_transition(session, service_request, current_user, "UNDER_REVIEW", "start_review")
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -400,19 +481,7 @@ async def upload_request_document(
     session.add(document)
 
     if service_request.status == "CORRECTION_REQUIRED":
-        from app.models.assignment import RequestHistory
-
-        history = RequestHistory(
-            request_id=request_id,
-            actor_id=current_user.id,
-            action="submit_correction",
-            from_status=service_request.status,
-            to_status="UNDER_REVIEW",
-            note=f"Replacement uploaded for {requirement.name}",
-        )
-        session.add(history)
-        service_request.status = "UNDER_REVIEW"
-        session.add(service_request)
+        _perform_transition(session, service_request, current_user, "UNDER_REVIEW", "submit_correction", note=f"Replacement uploaded for {requirement.name}")
 
     session.commit()
     session.refresh(document)
@@ -535,26 +604,15 @@ def review_request_document(
     session.add(document)
 
     if body.decision != "APPROVED":
-        history = RequestHistory(
-            request_id=request_id,
-            actor_id=current_user.id,
-            action="document_correction_required",
-            from_status=service_request.status,
-            to_status="CORRECTION_REQUIRED",
+        _perform_transition(
+            session, service_request, current_user, "CORRECTION_REQUIRED", "document_correction_required",
             note=body.reason,
+            notification_event="correction_required",
+            notification_title="Correction required",
+            notification_body=body.reason
         )
-        session.add(history)
-        service_request.status = "CORRECTION_REQUIRED"
-        _safe_add_notification(
-            session,
-            user_id=service_request.citizen_id,
-            request_id=service_request.id,
-            event_type="correction_required",
-            title="Correction required",
-            body=body.reason,
-        )
-        session.add(service_request)
     else:
+        from app.models.assignment import RequestHistory
         history = RequestHistory(
             request_id=request_id,
             actor_id=current_user.id,
@@ -570,44 +628,6 @@ def review_request_document(
     return review
 
 
-@router.post("/{request_id}/cancel", response_model=ServiceRequestResponse)
-def cancel_request(
-    request_id: UUID,
-    session: SessionDep,
-    current_user: CurrentUserCitizen,
-) -> Any:
-    req = session.get(ServiceRequest, request_id)
-    if not req:
-        raise HTTPException(status_code=404, detail="Request not found")
-    if req.citizen_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized")
-
-    allowed_states = {
-        "DRAFT", "SUBMITTED", "WAITING_FOR_CENTRE", 
-        "ACCEPTED", "UNDER_REVIEW", "CORRECTION_REQUIRED",
-        "INTERACTION_REQUIRED", "INTERACTION_SCHEDULED"
-    }
-    if req.status not in allowed_states:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot cancel request in state: {req.status}",
-        )
-
-    req.status = "CANCELLED"
-    req.cancelled_at = datetime.now(tz=UTC)
-    
-    # Record history
-    history = RequestHistory(
-        request_id=req.id,
-        actor_id=current_user.id,
-        action="CANCELLED",
-        note="Citizen cancelled the request.",
-    )
-    session.add(history)
-    session.add(req)
-    session.commit()
-    session.refresh(req)
-    return req
 
 
 @router.post("/{request_id}/unable_to_proceed", response_model=ServiceRequestResponse)
@@ -647,24 +667,12 @@ def unable_to_proceed(
     if not is_authorized:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    req.status = "UNABLE_TO_PROCEED"
-
-    history = RequestHistory(
-        request_id=req.id,
-        actor_id=current_user.id,
-        action="UNABLE_TO_PROCEED",
+    _perform_transition(
+        session, req, current_user, "UNABLE_TO_PROCEED", "UNABLE_TO_PROCEED",
         note=payload.reason,
-    )
-    session.add(history)
-    session.add(req)
-    
-    _safe_add_notification(
-        session,
-        user_id=req.citizen_id,
-        request_id=req.id,
-        event_type="request_unable_to_proceed",
-        title="Request Unable to Proceed",
-        body=f"Your request could not proceed. Reason: {payload.reason}",
+        notification_event="request_unable_to_proceed",
+        notification_title="Request Unable to Proceed",
+        notification_body=f"Your request could not proceed. Reason: {payload.reason}"
     )
     
     session.commit()
@@ -817,25 +825,13 @@ def require_request_interaction(
         instructions=body.instructions,
     )
     session.add(interaction)
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="interaction_required",
-        from_status=service_request.status,
-        to_status="INTERACTION_REQUIRED",
+    _perform_transition(
+        session, service_request, current_user, "INTERACTION_REQUIRED", "interaction_required",
         note=body.reason,
+        notification_event="interaction_required",
+        notification_title="Interaction required",
+        notification_body=body.reason
     )
-    session.add(history)
-    service_request.status = "INTERACTION_REQUIRED"
-    _safe_add_notification(
-        session,
-        user_id=service_request.citizen_id,
-        request_id=service_request.id,
-        event_type="interaction_required",
-        title="Interaction required",
-        body=body.reason,
-    )
-    session.add(service_request)
     session.commit()
     session.refresh(interaction)
     return interaction
@@ -878,24 +874,12 @@ def schedule_request_interaction(
     interaction.scheduled_at = body.scheduled_at
     interaction.scheduled_by_id = current_user.id
     session.add(interaction)
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="interaction_scheduled",
-        from_status=service_request.status,
-        to_status="INTERACTION_SCHEDULED",
+    _perform_transition(
+        session, service_request, current_user, "INTERACTION_SCHEDULED", "interaction_scheduled",
+        notification_event="interaction_scheduled",
+        notification_title="Interaction scheduled",
+        notification_body="Your centre interaction has been scheduled."
     )
-    session.add(history)
-    service_request.status = "INTERACTION_SCHEDULED"
-    _safe_add_notification(
-        session,
-        user_id=service_request.citizen_id,
-        request_id=service_request.id,
-        event_type="interaction_scheduled",
-        title="Interaction scheduled",
-        body="Your centre interaction has been scheduled.",
-    )
-    session.add(service_request)
     session.commit()
     session.refresh(interaction)
     return interaction
@@ -940,17 +924,7 @@ def record_interaction_outcome(
     session.add(interaction)
 
     next_status = "UNDER_REVIEW" if body.outcome == "COMPLETED" else "INTERACTION_REQUIRED"
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="interaction_" + body.outcome.lower(),
-        from_status=service_request.status,
-        to_status=next_status,
-        note=body.note,
-    )
-    session.add(history)
-    service_request.status = next_status
-    session.add(service_request)
+    _perform_transition(session, service_request, current_user, next_status, "interaction_" + body.outcome.lower(), note=body.note)
     session.commit()
     session.refresh(interaction)
     return interaction
@@ -1018,16 +992,7 @@ def mark_request_ready(
         raise HTTPException(status_code=409, detail="Request must be in UNDER_REVIEW state")
     _verify_ready_for_processing_preconditions(session, service_request)
 
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="mark_ready",
-        from_status=service_request.status,
-        to_status="READY_FOR_PROCESSING",
-    )
-    session.add(history)
-    service_request.status = "READY_FOR_PROCESSING"
-    session.add(service_request)
+    _perform_transition(session, service_request, current_user, "READY_FOR_PROCESSING", "mark_ready")
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -1049,16 +1014,7 @@ def start_request_processing(
     if service_request.status != "READY_FOR_PROCESSING":
         raise HTTPException(status_code=409, detail="Request must be READY_FOR_PROCESSING")
 
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="start_processing",
-        from_status=service_request.status,
-        to_status="PROCESSING",
-    )
-    session.add(history)
-    service_request.status = "PROCESSING"
-    session.add(service_request)
+    _perform_transition(session, service_request, current_user, "PROCESSING", "start_processing")
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -1089,17 +1045,13 @@ def mark_unable_to_proceed(
     if not body.reason.strip():
         raise HTTPException(status_code=422, detail="Reason is required")
 
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="unable_to_proceed",
-        from_status=service_request.status,
-        to_status="UNABLE_TO_PROCEED",
+    _perform_transition(
+        session, service_request, current_user, "UNABLE_TO_PROCEED", "unable_to_proceed",
         note=body.reason,
+        notification_event="request_unable_to_proceed",
+        notification_title="Request Unable to Proceed",
+        notification_body=f"Your request could not proceed. Reason: {body.reason}"
     )
-    session.add(history)
-    service_request.status = "UNABLE_TO_PROCEED"
-    session.add(service_request)
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -1126,7 +1078,7 @@ def cancel_request(
         "UNDER_REVIEW", "CORRECTION_REQUIRED", "INTERACTION_REQUIRED", "INTERACTION_SCHEDULED"
     }
     if service_request.status not in allowed_cancel_states:
-        raise HTTPException(status_code=409, detail="Request cannot be cancelled in its current state")
+        raise HTTPException(status_code=400, detail=f"Cannot cancel request in state: {service_request.status}")
 
     now = datetime.now(tz=UTC)
     existing_assignments = session.scalars(
@@ -1148,19 +1100,8 @@ def cancel_request(
             body=f"Request {request_id} was cancelled by the citizen.",
         )
 
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="cancel",
-        from_status=service_request.status,
-        to_status="CANCELLED",
-        note="Cancelled by citizen",
-    )
-    session.add(history)
-
-    service_request.status = "CANCELLED"
     service_request.cancelled_at = now
-    session.add(service_request)
+    _perform_transition(session, service_request, current_user, "CANCELLED", "CANCELLED", note="Cancelled by citizen")
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -1332,25 +1273,13 @@ def request_payment(
         components_json='{"mode":"development_mock"}',
     )
     session.add(payment)
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="payment_requested",
-        from_status=service_request.status,
-        to_status="PAYMENT_PENDING",
+    _perform_transition(
+        session, service_request, current_user, "PAYMENT_PENDING", "payment_requested",
         note="Development mock payment requested",
+        notification_event="payment_pending",
+        notification_title="Payment pending",
+        notification_body="A development mock payment is ready for this request."
     )
-    session.add(history)
-    service_request.status = "PAYMENT_PENDING"
-    _safe_add_notification(
-        session,
-        user_id=service_request.citizen_id,
-        request_id=service_request.id,
-        event_type="payment_pending",
-        title="Payment pending",
-        body="A development mock payment is ready for this request.",
-    )
-    session.add(service_request)
     session.commit()
     session.refresh(payment)
     return payment
@@ -1469,25 +1398,12 @@ def accept_request(
     )
     session.add(assignment)
 
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="accept",
-        from_status=service_request.status,
-        to_status="ACCEPTED",
+    _perform_transition(
+        session, service_request, current_user, "ACCEPTED", "accept",
+        notification_event="request_accepted",
+        notification_title="Request accepted",
+        notification_body="A centre employee accepted your request."
     )
-    session.add(history)
-
-    service_request.status = "ACCEPTED"
-    _safe_add_notification(
-        session,
-        user_id=service_request.citizen_id,
-        request_id=service_request.id,
-        event_type="request_accepted",
-        title="Request accepted",
-        body="A centre employee accepted your request.",
-    )
-    session.add(service_request)
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -1676,26 +1592,18 @@ def _complete_mock_payment(
         next_status = "PROCESSING"
     session.add(payment)
 
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="payment_" + outcome.lower(),
-        from_status=service_request.status,
-        to_status=next_status,
-        note="Development mock payment " + outcome.lower(),
-    )
-    session.add(history)
-    service_request.status = next_status
+    notification_kwargs = {}
     if outcome == "CONFIRMED":
-        _safe_add_notification(
-            session,
-            user_id=service_request.citizen_id,
-            request_id=service_request.id,
-            event_type="payment_confirmed",
-            title="Payment confirmed",
-            body="Development mock payment was confirmed.",
-        )
-    session.add(service_request)
+        notification_kwargs = {
+            "notification_event": "payment_confirmed",
+            "notification_title": "Payment confirmed",
+            "notification_body": "Development mock payment was confirmed.",
+        }
+    _perform_transition(
+        session, service_request, current_user, next_status, "payment_" + outcome.lower(),
+        note="Development mock payment " + outcome.lower(),
+        **notification_kwargs
+    )
     session.commit()
     session.refresh(payment)
     return payment
@@ -1870,27 +1778,13 @@ def complete_request(
     )
     session.add(output)
 
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="complete",
-        from_status=service_request.status,
-        to_status="COMPLETED",
-        note="Request completed",
-    )
-    session.add(history)
-
-    service_request.status = "COMPLETED"
     service_request.completed_at = now
-    session.add(service_request)
-
-    _safe_add_notification(
-        session,
-        user_id=service_request.citizen_id,
-        request_id=request_id,
-        event_type="request_completed",
-        title="Request completed",
-        body=f"Your request {request_id} has been completed.",
+    _perform_transition(
+        session, service_request, current_user, "COMPLETED", "complete",
+        note="Request completed",
+        notification_event="request_completed",
+        notification_title="Request completed",
+        notification_body=f"Your request {request_id} has been completed."
     )
 
     session.commit()
@@ -1918,18 +1812,9 @@ def close_request(
 
     now = datetime.now(tz=UTC)
     
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="close",
-        from_status=service_request.status,
-        to_status="CLOSED",
-        note="Request closed by citizen",
+    _perform_transition(
+        session, service_request, current_user, "CLOSED", "close", note="Request closed by citizen"
     )
-    session.add(history)
-
-    service_request.status = "CLOSED"
-    session.add(service_request)
     session.commit()
     session.refresh(service_request)
     return service_request

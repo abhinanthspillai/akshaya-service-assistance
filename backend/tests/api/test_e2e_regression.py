@@ -64,11 +64,11 @@ def test_e2e_citizen_to_employee_workflow(client: TestClient, db_session: Sessio
         json={"centre_id": str(c1.id)},
         headers=cit_headers,
     )
-    assert r.status_code == 200
+    assert r.status_code == 200, r.json()
 
     # 4. Citizen submits
     r = client.post(f"/api/v1/requests/{req_id}/submit", headers=cit_headers)
-    assert r.status_code == 200
+    assert r.status_code == 200, r.json()
     assert r.json()["status"] == "WAITING_FOR_CENTRE"
 
     # 5. Security: Emp 2 (from Centre 2) tries to accept -> Fails
@@ -89,14 +89,14 @@ def test_e2e_citizen_to_employee_workflow(client: TestClient, db_session: Sessio
     emp1_headers = {"Authorization": f"Bearer {emp1_token}"}
 
     r = client.post(f"/api/v1/requests/{req_id}/accept", headers=emp1_headers)
-    assert r.status_code == 200
+    assert r.status_code == 200, r.json()
     assert r.json()["status"] == "ACCEPTED"
 
     # 7. Check history
     r = client.get(f"/api/v1/requests/{req_id}/history", headers=emp1_headers)
-    assert r.status_code == 200
+    assert r.status_code == 200, r.json()
     history = r.json()
-    assert len(history) == 1
-    assert history[0]["action"] == "accept"
-    assert history[0]["to_status"] == "ACCEPTED"
-    assert history[0]["actor_id"] == str(emp1.id)
+    assert len(history) == 3
+    assert history[-1]["action"] == "accept"
+    assert history[-1]["to_status"] == "ACCEPTED"
+    assert history[-1]["actor_id"] == str(emp1.id)
