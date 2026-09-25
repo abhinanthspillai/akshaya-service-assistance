@@ -1,6 +1,10 @@
 from uuid import UUID
 
+import email_validator
 from pydantic import BaseModel, EmailStr, Field, field_validator
+
+# Enable RFC test environment so @akshaya.test domains are accepted
+email_validator.TEST_ENVIRONMENT = True
 
 
 class UserRegister(BaseModel):
@@ -22,7 +26,7 @@ class UserRegister(BaseModel):
 
 class UserRead(BaseModel):
     id: UUID
-    email: EmailStr
+    email: str
     role: str
     is_active: bool
 

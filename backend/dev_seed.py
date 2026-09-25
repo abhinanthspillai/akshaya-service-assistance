@@ -67,6 +67,11 @@ def get_or_create_user(
         )
         db.add(user)
         db.flush()
+    else:
+        user.password_hash = get_password_hash(password)
+        user.role = role
+        user.is_active = True
+        db.flush()
 
     if role == "citizen":
         prof = db.get(CitizenProfile, user.id)

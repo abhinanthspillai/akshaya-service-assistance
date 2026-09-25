@@ -78,7 +78,10 @@ def register(user_in: UserRegister, session: SessionDep) -> User:
 
 @router.post("/login", response_model=Token)
 def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], session: SessionDep) -> Token:
-    user = session.scalar(select(User).where(User.email == form_data.username))
+    clean_username = form_data.username.strip().lower()
+    user = session.scalar(select(User).where(User.email == clean_username))
+    if not user:
+        user = session.scalar(select(User).where(User.email == form_data.username.strip()))
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
     if not user.is_active:

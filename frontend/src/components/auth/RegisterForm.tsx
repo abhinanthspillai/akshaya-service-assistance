@@ -112,14 +112,16 @@ export function RegisterForm() {
   };
 
   return (
-    <div className="w-full max-w-sm mx-auto flex flex-col justify-center h-full">
-      <h2 className="text-3xl font-bold text-ink-900 mb-2 text-center md:text-left">Create account</h2>
-      <p className="text-ink-500 mb-6 text-sm text-center md:text-left">
-        Access citizen services or staff request operations.
-      </p>
+    <div className="w-full max-w-sm mx-auto flex flex-col justify-start flex-1 pb-6">
+      <div className="mb-5 shrink-0">
+        <h2 className="text-2xl sm:text-3xl font-bold text-ink-900 mb-1.5 text-center md:text-left">Create account</h2>
+        <p className="text-ink-500 text-sm text-center md:text-left">
+          Access citizen services or staff request operations.
+        </p>
+      </div>
 
       {/* Role Selection Toggle */}
-      <div className="grid grid-cols-2 gap-1.5 p-1 bg-ink-50 rounded-2xl mb-6 border border-ink-100">
+      <div className="grid grid-cols-2 gap-1.5 p-1 bg-ink-50 rounded-2xl mb-5 border border-ink-100 shrink-0">
         <button
           type="button"
           onClick={() => {
