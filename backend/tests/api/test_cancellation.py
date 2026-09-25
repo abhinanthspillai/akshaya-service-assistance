@@ -23,8 +23,8 @@ def test_citizen_cancel_allowed_state(client: TestClient, db_session: Session, n
     assert data["status"] == "CANCELLED"
     
     history = db_session.query(RequestHistory).filter_by(request_id=req.id).first()
-    assert history is not None
-    assert history.action == "CANCELLED"
+    from app.models.enums import RequestAction
+    assert history.action == RequestAction.CANCEL.value
 
 def test_citizen_cancel_not_allowed_state(client: TestClient, db_session: Session, normal_user_headers: dict[str, str], normal_user_id: str):
     from uuid import UUID

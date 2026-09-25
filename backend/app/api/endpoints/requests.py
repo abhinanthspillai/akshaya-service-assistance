@@ -16,6 +16,7 @@ from app.api.deps import (
 )
 from app.core.config import get_settings
 from app.models.assignment import RequestAssignment, RequestHistory
+from app.models.enums import RequestAction
 from app.models.centre import AkshayaCentre
 from app.models.document import DOCUMENT_REVIEW_DECISIONS, RequestDocument, RequestDocumentReview
 from app.models.interaction import RequestInteraction
@@ -113,7 +114,7 @@ def _perform_transition(
     service_request,
     current_user,
     to_status: str,
-    action: str,
+    action: str | RequestAction,
     note: str | None = None,
     notification_title: str | None = None,
     notification_body: str | None = None,
@@ -133,10 +134,11 @@ def _perform_transition(
     if current_user.role not in allowed_roles and "system" not in allowed_roles:
         raise HTTPException(status_code=403, detail=f"Role {current_user.role} not allowed to transition {service_request.status} -> {to_status}")
 
+    action_val = action.value if isinstance(action, RequestAction) else str(action)
     history = RequestHistory(
         request_id=service_request.id,
         actor_id=current_user.id,
-        action=action,
+        action=action_val,
         from_status=service_request.status,
         to_status=to_status,
         note=note,
@@ -145,15 +147,26 @@ def _perform_transition(
     service_request.status = to_status
     session.add(service_request)
 
-    if notification_title and notification_body and notification_event:
-        _safe_add_notification(
-            session,
-            user_id=service_request.citizen_id,
-            request_id=service_request.id,
-            event_type=notification_event,
-            title=notification_title,
-            body=notification_body,
-        )
+    if not notification_event:
+        notification_event = f"status_{to_status.lower()}"
+    if not notification_title:
+        notification_title = f"Request {to_status.replace('_', ' ').title()}"
+    if not notification_body:
+        if to_status == "UNABLE_TO_PROCEED":
+            notification_body = f"Your request could not proceed. Reason: {note or 'Not specified'}"
+        elif note:
+            notification_body = f"Your request status changed to {to_status}. Note: {note}"
+        else:
+            notification_body = f"Your request status changed to {to_status}."
+
+    _safe_add_notification(
+        session,
+        user_id=service_request.citizen_id,
+        request_id=service_request.id,
+        event_type=notification_event,
+        title=notification_title,
+        body=notification_body,
+    )
 
 _ALLOWED_EXTENSIONS_BY_MIME = {
     "application/pdf": {".pdf"},
@@ -451,12 +464,12 @@ def submit_request(
 
     now = datetime.now(tz=UTC)
     service_request.submitted_at = now
-    _perform_transition(session, service_request, current_user, "SUBMITTED", "submit_request")
+    _perform_transition(session, service_request, current_user, "SUBMITTED", RequestAction.SUBMIT_REQUEST)
     session.flush()
 
     # Atomic transition to WAITING_FOR_CENTRE after routing succeeds
     _perform_transition(
-        session, service_request, current_user, "WAITING_FOR_CENTRE", "submit_request_routing",
+        session, service_request, current_user, "WAITING_FOR_CENTRE", RequestAction.SUBMIT_REQUEST_ROUTING,
         notification_event="request_submitted",
         notification_title="Request submitted",
         notification_body="Your request has been submitted to the selected centre."
@@ -501,7 +514,7 @@ def start_request_review(
     if service_request.status != "ACCEPTED":
         raise HTTPException(status_code=409, detail="Request must be in ACCEPTED state")
 
-    _perform_transition(session, service_request, current_user, "UNDER_REVIEW", "start_review")
+    _perform_transition(session, service_request, current_user, "UNDER_REVIEW", RequestAction.START_REVIEW)
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -639,7 +652,7 @@ async def upload_request_document(
             )
         ) or 0
         if pending_reupload == 0:
-            _perform_transition(session, service_request, current_user, "UNDER_REVIEW", "submit_correction", note="All replacements uploaded.")
+            _perform_transition(session, service_request, current_user, "UNDER_REVIEW", RequestAction.SUBMIT_CORRECTION, note="All replacements uploaded.")
 
     session.commit()
     session.refresh(document)
@@ -763,7 +776,7 @@ def review_request_document(
 
     if body.decision != "APPROVED":
         _perform_transition(
-            session, service_request, current_user, "CORRECTION_REQUIRED", "document_correction_required",
+            session, service_request, current_user, "CORRECTION_REQUIRED", RequestAction.DOCUMENT_CORRECTION_REQUIRED,
             note=body.reason,
             notification_event="correction_required",
             notification_title="Correction required",
@@ -774,7 +787,7 @@ def review_request_document(
         history = RequestHistory(
             request_id=request_id,
             actor_id=current_user.id,
-            action="document_approved",
+            action=RequestAction.DOCUMENT_APPROVED.value,
             from_status=service_request.status,
             to_status=service_request.status,
             note=f"Document {document.original_filename} approved",
@@ -851,7 +864,7 @@ def require_request_interaction(
     )
     session.add(interaction)
     _perform_transition(
-        session, service_request, current_user, "INTERACTION_REQUIRED", "interaction_required",
+        session, service_request, current_user, "INTERACTION_REQUIRED", RequestAction.INTERACTION_REQUIRED,
         note=body.reason,
         notification_event="interaction_required",
         notification_title="Interaction required",
@@ -899,7 +912,7 @@ def schedule_request_interaction(
     interaction.scheduled_by_id = current_user.id
     session.add(interaction)
     _perform_transition(
-        session, service_request, current_user, "INTERACTION_SCHEDULED", "interaction_scheduled",
+        session, service_request, current_user, "INTERACTION_SCHEDULED", RequestAction.INTERACTION_SCHEDULED,
         notification_event="interaction_scheduled",
         notification_title="Interaction scheduled",
         notification_body="Your centre interaction has been scheduled."
@@ -947,7 +960,8 @@ def record_interaction_outcome(
     session.add(interaction)
 
     next_status = "UNDER_REVIEW" if body.outcome == "COMPLETED" else "INTERACTION_REQUIRED"
-    _perform_transition(session, service_request, current_user, next_status, "interaction_" + body.outcome.lower(), note=body.note)
+    outcome_action = RequestAction(f"interaction_{body.outcome.lower()}")
+    _perform_transition(session, service_request, current_user, next_status, outcome_action, note=body.note)
     session.commit()
     session.refresh(interaction)
     return interaction
@@ -1014,7 +1028,7 @@ def mark_request_ready(
         raise HTTPException(status_code=409, detail="Request must be in UNDER_REVIEW state")
     _verify_ready_for_processing_preconditions(session, service_request)
 
-    _perform_transition(session, service_request, current_user, "READY_FOR_PROCESSING", "mark_ready")
+    _perform_transition(session, service_request, current_user, "READY_FOR_PROCESSING", RequestAction.MARK_READY)
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -1035,7 +1049,7 @@ def start_request_processing(
     if service_request.status != "READY_FOR_PROCESSING":
         raise HTTPException(status_code=409, detail="Request must be READY_FOR_PROCESSING")
 
-    _perform_transition(session, service_request, current_user, "PROCESSING", "start_processing")
+    _perform_transition(session, service_request, current_user, "PROCESSING", RequestAction.START_PROCESSING)
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -1066,7 +1080,7 @@ def mark_unable_to_proceed(
         raise HTTPException(status_code=422, detail="Reason is required")
 
     _perform_transition(
-        session, service_request, current_user, "UNABLE_TO_PROCEED", "unable_to_proceed",
+        session, service_request, current_user, "UNABLE_TO_PROCEED", RequestAction.UNABLE_TO_PROCEED,
         note=body.reason,
         notification_event="request_unable_to_proceed",
         notification_title="Request Unable to Proceed",
@@ -1121,7 +1135,7 @@ def cancel_request(
         )
 
     service_request.cancelled_at = now
-    _perform_transition(session, service_request, current_user, "CANCELLED", "CANCELLED", note="Cancelled by citizen")
+    _perform_transition(session, service_request, current_user, "CANCELLED", RequestAction.CANCEL, note="Cancelled by citizen")
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -1213,7 +1227,7 @@ def reassign_request(
     history = RequestHistory(
         request_id=request_id,
         actor_id=current_user.id,
-        action="REASSIGNED",
+        action=RequestAction.REASSIGN.value,
         from_status=service_request.status,
         to_status=service_request.status,
         note=f"Reassigned to {body.employee_id}",
@@ -1295,7 +1309,7 @@ def request_payment(
     )
     session.add(payment)
     _perform_transition(
-        session, service_request, current_user, "PAYMENT_PENDING", "payment_requested",
+        session, service_request, current_user, "PAYMENT_PENDING", RequestAction.PAYMENT_REQUESTED,
         note="Development mock payment requested",
         notification_event="payment_pending",
         notification_title="Payment pending",
@@ -1419,7 +1433,7 @@ def accept_request(
     session.add(assignment)
 
     _perform_transition(
-        session, service_request, current_user, "ACCEPTED", "accept",
+        session, service_request, current_user, "ACCEPTED", RequestAction.ACCEPT,
         notification_event="request_accepted",
         notification_title="Request accepted",
         notification_body="A centre employee accepted your request."
@@ -1475,17 +1489,7 @@ def _verify_document_access(user: Any, service_request: ServiceRequest, session:
         return
 
     if user.role == "centre_employee":
-        from app.models.assignment import RequestAssignment
-
-        assignment = session.scalar(
-            select(RequestAssignment).where(
-                RequestAssignment.request_id == service_request.id,
-                RequestAssignment.employee_id == user.id,
-                RequestAssignment.is_active.is_(True),
-            )
-        )
-        if not assignment:
-            raise HTTPException(status_code=403, detail="Not authorized")
+        _verify_active_assignment(user, service_request, session)
         return
 
     if user.role == "centre_administrator":
@@ -1640,8 +1644,9 @@ def _complete_mock_payment(
             "notification_title": "Payment confirmed",
             "notification_body": "Development mock payment was confirmed.",
         }
+    payment_action = RequestAction(f"payment_{outcome.lower()}")
     _perform_transition(
-        session, service_request, current_user, next_status, "payment_" + outcome.lower(),
+        session, service_request, current_user, next_status, payment_action,
         note="Development mock payment " + outcome.lower(),
         **notification_kwargs
     )
@@ -1821,7 +1826,7 @@ def complete_request(
 
     service_request.completed_at = now
     _perform_transition(
-        session, service_request, current_user, "COMPLETED", "complete",
+        session, service_request, current_user, "COMPLETED", RequestAction.COMPLETE,
         note="Request completed",
         notification_event="request_completed",
         notification_title="Request completed",
@@ -1854,7 +1859,7 @@ def close_request(
     now = datetime.now(tz=UTC)
     
     _perform_transition(
-        session, service_request, current_user, "CLOSED", "close", note="Request closed by citizen"
+        session, service_request, current_user, "CLOSED", RequestAction.CLOSE, note="Request closed by citizen"
     )
     session.commit()
     session.refresh(service_request)

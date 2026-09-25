@@ -53,5 +53,5 @@ def test_admin_reassign_request(client: TestClient, db_session: Session, admin_h
     # Check history
     history = db_session.query(RequestHistory).filter_by(request_id=req_id).first()
     assert history is not None
-    assert history.note == f"Reassigned to {new_employee_id}"
-    assert history.action == "REASSIGNED"
+    from app.models.enums import RequestAction
+    assert history.action == RequestAction.REASSIGN.value

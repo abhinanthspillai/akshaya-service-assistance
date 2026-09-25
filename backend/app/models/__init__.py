@@ -1,4 +1,5 @@
 from app.models.assignment import RequestAssignment, RequestHistory
+from app.models.enums import RequestAction
 from app.models.centre import AkshayaCentre
 from app.models.document import RequestDocument, RequestDocumentReview
 from app.models.interaction import RequestInteraction
@@ -34,6 +35,7 @@ __all__ = [
     "ServiceRequest",
     "RequestAssignment",
     "RequestHistory",
+    "RequestAction",
     "RequestDocument",
     "RequestDocumentReview",
     "RequestInteraction",
