@@ -73,6 +73,8 @@ def centre_b_request(db_session: Session, normal_user_id: str, second_centre: Ak
         ("complete", {"collection_instructions": "Come pick up"}),
         ("reassign", {"employee_id": str(uuid4())}),
         ("require-interaction", {"requirement_id": str(uuid4()), "reason": "Meet in person"}),
+        ("schedule-interaction", {"interaction_id": str(uuid4()), "scheduled_at": "2026-09-30T10:00:00Z"}),
+        ("messages", {"body": "Cross centre message attempt"}),
     ],
 )
 def test_cross_centre_action_endpoints_forbidden(
@@ -88,6 +90,127 @@ def test_cross_centre_action_endpoints_forbidden(
         json=payload,
     )
     assert r.status_code in (403, 404), f"Expected 403 or 404 for {endpoint_suffix}, got {r.status_code}: {r.text}"
+
+
+@pytest.mark.parametrize(
+    "endpoint_suffix",
+    [
+        "documents",
+        "document-reviews",
+        "interactions",
+        "messages",
+        "payments",
+        "history",
+        "",
+    ],
+)
+def test_cross_centre_read_endpoints_forbidden(
+    client: TestClient,
+    employee_headers: dict[str, str],
+    centre_b_request: ServiceRequest,
+    endpoint_suffix: str,
+):
+    url = f"/api/v1/requests/{centre_b_request.id}/{endpoint_suffix}".rstrip("/")
+    r = client.get(url, headers=employee_headers)
+    assert r.status_code == 403, f"Expected 403 for GET {url}, got {r.status_code}: {r.text}"
+
+
+def test_cross_centre_document_download_forbidden(
+    client: TestClient,
+    db_session: Session,
+    employee_headers: dict[str, str],
+    centre_b_request: ServiceRequest,
+    normal_user_id: str,
+):
+    doc = RequestDocument(
+        id=uuid4(),
+        request_id=centre_b_request.id,
+        requirement_id=uuid4(),
+        storage_key="request-documents/fake.pdf",
+        original_filename="fake.pdf",
+        content_type="application/pdf",
+        size_bytes=100,
+        sha256="fakehash",
+        status="SUBMITTED",
+        is_current=True,
+        uploaded_by_id=UUID(normal_user_id),
+    )
+    db_session.add(doc)
+    db_session.commit()
+
+    r = client.get(
+        f"/api/v1/requests/{centre_b_request.id}/documents/{doc.id}/download",
+        headers=employee_headers,
+    )
+    assert r.status_code == 403, f"Expected 403 for download, got {r.status_code}: {r.text}"
+
+
+EXPLICIT_REQUEST_ROUTE_ALLOWLIST = {
+    ("DELETE", "/api/v1/requests/{request_id}"): "Citizen draft deletion route; restricted to draft owner citizen.",
+    ("POST", "/api/v1/requests/{request_id}/select-centre"): "Citizen pre-submission routing to choose target Akshaya centre.",
+    ("POST", "/api/v1/requests/{request_id}/submit"): "Citizen submission action to submit request to selected centre.",
+    ("POST", "/api/v1/requests/{request_id}/pre-validate"): "Citizen pre-validation check against required service documents.",
+    ("POST", "/api/v1/requests/{request_id}/cancel"): "Citizen-initiated request cancellation; owner-restricted.",
+    ("POST", "/api/v1/requests/{request_id}/close"): "Citizen terminal closure after request completion.",
+    ("POST", "/api/v1/requests/{request_id}/documents"): "Citizen document upload endpoint for requirement submissions and re-uploads.",
+    ("POST", "/api/v1/requests/{request_id}/payments/{payment_id}/confirm"): "Citizen mock payment confirmation gateway endpoint.",
+    ("POST", "/api/v1/requests/{request_id}/payments/{payment_id}/fail"): "Citizen mock payment failure callback endpoint.",
+    ("POST", "/api/v1/requests/{request_id}/payments/{payment_id}/cancel"): "Citizen mock payment cancellation endpoint.",
+    ("GET", "/api/v1/requests/{request_id}/output"): "Citizen output delivery endpoint to download generated certificate/document.",
+}
+
+CROSS_CENTRE_COVERED_ROUTES = {
+    # Action endpoints tested in test_cross_centre_action_endpoints_forbidden
+    ("POST", "/api/v1/requests/{request_id}/accept"),
+    ("POST", "/api/v1/requests/{request_id}/start-review"),
+    ("POST", "/api/v1/requests/{request_id}/mark-ready"),
+    ("POST", "/api/v1/requests/{request_id}/start-processing"),
+    ("POST", "/api/v1/requests/{request_id}/unable-to-proceed"),
+    ("POST", "/api/v1/requests/{request_id}/request-payment"),
+    ("POST", "/api/v1/requests/{request_id}/complete"),
+    ("POST", "/api/v1/requests/{request_id}/reassign"),
+    ("POST", "/api/v1/requests/{request_id}/require-interaction"),
+    ("POST", "/api/v1/requests/{request_id}/schedule-interaction"),
+    ("POST", "/api/v1/requests/{request_id}/messages"),
+    # Sub-resource action endpoints tested in dedicated tests
+    ("POST", "/api/v1/requests/{request_id}/documents/{document_id}/review"),
+    ("POST", "/api/v1/requests/{request_id}/interactions/{interaction_id}/outcome"),
+    # Read endpoints tested in test_cross_centre_read_endpoints_forbidden
+    ("GET", "/api/v1/requests/{request_id}"),
+    ("GET", "/api/v1/requests/{request_id}/documents"),
+    ("GET", "/api/v1/requests/{request_id}/documents/{document_id}/download"),
+    ("GET", "/api/v1/requests/{request_id}/document-reviews"),
+    ("GET", "/api/v1/requests/{request_id}/interactions"),
+    ("GET", "/api/v1/requests/{request_id}/messages"),
+    ("GET", "/api/v1/requests/{request_id}/payments"),
+    ("GET", "/api/v1/requests/{request_id}/history"),
+}
+
+
+def test_all_request_scoped_routes_are_covered_or_allowlisted():
+    from app.main import app
+
+    openapi_paths = app.openapi()["paths"]
+    all_request_routes = set()
+
+    for path, methods in openapi_paths.items():
+        if "{request_id}" in path:
+            for method in methods.keys():
+                if method.upper() in ("GET", "POST", "PUT", "PATCH", "DELETE"):
+                    all_request_routes.add((method.upper(), path))
+
+    unaccounted = []
+    for route in all_request_routes:
+        if route not in CROSS_CENTRE_COVERED_ROUTES and route not in EXPLICIT_REQUEST_ROUTE_ALLOWLIST:
+            unaccounted.append(f"{route[0]} {route[1]}")
+
+    assert not unaccounted, (
+        f"The following request-scoped routes are neither covered by cross-centre tests "
+        f"nor present on the explicit allowlist with a written reason:\n" + "\n".join(unaccounted)
+    )
+
+    for route, reason in EXPLICIT_REQUEST_ROUTE_ALLOWLIST.items():
+        assert reason and len(reason.strip()) > 10, f"Allowlisted route {route} must have a written reason."
 
 
 def test_cross_centre_document_review_forbidden(
