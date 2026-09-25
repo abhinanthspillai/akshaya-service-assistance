@@ -292,71 +292,148 @@ def list_requests(
 @router.get("/dashboard", response_model=DashboardResponse)
 def get_dashboard_data(
     session: SessionDep,
-    current_user: CurrentUser,
+    current_user: CurrentUserEmployee,
 ) -> Any:
-    if current_user.role != "centre_employee":
-        raise HTTPException(status_code=403, detail="Dashboard is only for centre employees")
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    from sqlalchemy import func
 
     from app.models.profile import EmployeeProfile
+    from app.models.document import RequestDocument
+
     employee = session.get(EmployeeProfile, current_user.id)
     if not employee:
         raise HTTPException(status_code=403, detail="Employee profile not found")
 
     centre_id = employee.centre_id
-    
-    from datetime import datetime, timedelta
 
-    from sqlalchemy import func
-    
-    # 1. Status counts
+    # 1. Status counts (explicitly excluding DRAFT and SUBMITTED)
     counts = session.execute(
         select(ServiceRequest.status, func.count(ServiceRequest.id))
-        .where(ServiceRequest.selected_centre_id == centre_id)
+        .where(
+            ServiceRequest.selected_centre_id == centre_id,
+            ServiceRequest.status.notin_(["DRAFT", "SUBMITTED"]),
+        )
         .group_by(ServiceRequest.status)
     ).all()
     status_counts = {row[0]: row[1] for row in counts}
-    
-    # 2. Completed today
-    now = datetime.now(UTC)
-    # Actually, Asia/Kolkata boundaries. For simplicity, just use last 24h or so, but let's do a naive UTC day for now or timedelta(hours=5, minutes=30)
-    # The requirement says Asia/Kolkata day boundaries.
-    kolkata_offset = timedelta(hours=5, minutes=30)
-    kolkata_now = now + kolkata_offset
-    start_of_day_kolkata = datetime(kolkata_now.year, kolkata_now.month, kolkata_now.day, tzinfo=UTC) - kolkata_offset
-    
-    completed_today = session.scalar(
-        select(func.count(ServiceRequest.id))
+
+    # 2. Completed today (Asia/Kolkata calendar day boundaries)
+    kolkata_tz = ZoneInfo("Asia/Kolkata")
+    now_kolkata = datetime.now(kolkata_tz)
+    start_of_day_kolkata = datetime(
+        now_kolkata.year, now_kolkata.month, now_kolkata.day, tzinfo=kolkata_tz
+    )
+    start_of_day_utc = start_of_day_kolkata.astimezone(UTC)
+
+    completed_today = (
+        session.scalar(
+            select(func.count(ServiceRequest.id)).where(
+                ServiceRequest.selected_centre_id == centre_id,
+                ServiceRequest.status == "COMPLETED",
+                func.coalesce(ServiceRequest.completed_at, ServiceRequest.updated_at)
+                >= start_of_day_utc,
+            )
+        )
+        or 0
+    )
+
+    # 3. Rejected last 30 days (UNABLE_TO_PROCEED)
+    thirty_days_ago = datetime.now(UTC) - timedelta(days=30)
+    rejected_last_30_days = (
+        session.scalar(
+            select(func.count(ServiceRequest.id)).where(
+                ServiceRequest.selected_centre_id == centre_id,
+                ServiceRequest.status == "UNABLE_TO_PROCEED",
+                ServiceRequest.updated_at >= thirty_days_ago,
+            )
+        )
+        or 0
+    )
+
+    # 4. Buckets
+    new_count = status_counts.get("WAITING_FOR_CENTRE", 0) + status_counts.get("ACCEPTED", 0)
+    in_review_count = (
+        status_counts.get("UNDER_REVIEW", 0)
+        + status_counts.get("READY_FOR_PROCESSING", 0)
+        + status_counts.get("PROCESSING", 0)
+    )
+    awaiting_citizen_count = (
+        status_counts.get("PAYMENT_PENDING", 0)
+        + status_counts.get("CORRECTION_REQUIRED", 0)
+        + status_counts.get("INTERACTION_REQUIRED", 0)
+        + status_counts.get("INTERACTION_SCHEDULED", 0)
+    )
+    buckets = {
+        "new": new_count,
+        "in_review": in_review_count,
+        "awaiting_citizen": awaiting_citizen_count,
+        "completed_today": completed_today,
+        "rejected_last_30_days": rejected_last_30_days,
+    }
+
+    # 5. Needs attention ranking:
+    # Priority 1: Re-uploaded docs awaiting review (version > 1, is_current=True, in UNDER_REVIEW/CORRECTION_REQUIRED)
+    reuploaded_req_ids = session.scalars(
+        select(RequestDocument.request_id)
+        .join(ServiceRequest, RequestDocument.request_id == ServiceRequest.id)
         .where(
             ServiceRequest.selected_centre_id == centre_id,
-            ServiceRequest.status == "COMPLETED",
-            ServiceRequest.completed_at >= start_of_day_kolkata
+            ServiceRequest.status.in_(["UNDER_REVIEW", "CORRECTION_REQUIRED"]),
+            RequestDocument.is_current.is_(True),
+            RequestDocument.version > 1,
         )
-    ) or 0
-    
-    # 3. Rejected last 30 days
-    thirty_days_ago = now - timedelta(days=30)
-    rejected_last_30_days = session.scalar(
-        select(func.count(ServiceRequest.id))
-        .where(
-            ServiceRequest.selected_centre_id == centre_id,
-            ServiceRequest.status == "UNABLE_TO_PROCEED",
-            ServiceRequest.updated_at >= thirty_days_ago
-        )
-    ) or 0
-    
-    # 4. Needs attention (WAITING_FOR_CENTRE, ACCEPTED, UNDER_REVIEW, READY_FOR_PROCESSING, PROCESSING)
-    attention_statuses = ["WAITING_FOR_CENTRE", "ACCEPTED", "UNDER_REVIEW", "READY_FOR_PROCESSING", "PROCESSING"]
-    needs_attention = session.scalars(
+        .distinct()
+    ).all()
+
+    reuploaded_requests = []
+    if reuploaded_req_ids:
+        reuploaded_requests = session.scalars(
+            select(ServiceRequest)
+            .where(ServiceRequest.id.in_(reuploaded_req_ids))
+            .order_by(ServiceRequest.updated_at.asc())
+        ).all()
+
+    # Priority 2: Oldest WAITING_FOR_CENTRE
+    waiting_requests = session.scalars(
         select(ServiceRequest)
         .where(
             ServiceRequest.selected_centre_id == centre_id,
-            ServiceRequest.status.in_(attention_statuses)
+            ServiceRequest.status == "WAITING_FOR_CENTRE",
+        )
+        .order_by(ServiceRequest.created_at.asc())
+        .limit(10)
+    ).all()
+
+    # Priority 3: Oldest untouched active requests
+    untouched_requests = session.scalars(
+        select(ServiceRequest)
+        .where(
+            ServiceRequest.selected_centre_id == centre_id,
+            ServiceRequest.status.in_(
+                [
+                    "ACCEPTED",
+                    "UNDER_REVIEW",
+                    "READY_FOR_PROCESSING",
+                    "PROCESSING",
+                    "INTERACTION_SCHEDULED",
+                ]
+            ),
         )
         .order_by(ServiceRequest.updated_at.asc())
         .limit(10)
     ).all()
-    
-    # 5. Recent activity
+
+    seen_ids = set()
+    needs_attention = []
+    for req in (*reuploaded_requests, *waiting_requests, *untouched_requests):
+        if req.id not in seen_ids:
+            seen_ids.add(req.id)
+            needs_attention.append(req)
+        if len(needs_attention) >= 10:
+            break
+
+    # 6. Recent activity
     recent_history = session.execute(
         select(RequestHistory, ServiceRequest.service_name_snapshot, ServiceRequest.citizen_id)
         .join(ServiceRequest, RequestHistory.request_id == ServiceRequest.id)
@@ -364,7 +441,7 @@ def get_dashboard_data(
         .order_by(RequestHistory.created_at.desc())
         .limit(20)
     ).all()
-    
+
     recent_activity = [
         {
             "id": h.RequestHistory.id,
@@ -383,6 +460,7 @@ def get_dashboard_data(
         "status_counts": status_counts,
         "completed_today": completed_today,
         "rejected_last_30_days": rejected_last_30_days,
+        "buckets": buckets,
         "needs_attention": needs_attention,
         "recent_activity": recent_activity,
     }

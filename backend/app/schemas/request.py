@@ -73,9 +73,18 @@ class RecentActivityItem(BaseModel):
     request_citizen_id: UUID
 
 
+class DashboardBuckets(BaseModel):
+    new: int
+    in_review: int
+    awaiting_citizen: int
+    completed_today: int
+    rejected_last_30_days: int
+
+
 class DashboardResponse(BaseModel):
     status_counts: dict[str, int]
     completed_today: int
     rejected_last_30_days: int
+    buckets: DashboardBuckets
     needs_attention: list[ServiceRequestResponse]
     recent_activity: list[RecentActivityItem]
