@@ -1,3 +1,4 @@
+from uuid import uuid4
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -286,3 +287,37 @@ def test_delete_request_invalid_status(client: TestClient, db_session: Session) 
     # SUBMITTED/WAITING_FOR_CENTRE status cannot be deleted/archived
     r = client.delete(f"/api/v1/requests/{req_id}", headers=citizen_headers)
     assert r.status_code == 400
+
+
+def test_citizen_status_counts_isolated_to_own_requests(client: TestClient, db_session: Session) -> None:
+    """Verify that a citizen's status_counts in GET /requests/ only include requests
+    belonging to that citizen, and are not polluted by another citizen's requests.
+    """
+    citizen1_headers = get_citizen_headers(client, db_session, "cit1_counts@example.com")
+    citizen2_headers = get_citizen_headers(client, db_session, "cit2_counts@example.com")
+
+    service = Service(name="Count Test Service", code=f"CTS_{uuid4().hex[:6]}", service_type="A")
+    db_session.add(service)
+    db_session.commit()
+
+    # Citizen 1 creates 1 DRAFT
+    r1 = client.post("/api/v1/requests/", json={"service_id": str(service.id)}, headers=citizen1_headers)
+    assert r1.status_code == 201
+
+    # Citizen 2 creates 2 DRAFTs
+    r2 = client.post("/api/v1/requests/", json={"service_id": str(service.id)}, headers=citizen2_headers)
+    assert r2.status_code == 201
+    r3 = client.post("/api/v1/requests/", json={"service_id": str(service.id)}, headers=citizen2_headers)
+    assert r3.status_code == 201
+
+    # Citizen 1 gets status_counts: DRAFT must be exactly 1
+    res1 = client.get("/api/v1/requests/", headers=citizen1_headers)
+    assert res1.status_code == 200
+    counts1 = res1.json()["status_counts"]
+    assert counts1.get("DRAFT", 0) == 1
+
+    # Citizen 2 gets status_counts: DRAFT must be exactly 2
+    res2 = client.get("/api/v1/requests/", headers=citizen2_headers)
+    assert res2.status_code == 200
+    counts2 = res2.json()["status_counts"]
+    assert counts2.get("DRAFT", 0) == 2

@@ -26,6 +26,7 @@ type Tab = 'All' | 'Needs Action' | 'In Progress' | 'Completed' | 'Drafts' | 'Ca
 
 export function MyRequests() {
  const [requests, setRequests] = useState<ServiceRequest[]>([]);
+ const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
  const [isLoading, setIsLoading] = useState(true);
  const [error, setError] = useState('');
  const [activeTab, setActiveTab] = useState<Tab>('All');
@@ -42,6 +43,9 @@ export function MyRequests() {
  try {
  const res = await api.get('/requests/', { params: { limit: 100 } });
  setRequests(res.data.items || (Array.isArray(res.data) ? res.data : []));
+ if (res.data.status_counts) {
+ setStatusCounts(res.data.status_counts);
+ }
  } catch {
  setError('Failed to load requests. Please try again later.');
  } finally {
@@ -159,12 +163,14 @@ export function MyRequests() {
  const cancelledStates = ['CANCELLED', 'UNABLE_TO_PROCEED'];
  const draftStates = ['DRAFT'];
 
- if (tab === 'All') count = requests.length;
- else if (tab === 'Needs Action') count = requests.filter(r => needsAttentionStates.includes(r.status)).length;
- else if (tab === 'In Progress') count = requests.filter(r => inProgressStates.includes(r.status)).length;
- else if (tab === 'Completed') count = requests.filter(r => completedStates.includes(r.status)).length;
- else if (tab === 'Drafts') count = requests.filter(r => draftStates.includes(r.status)).length;
- else if (tab === 'Cancelled') count = requests.filter(r => cancelledStates.includes(r.status)).length;
+ const sumStatuses = (statuses: string[]) => statuses.reduce((acc, s) => acc + (statusCounts[s] || 0), 0);
+
+ if (tab === 'All') count = Object.values(statusCounts).reduce((acc, v) => acc + v, 0);
+ else if (tab === 'Needs Action') count = sumStatuses(needsAttentionStates);
+ else if (tab === 'In Progress') count = sumStatuses(inProgressStates);
+ else if (tab === 'Completed') count = sumStatuses(completedStates);
+ else if (tab === 'Drafts') count = sumStatuses(draftStates);
+ else if (tab === 'Cancelled') count = sumStatuses(cancelledStates);
 
  const isActive = activeTab === tab;
 
