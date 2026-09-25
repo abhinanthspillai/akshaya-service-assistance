@@ -64,6 +64,7 @@ def create_employee(
         user_id=user.id,
         centre_id=centre_id,
         full_name=employee_in.full_name,
+        approval_status="APPROVED",
     )
     session.add(profile)
     log_audit(

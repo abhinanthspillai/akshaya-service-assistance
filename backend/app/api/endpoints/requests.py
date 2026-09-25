@@ -223,6 +223,8 @@ def list_requests(
         employee = session.get(EmployeeProfile, current_user.id)
         if not employee:
             raise HTTPException(status_code=403, detail="Employee profile not found")
+        if employee.approval_status != "APPROVED":
+            raise HTTPException(status_code=403, detail="Account pending approval by centre")
         stmt = stmt.where(ServiceRequest.selected_centre_id == employee.centre_id)
     elif current_user.role == "centre_administrator":
         from app.models.profile import CentreAdministrator
@@ -883,6 +885,12 @@ def schedule_request_interaction(
     current_user: CurrentUser,
     body: ScheduleInteractionRequest,
 ) -> Any:
+    if current_user.role == "centre_employee":
+        from app.models.profile import EmployeeProfile
+
+        emp = session.get(EmployeeProfile, current_user.id)
+        if not emp or emp.approval_status != "APPROVED":
+            raise HTTPException(status_code=403, detail="Account pending approval by centre")
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -1472,7 +1480,9 @@ def _verify_request_access(user: Any, service_request: ServiceRequest, session: 
         from app.models.profile import EmployeeProfile
 
         employee = session.get(EmployeeProfile, user.id)
-        if not employee or employee.centre_id != service_request.selected_centre_id:
+        if not employee or employee.approval_status != "APPROVED":
+            raise HTTPException(status_code=403, detail="Account pending approval by centre")
+        if employee.centre_id != service_request.selected_centre_id:
             raise HTTPException(status_code=403, detail="Not authorized")
     if user.role == "centre_administrator":
         from app.models.profile import CentreAdministrator
@@ -1512,7 +1522,9 @@ def _verify_active_assignment(user: Any, service_request: ServiceRequest, sessio
     # 1. Centre-scoping check: Ensure employee's centre matches request's centre
     if user.role == "centre_employee":
         emp = session.get(EmployeeProfile, user.id)
-        if not emp or emp.centre_id != service_request.selected_centre_id:
+        if not emp or emp.approval_status != "APPROVED":
+            raise HTTPException(status_code=403, detail="Account pending approval by centre")
+        if emp.centre_id != service_request.selected_centre_id:
             # Centre mismatch (e.g. employee's centre changed or request reassigned to another centre)
             # Revoke any active assignments for this employee on this request
             assignment = session.scalar(
@@ -1788,6 +1800,13 @@ def complete_request(
 
     if current_user.role not in {"centre_employee", "centre_administrator", "system_administrator"}:
         raise HTTPException(status_code=403, detail="Not authorized")
+
+    if current_user.role == "centre_employee":
+        from app.models.profile import EmployeeProfile
+
+        emp = session.get(EmployeeProfile, current_user.id)
+        if not emp or emp.approval_status != "APPROVED":
+            raise HTTPException(status_code=403, detail="Account pending approval by centre")
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:

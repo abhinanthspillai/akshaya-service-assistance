@@ -67,7 +67,28 @@ class RoleChecker:
 
 
 get_current_citizen = RoleChecker(["citizen"])
-get_current_employee = RoleChecker(["centre_employee"])
+
+
+def get_current_employee(session: SessionDep, user: CurrentUser) -> User:
+    if user.role != "centre_employee":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions",
+        )
+    employee = session.get(EmployeeProfile, user.id)
+    if not employee:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Employee profile not found",
+        )
+    if employee.approval_status != "APPROVED":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account pending approval by centre",
+        )
+    return user
+
+
 get_current_centre_admin = RoleChecker(["centre_administrator"])
 get_current_sys_admin = RoleChecker(["system_administrator"])
 

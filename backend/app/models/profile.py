@@ -48,6 +48,9 @@ class EmployeeProfile(Base):
     full_name: Mapped[str] = mapped_column(String(160), nullable=False)
     max_active_requests: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    approval_status: Mapped[str] = mapped_column(
+        String(32), default="APPROVED", nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.now(), nullable=False
     )
@@ -57,6 +60,10 @@ class EmployeeProfile(Base):
 
     __table_args__ = (
         CheckConstraint("max_active_requests > 0", name="employee_max_active_check"),
+        CheckConstraint(
+            "approval_status IN ('PENDING_APPROVAL', 'APPROVED', 'REJECTED')",
+            name="employee_approval_status_check",
+        ),
         Index("ix_employee_profiles_centre_id_is_available", "centre_id", "is_available"),
     )
 

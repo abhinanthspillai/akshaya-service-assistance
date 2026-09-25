@@ -23,7 +23,6 @@ router = APIRouter()
 @router.get("/", response_model=list[AkshayaCentreResponse])
 def get_centres(
     session: SessionDep,
-    current_user: CurrentUser,
     district: str | None = None,
     active: bool = True,
     skip: int = Query(0, ge=0),

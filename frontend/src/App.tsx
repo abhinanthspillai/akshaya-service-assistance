@@ -19,6 +19,7 @@ import { Escalations } from './pages/admin/Escalations';
 import { SupportAdmin } from './pages/admin/SupportAdmin';
 import { AuditLogs } from './pages/admin/AuditLogs';
 import { SysAdminDashboard } from './pages/admin/SysAdminDashboard';
+import { PendingApproval } from './pages/auth/PendingApproval';
 import { Loader2 } from 'lucide-react';
 
 type UserRole = 'citizen' | 'centre_employee' | 'centre_administrator' | 'system_administrator';
@@ -53,6 +54,10 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode,
  return <Navigate to="/login" replace />;
  }
 
+ if (user.role === 'centre_employee' && user.approval_status === 'PENDING_APPROVAL') {
+ return <PendingApproval />;
+ }
+
  if (allowedRoles && !allowedRoles.includes(user.role as UserRole)) {
  return <Navigate to={getRoleLandingPage(user.role)} replace />;
  }
@@ -73,6 +78,10 @@ function RootRedirect() {
 
  if (!user) {
  return <Navigate to="/login" replace />;
+ }
+
+ if (user.role === 'centre_employee' && user.approval_status === 'PENDING_APPROVAL') {
+ return <PendingApproval />;
  }
 
  return <Navigate to={getRoleLandingPage(user.role)} replace />;
