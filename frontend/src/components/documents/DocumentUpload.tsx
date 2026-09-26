@@ -20,6 +20,7 @@ interface RequestDocument {
   status: string;
   employee_remarks: string | null;
   requirement_id: string;
+  size_bytes: number;
 }
 
 interface DocumentUploadProps {
@@ -107,70 +108,96 @@ export function DocumentUpload({ requestId, requirement, existingDocument, onUpl
     <div className="bg-mono-bg p-4 rounded-xl border border-mono-border">
       <div className="flex items-center justify-between gap-4">
         <div className="flex-1">
-          <h3 className="font-semibold text-mono-text flex items-center gap-2 text-sm leading-tight">
+          <h3 className="font-semibold text-mono-text flex items-center gap-3 text-[16px] leading-tight">
             {requirement.name}
             {requirement.requirement_type === 'REQUIRED' && (
-              <span className="text-red-600 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-red-50 rounded">Required</span>
+              <span className="text-mono-text text-[11px] font-bold uppercase tracking-wider">Required</span>
             )}
             {requirement.requirement_type === 'CONDITIONAL' && (
-              <span className="text-orange-500 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-orange-50 rounded">Conditional</span>
+              <span className="text-orange-600 text-[11px] font-bold uppercase tracking-wider">Conditional</span>
             )}
             {requirement.requirement_type === 'OPTIONAL' && (
-              <span className="text-mono-muted text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-mono-surface rounded">Optional</span>
+              <span className="text-mono-muted text-[11px] font-bold uppercase tracking-wider">Optional</span>
             )}
           </h3>
-          {requirement.description && (
-            <p className="text-xs text-mono-muted mt-1">{requirement.description}</p>
+          {!existingDocument && requirement.description && (
+            <p className="text-[13px] text-mono-muted mt-2">{requirement.description}</p>
           )}
-          {requirement.conditional_rule && requirement.requirement_type === 'CONDITIONAL' && (
-            <p className="text-[11px] text-orange-500 mt-1 italic">When to upload: {requirement.conditional_rule}</p>
+          {!existingDocument && requirement.conditional_rule && requirement.requirement_type === 'CONDITIONAL' && (
+            <p className="text-[13px] text-orange-600 mt-2">When to upload: {requirement.conditional_rule}</p>
+          )}
+          {!existingDocument && (
+            <p className="text-[12px] font-medium text-mono-muted mt-4 uppercase tracking-wider">
+              {requirement.allowed_file_types.map(t => t.mime_type.split('/')[1].toUpperCase()).join(', ')} • Maximum {maxMb} MB
+            </p>
           )}
         </div>
         {!existingDocument && !file && (
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="shrink-0 text-[13px] font-semibold bg-white border border-mono-border px-3 py-1.5 rounded-lg text-mono-text hover:bg-mono-surface transition-colors"
+            className="shrink-0 mt-4 sm:mt-0 text-[14px] font-semibold bg-white border border-mono-border px-4 py-2 rounded-xl text-mono-text hover:bg-mono-surface hover:text-black transition-colors"
           >
-            Choose File
+            [ Choose File ]
           </button>
         )}
       </div>
 
       {existingDocument ? (
-        <div className={clsx(
-          "mt-3 border rounded-lg p-3 flex flex-col gap-2",
-          existingDocument.status === 'REJECTED' ? "bg-red-50 border-red-200" :
-          existingDocument.status === 'REUPLOAD_REQUIRED' ? "bg-orange-50 border-orange-200" :
-          "bg-green-50 border-green-200"
-        )}>
-          <div className="flex items-center gap-3">
-            {existingDocument.status === 'REJECTED' || existingDocument.status === 'REUPLOAD_REQUIRED' ? (
-              <AlertCircle className={existingDocument.status === 'REJECTED' ? "text-red-600" : "text-orange-600"} size={20} />
-            ) : (
-              <CheckCircle2 className="text-green-600" size={20} />
+        <div className="mt-4 flex flex-col gap-3">
+          <div className={clsx(
+            "rounded-xl p-4 flex flex-col gap-3 border",
+            existingDocument.status === 'REJECTED' ? "bg-red-50 border-red-200" :
+            existingDocument.status === 'REUPLOAD_REQUIRED' ? "bg-orange-50 border-orange-200" :
+            "bg-green-50 border-green-200"
+          )}>
+            <div className="flex items-start gap-3">
+              {existingDocument.status === 'REJECTED' || existingDocument.status === 'REUPLOAD_REQUIRED' ? (
+                <AlertCircle className={existingDocument.status === 'REJECTED' ? "text-red-600 mt-0.5" : "text-orange-600 mt-0.5"} size={20} />
+              ) : (
+                <CheckCircle2 className="text-green-600 mt-0.5" size={20} />
+              )}
+              <div className="flex-1">
+                <p className="text-[15px] font-semibold text-mono-text">
+                  {existingDocument.original_filename}
+                </p>
+                <p className="text-[13px] text-mono-muted mt-0.5">
+                  {(existingDocument.size_bytes / 1024 / 1024).toFixed(1)} MB
+                </p>
+                
+                <p className={clsx("text-[13px] font-medium mt-3",
+                  existingDocument.status === 'REJECTED' ? "text-red-700" :
+                  existingDocument.status === 'REUPLOAD_REQUIRED' ? "text-orange-700" :
+                  "text-green-700"
+                )}>
+                  {existingDocument.status === 'PENDING' ? 'Uploaded successfully' : 
+                   existingDocument.status === 'REUPLOAD_REQUIRED' ? 'Re-upload Required' :
+                   existingDocument.status.replace(/_/g, ' ')}
+                </p>
+              </div>
+            </div>
+            {existingDocument.employee_remarks && (
+              <div className="bg-white/60 p-3 rounded-lg text-sm text-ink-900 border border-black/5 mt-1">
+                <span className="font-semibold text-mono-text">Remarks:</span> {existingDocument.employee_remarks}
+              </div>
             )}
-            <div className="flex-1">
-              <p className={clsx("text-sm font-semibold", 
-                existingDocument.status === 'REJECTED' ? "text-red-900" :
-                existingDocument.status === 'REUPLOAD_REQUIRED' ? "text-orange-900" :
-                "text-green-900"
-              )}>
-                {existingDocument.original_filename}
-              </p>
-              <p className={clsx("text-[11px] mt-0.5",
-                existingDocument.status === 'REJECTED' ? "text-red-700" :
-                existingDocument.status === 'REUPLOAD_REQUIRED' ? "text-orange-700" :
-                "text-green-700"
-              )}>
-                Status: {existingDocument.status.replace(/_/g, ' ')}
-              </p>
+            
+            <div className="mt-2 flex items-center gap-4">
+              <a 
+                href={`${api.defaults.baseURL}/requests/${requestId}/documents/${existingDocument.id}/download`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[13px] font-semibold text-mono-text hover:text-black transition-colors"
+              >
+                [ Preview ]
+              </a>
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="text-[13px] font-semibold text-mono-text hover:text-black transition-colors"
+              >
+                [ Replace ]
+              </button>
             </div>
           </div>
-          {existingDocument.employee_remarks && (
-            <div className="bg-white/60 p-2.5 rounded-md text-xs text-ink-900 border border-black/5 mt-1">
-              <span className="font-semibold">Remarks:</span> {existingDocument.employee_remarks}
-            </div>
-          )}
         </div>
       ) : (
         <div

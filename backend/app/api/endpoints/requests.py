@@ -382,6 +382,7 @@ def get_dashboard_data(
             ServiceRequest.status.in_(["UNDER_REVIEW", "CORRECTION_REQUIRED"]),
             RequestDocument.is_current.is_(True),
             RequestDocument.version > 1,
+            RequestDocument.status == "PENDING",
         )
         .distinct()
     ).all()

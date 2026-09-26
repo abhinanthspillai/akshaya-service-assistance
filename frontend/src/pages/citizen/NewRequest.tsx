@@ -44,6 +44,7 @@ interface RequestDocument {
   status: string;
   employee_remarks: string | null;
   requirement_id: string;
+  size_bytes: number;
 }
 
 type Step = 'requirements' | 'centre' | 'documents' | 'review';
@@ -187,8 +188,10 @@ export function NewRequest() {
     }
   };
 
-  const hasAllRequiredDocuments = service.document_requirements
-    .filter(req => req.requirement_type === 'REQUIRED')
+  const requiredDocs = service.document_requirements.filter(req => req.requirement_type === 'REQUIRED');
+  const conditionalDocs = service.document_requirements.filter(req => req.requirement_type === 'CONDITIONAL');
+
+  const hasAllRequiredDocuments = requiredDocs
     .every(req => documents.some(doc => doc.requirement_id === req.id && doc.status !== 'REJECTED'));
 
   const filteredCentres = centres.filter(c => 
@@ -272,28 +275,54 @@ export function NewRequest() {
               </div>
             </div>
 
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-sm font-semibold text-mono-text mb-3 uppercase tracking-wider">Required Documents</h3>
-                {service.document_requirements.length === 0 ? (
-                  <p className="text-mono-muted text-sm">No documents required for this service.</p>
-                ) : (
+            <div className="space-y-8">
+              {requiredDocs.length > 0 && (
+                <div>
+                  <h3 className="text-[11px] font-bold text-mono-muted mb-4 uppercase tracking-wider">Required Documents</h3>
                   <ul className="space-y-3">
-                    {service.document_requirements.map(req => (
-                      <li key={req.id} className="flex items-start gap-3 bg-mono-bg p-4 rounded-[16px] border border-mono-muted/20">
-                        <CheckCircle2 size={18} className={req.requirement_type === 'REQUIRED' ? "text-mono-text mt-0.5 shrink-0" : "text-mono-muted mt-0.5 shrink-0"} />
+                    {requiredDocs.map(req => (
+                      <li key={req.id} className="flex items-start gap-3 bg-mono-surface p-4 rounded-xl border border-mono-border">
+                        <CheckCircle2 size={18} className="text-mono-text mt-0.5 shrink-0" />
                         <div>
-                          <p className="font-medium text-mono-text text-sm">{req.name}</p>
-                          <p className="text-xs text-mono-muted mt-1">
-                            {req.requirement_type === 'REQUIRED' ? 'Mandatory for application' : 
-                             req.requirement_type === 'CONDITIONAL' ? 'Conditional (See instructions)' : 'Optional'}
+                          <p className="font-medium text-mono-text text-sm flex items-center gap-2">
+                            {req.name}
+                            <span className="text-red-600 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-red-50 rounded">Required</span>
                           </p>
+                          {req.description && (
+                            <p className="text-xs text-mono-muted mt-1">{req.description}</p>
+                          )}
                         </div>
                       </li>
                     ))}
                   </ul>
-                )}
-              </div>
+                </div>
+              )}
+
+              {conditionalDocs.length > 0 && (
+                <div>
+                  <h3 className="text-[11px] font-bold text-mono-muted mb-4 uppercase tracking-wider">Conditional Documents</h3>
+                  <ul className="space-y-3">
+                    {conditionalDocs.map(req => (
+                      <li key={req.id} className="flex items-start gap-3 bg-mono-surface p-4 rounded-xl border border-mono-border">
+                        <div className="w-[18px] h-[18px] rounded-full border-2 border-mono-muted mt-0.5 shrink-0"></div>
+                        <div>
+                          <p className="font-medium text-mono-text text-sm flex items-center gap-2">
+                            {req.name}
+                            <span className="text-orange-500 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-orange-50 rounded">Conditional</span>
+                          </p>
+                          {req.conditional_rule && (
+                            <p className="text-xs text-orange-600 mt-1 italic">When to upload: {req.conditional_rule}</p>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {requiredDocs.length === 0 && conditionalDocs.length === 0 && (
+                <p className="text-mono-muted text-sm">No documents required for this service.</p>
+              )}
             </div>
 
             <div className="mt-8 flex justify-end">
@@ -418,24 +447,56 @@ export function NewRequest() {
               </div>
             </div>
 
-            <div className="space-y-6">
-              {service.document_requirements.map(req => {
-                const existingDoc = documents.find(d => d.requirement_id === req.id);
-                return (
-                  <DocumentUpload
-                    key={req.id}
-                    requestId={requestId!}
-                    requirement={req}
-                    existingDocument={existingDoc}
-                    onUploadSuccess={(newDoc) => {
-                      setDocuments(prev => {
-                        const filtered = prev.filter(d => d.requirement_id !== newDoc.requirement_id);
-                        return [...filtered, newDoc];
-                      });
-                    }}
-                  />
-                );
-              })}
+            <div className="space-y-10">
+              {requiredDocs.length > 0 && (
+                <div>
+                  <h3 className="text-[13px] font-bold text-mono-muted mb-4 uppercase tracking-wider border-b border-mono-border pb-2">Required Documents</h3>
+                  <div className="space-y-4">
+                    {requiredDocs.map(req => {
+                      const existingDoc = documents.find(d => d.requirement_id === req.id);
+                      return (
+                        <DocumentUpload
+                          key={req.id}
+                          requestId={requestId!}
+                          requirement={req}
+                          existingDocument={existingDoc}
+                          onUploadSuccess={(newDoc) => {
+                            setDocuments(prev => {
+                              const filtered = prev.filter(d => d.requirement_id !== newDoc.requirement_id);
+                              return [...filtered, newDoc];
+                            });
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {conditionalDocs.length > 0 && (
+                <div>
+                  <h3 className="text-[13px] font-bold text-mono-muted mb-4 uppercase tracking-wider border-b border-mono-border pb-2">Conditional Documents</h3>
+                  <div className="space-y-4">
+                    {conditionalDocs.map(req => {
+                      const existingDoc = documents.find(d => d.requirement_id === req.id);
+                      return (
+                        <DocumentUpload
+                          key={req.id}
+                          requestId={requestId!}
+                          requirement={req}
+                          existingDocument={existingDoc}
+                          onUploadSuccess={(newDoc) => {
+                            setDocuments(prev => {
+                              const filtered = prev.filter(d => d.requirement_id !== newDoc.requirement_id);
+                              return [...filtered, newDoc];
+                            });
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mt-8 flex justify-between">
@@ -494,13 +555,35 @@ export function NewRequest() {
               {documents.length > 0 && (
                 <div>
                   <div className="text-xs font-semibold text-mono-muted uppercase tracking-wider mb-2 mt-4">Uploaded Documents</div>
-                  <div className="space-y-2">
+                  <div className="space-y-3 bg-mono-surface p-4 rounded-xl border border-mono-border">
                     {documents.map(doc => {
                       const req = service.document_requirements.find(r => r.id === doc.requirement_id);
                       return (
-                        <div key={doc.id} className="flex items-center gap-2 text-sm text-mono-text">
-                          <CheckCircle2 size={16} className="text-green-600" />
-                          <span className="font-medium">{req?.name}:</span> {doc.original_filename}
+                        <div key={doc.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm text-mono-text border-b last:border-0 border-mono-border pb-3 last:pb-0">
+                          <div className="flex items-start gap-2">
+                            <CheckCircle2 size={16} className="text-green-600 shrink-0 mt-0.5" />
+                            <div className="flex flex-col">
+                              <span className="font-semibold">{req?.name}</span>
+                              <span className="text-mono-muted text-[13px]">{doc.original_filename}</span>
+                              <span className="text-xs text-mono-muted mt-0.5">{(doc.size_bytes / 1024 / 1024).toFixed(1)} MB</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 ml-6 sm:ml-0">
+                            <a 
+                              href={`${api.defaults.baseURL}/requests/${requestId}/documents/${doc.id}/download`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[13px] font-semibold text-mono-text hover:text-black transition-colors"
+                            >
+                              [ View ]
+                            </a>
+                            <button
+                              onClick={() => setCurrentStep('documents')}
+                              className="text-[13px] font-semibold text-mono-text hover:text-black transition-colors"
+                            >
+                              [ Replace ]
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
