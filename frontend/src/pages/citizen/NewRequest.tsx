@@ -56,6 +56,9 @@ export function NewRequest() {
   const [service, setService] = useState<ServiceDetail | null>(null);
   const [centres, setCentres] = useState<Centre[]>([]);
   const [documents, setDocuments] = useState<RequestDocument[]>([]);
+  const [stagedFiles, setStagedFiles] = useState<Record<string, File>>({});
+  const [uploadStatuses, setUploadStatuses] = useState<Record<string, 'pending' | 'uploading' | 'success' | 'error'>>({});
+  const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -182,6 +185,87 @@ export function NewRequest() {
     }
   };
 
+
+  const handleUploadAll = async () => {
+    if (isProcessing) return;
+    
+    const requirementsToUpload = Object.keys(stagedFiles);
+    if (requirementsToUpload.length === 0) {
+      setCurrentStep('review');
+      return;
+    }
+
+    setIsProcessing(true);
+    setError('');
+
+    // Reset statuses to uploading
+    const newStatuses: Record<string, 'uploading' | 'success' | 'error'> = {};
+    const newErrors: Record<string, string> = {};
+    for (const reqId of requirementsToUpload) {
+      newStatuses[reqId] = 'uploading';
+      newErrors[reqId] = '';
+    }
+    setUploadStatuses(prev => ({ ...prev, ...newStatuses }));
+    setUploadErrors(prev => ({ ...prev, ...newErrors }));
+
+    const uploadPromises = requirementsToUpload.map(async (reqId) => {
+      const file = stagedFiles[reqId];
+      const formData = new FormData();
+      formData.append('requirement_id', reqId);
+      formData.append('file', file);
+
+      try {
+        const res = await api.post(`/requests/${requestId}/documents`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        
+        // Update documents list with the new uploaded doc
+        setDocuments(prev => {
+          const filtered = prev.filter(d => d.requirement_id !== reqId);
+          return [...filtered, res.data];
+        });
+        
+        return { reqId, success: true };
+      } catch (err: any) {
+        return { 
+          reqId, 
+          success: false, 
+          error: err.response?.data?.detail || 'Failed to upload document.' 
+        };
+      }
+    });
+
+    const results = await Promise.all(uploadPromises);
+    
+    let hasError = false;
+    const finalStatuses: Record<string, 'uploading' | 'success' | 'error'> = {};
+    const finalErrors: Record<string, string> = {};
+    const newStagedFiles = { ...stagedFiles };
+
+    for (const result of results) {
+      if (result.success) {
+        finalStatuses[result.reqId] = 'success';
+        delete newStagedFiles[result.reqId];
+      } else {
+        hasError = true;
+        finalStatuses[result.reqId] = 'error';
+        finalErrors[result.reqId] = result.error!;
+      }
+    }
+
+    setUploadStatuses(prev => ({ ...prev, ...finalStatuses }));
+    setUploadErrors(prev => ({ ...prev, ...finalErrors }));
+    setStagedFiles(newStagedFiles);
+
+    setIsProcessing(false);
+
+    if (hasError) {
+      setError('Some documents failed to upload. Please review the errors below.');
+    } else {
+      setCurrentStep('review');
+    }
+  };
+
   const handleSubmit = async () => {
     if (!requestId || isProcessing) return;
     setIsProcessing(true);
@@ -201,7 +285,10 @@ export function NewRequest() {
   const conditionalDocs: typeof requiredDocs = [];
 
   const hasAllRequiredDocuments = service.document_requirements
-    .every(req => documents.some(doc => doc.requirement_id === req.id && doc.status !== 'REJECTED'));
+    .every(req => 
+      documents.some(doc => doc.requirement_id === req.id && doc.status !== 'REJECTED') ||
+      !!stagedFiles[req.id]
+    );
 
   const filteredCentres = centres.filter(c => 
     !searchQuery || 
@@ -449,6 +536,20 @@ export function NewRequest() {
                           requestId={requestId!}
                           requirement={req}
                           existingDocument={existingDoc}
+                          stagedFile={stagedFiles[req.id]}
+                          onFileStage={(file) => {
+                            setStagedFiles(prev => {
+                              const newFiles = { ...prev };
+                              if (file) newFiles[req.id] = file;
+                              else delete newFiles[req.id];
+                              return newFiles;
+                            });
+                            // Reset status when file changes
+                            setUploadStatuses(prev => ({ ...prev, [req.id]: 'pending' }));
+                            setUploadErrors(prev => ({ ...prev, [req.id]: '' }));
+                          }}
+                          uploadStatus={uploadStatuses[req.id] || 'pending'}
+                          uploadProgressError={uploadErrors[req.id] || ''}
                           onUploadSuccess={(newDoc) => {
                             setDocuments(prev => {
                               const filtered = prev.filter(d => d.requirement_id !== newDoc.requirement_id);

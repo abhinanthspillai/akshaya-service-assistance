@@ -38,7 +38,7 @@ export function Notifications() {
        if (res.data.notification_preferences) {
          setPreferences(res.data.notification_preferences);
        }
-     } catch {
+     } catch (e) {
        console.error("Failed to load preferences", e);
      }
    };
@@ -51,7 +51,7 @@ export function Notifications() {
      const res = await api.put('/auth/me/notification-preferences', preferences);
      setPreferences(res.data);
      setIsSettingsOpen(false);
-   } catch {
+   } catch (e) {
      setError('Failed to save settings.');
    } finally {
      setIsSavingPrefs(false);
@@ -74,7 +74,7 @@ const navigate = useNavigate();
    setNotifications(current => current.map(item => ({ ...item, is_read: true })));
    window.dispatchEvent(new Event('notificationsRead'));
  }
- } catch {
+ } catch (e) {
  setError('Failed to load notifications.');
  } finally {
  setIsLoading(false);
@@ -87,7 +87,7 @@ const navigate = useNavigate();
  try {
  const res = await api.post('/notifications/' + id + '/read');
  setNotifications((current) => current.map((item) => item.id === id ? res.data : item));
- } catch {
+ } catch (e) {
  setError('Failed to mark notification as read.');
  }
  };
@@ -97,7 +97,7 @@ const navigate = useNavigate();
  await api.post('/notifications/read-all');
  setNotifications(current => current.map(item => ({ ...item, is_read: true })));
  window.dispatchEvent(new Event('notificationsRead'));
- } catch {
+ } catch (e) {
  setError('Failed to mark all as read.');
  }
  };

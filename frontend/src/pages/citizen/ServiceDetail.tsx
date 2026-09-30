@@ -130,12 +130,8 @@ export function ServiceDetail() {
  <li key={req.id} className="flex flex-col gap-1">
  <div className="flex items-center gap-2">
  <span className="font-medium text-mono-text">{req.name}</span>
- {req.requirement_type === 'REQUIRED' && (
  
- )}
- {req.requirement_type === 'CONDITIONAL' && (
  
- )}
  {req.requirement_type === 'OPTIONAL' && (
  <span className="text-[10px] uppercase tracking-wider font-bold text-mono-muted bg-ink-200 px-2 py-0.5 rounded">Optional</span>
  )}

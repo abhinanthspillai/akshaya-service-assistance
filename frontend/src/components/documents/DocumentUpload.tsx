@@ -30,7 +30,16 @@ interface DocumentUploadProps {
   onUploadSuccess: (document: RequestDocument) => void;
 }
 
-export function DocumentUpload({ requestId, requirement, existingDocument, onUploadSuccess }: DocumentUploadProps) {
+export function DocumentUpload({ 
+  requestId, 
+  requirement, 
+  existingDocument, 
+  onUploadSuccess,
+  stagedFile,
+  onFileStage,
+  uploadStatus,
+  uploadProgressError
+}: DocumentUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,9 +88,9 @@ export function DocumentUpload({ requestId, requirement, existingDocument, onUpl
   };
 
   const handleUpload = async () => {
-    if (!file) return;
-    setIsUploading(true);
-    setError(null);
+    if (!file || onFileStage) return; // In staged mode, upload is handled externally
+    setLocalIsUploading(true);
+    setLocalError(null);
 
     const formData = new FormData();
     formData.append('requirement_id', requirement.id);
@@ -93,14 +102,14 @@ export function DocumentUpload({ requestId, requirement, existingDocument, onUpl
           'Content-Type': 'multipart/form-data',
         },
       });
-      setFile(null);
+      setLocalFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
-      onUploadSuccess(res.data);
+      if (onUploadSuccess) onUploadSuccess(res.data);
     } catch (err) {
       const error = err as AxiosError<{ detail: string }>;
-      setError(error.response?.data?.detail || 'Failed to upload document.');
+      setLocalError(error.response?.data?.detail || 'Failed to upload document.');
     } finally {
-      setIsUploading(false);
+      setLocalIsUploading(false);
     }
   };
 
@@ -203,28 +212,40 @@ export function DocumentUpload({ requestId, requirement, existingDocument, onUpl
           onDrop={handleDrop}
         >
           {file ? (
-            <div className="w-full flex items-center justify-between bg-white p-2.5 rounded-lg shadow-sm border border-mono-border">
+            <div className={`w-full flex items-center justify-between bg-white p-2.5 rounded-lg shadow-sm border ${uploadStatus === 'success' ? 'border-green-500 bg-green-50' : 'border-mono-border'}`}>
               <div className="flex items-center gap-2.5 truncate pr-3">
-                <FileIcon className="text-blue-600 shrink-0" size={16} />
+                {uploadStatus === 'success' ? (
+                  <CheckCircle2 className="text-green-600 shrink-0" size={16} />
+                ) : uploadStatus === 'error' ? (
+                  <AlertCircle className="text-red-600 shrink-0" size={16} />
+                ) : uploadStatus === 'uploading' ? (
+                  <Loader2 className="text-blue-600 shrink-0 animate-spin" size={16} />
+                ) : (
+                  <FileIcon className="text-blue-600 shrink-0" size={16} />
+                )}
                 <span className="text-[13px] font-medium text-mono-text truncate">{file.name}</span>
                 <span className="text-[11px] text-mono-muted shrink-0">({(file.size / 1024 / 1024).toFixed(1)} MB)</span>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  onClick={() => setFile(null)}
-                  className="p-1.5 text-mono-muted hover:text-red-600 hover:bg-red-50 rounded-md transition"
-                  disabled={isUploading}
-                >
+                {uploadStatus !== 'success' && uploadStatus !== 'uploading' && (
+                  <button
+                    onClick={() => { if (onFileStage) onFileStage(null); else setLocalFile(null); }}
+                    className="p-1.5 text-mono-muted hover:text-red-600 hover:bg-red-50 rounded-md transition"
+                    disabled={isUploading}
+                  >
                   <X size={14} />
-                </button>
-                <button
-                  onClick={handleUpload}
-                  disabled={isUploading}
-                  className="bg-mono-text text-white text-[11px] font-semibold px-3 py-1.5 rounded-md hover:bg-black transition flex items-center gap-1.5 disabled:opacity-70"
-                >
-                  {isUploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                  Upload
-                </button>
+                  </button>
+                )}
+                {!onFileStage && (
+                  <button
+                    onClick={handleUpload}
+                    disabled={isUploading}
+                    className="bg-mono-text text-white text-[11px] font-semibold px-3 py-1.5 rounded-md hover:bg-black transition flex items-center gap-1.5 disabled:opacity-70"
+                  >
+                    {isUploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                    Upload
+                  </button>
+                )}
               </div>
             </div>
           ) : (

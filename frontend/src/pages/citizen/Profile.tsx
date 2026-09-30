@@ -3,7 +3,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { User, MapPin, ShieldCheck, Lock, FileText, Edit2, ChevronRight, X, Check } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
 import { api } from '../../lib/api';
-import { toast } from 'sonner';
 
 export function Profile() {
   const { user, refreshUser } = useAuth();
@@ -50,9 +49,9 @@ export function Profile() {
       await refreshUser();
       if (section === 'personal') setIsEditingPersonal(false);
       if (section === 'address') setIsEditingAddress(false);
-      toast.success('Profile updated successfully');
+      alert('Profile updated successfully');
     } catch (err: unknown) {
-      toast.error((err as any).response?.data?.detail || 'Failed to update profile');
+      alert((err as any).response?.data?.detail || 'Failed to update profile');
     } finally {
       setIsSaving(false);
     }
@@ -76,7 +75,7 @@ export function Profile() {
         current_password: passwordData.current_password,
         new_password: passwordData.new_password
       });
-      toast.success('Password changed successfully');
+      alert('Password changed successfully');
       setIsChangingPassword(false);
       setPasswordData({ current_password: '', new_password: '', confirm_password: '' });
     } catch (err: unknown) {
