@@ -30,10 +30,13 @@ export function MyRequests() {
  const [isLoading, setIsLoading] = useState(true);
  const [error, setError] = useState('');
  const [activeTab, setActiveTab] = useState<Tab>('All');
- const [searchQuery, setSearchQuery] = useState('');
- const [currentPage, setCurrentPage] = useState(1);
- const itemsPerPage = 10;
- const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedService, setSelectedService] = useState('All');
+  const [selectedStatus, setSelectedStatus] = useState('All');
+  const [selectedTime, setSelectedTime] = useState('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  const navigate = useNavigate();
  
  const [deleteConfirm, setDeleteConfirm] = useState<{isOpen: boolean; id: string; status: string}>({isOpen: false, id: '', status: ''});
  const [isDeleting, setIsDeleting] = useState(false);
@@ -83,12 +86,45 @@ export function MyRequests() {
  );
  }
 
- return filtered;
- };
+  if (selectedService !== 'All') {
+  filtered = filtered.filter(r => r.service_name_snapshot === selectedService);
+  }
 
- const filteredRequests = getFilteredRequests();
- const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
- const paginatedRequests = filteredRequests.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  if (selectedStatus !== 'All') {
+  filtered = filtered.filter(r => r.status === selectedStatus);
+  }
+
+  if (selectedTime !== 'All') {
+  const now = new Date();
+  filtered = filtered.filter(r => {
+  const date = new Date(r.created_at);
+  if (selectedTime === '7 Days') return now.getTime() - date.getTime() <= 7 * 24 * 60 * 60 * 1000;
+  if (selectedTime === '30 Days') return now.getTime() - date.getTime() <= 30 * 24 * 60 * 60 * 1000;
+  if (selectedTime === '90 Days') return now.getTime() - date.getTime() <= 90 * 24 * 60 * 60 * 1000;
+  return true;
+  });
+  }
+
+  return filtered;
+  };
+
+  const filteredRequests = getFilteredRequests();
+  const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
+  const paginatedRequests = filteredRequests.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  const uniqueServices = Array.from(new Set(requests.map(r => r.service_name_snapshot))).sort();
+  const uniqueStatuses = Array.from(new Set(requests.map(r => r.status))).sort();
+
+  const isFilterActive = searchQuery !== '' || activeTab !== 'All' || selectedService !== 'All' || selectedStatus !== 'All' || selectedTime !== 'All';
+
+  const handleReset = () => {
+  setSearchQuery('');
+  setActiveTab('All');
+  setSelectedService('All');
+  setSelectedStatus('All');
+  setSelectedTime('All');
+  setCurrentPage(1);
+  };
 
  const handleDeleteRequest = (id: string, status: string) => {
    setDeleteConfirm({ isOpen: true, id, status });
@@ -210,25 +246,30 @@ export function MyRequests() {
  />
  </div>
  <div className="flex gap-4 flex-1">
- <div className="flex-1 max-w-[200px]">
- <Select>
- <option>All Services</option>
- </Select>
- </div>
- <div className="flex-1 max-w-[200px]">
- <Select>
- <option>All Statuses</option>
- </Select>
- </div>
- <div className="flex-1 max-w-[200px]">
- <Select>
- <option>All Time</option>
- </Select>
- </div>
- </div>
- <Button variant="secondary" className="px-5">
- Reset
- </Button>
+  <div className="flex-1 max-w-[200px]">
+  <Select value={selectedService} onChange={(e) => { setSelectedService(e.target.value); setCurrentPage(1); }}>
+  <option value="All">All Services</option>
+  {uniqueServices.map(s => <option key={s} value={s}>{s}</option>)}
+  </Select>
+  </div>
+  <div className="flex-1 max-w-[200px]">
+  <Select value={selectedStatus} onChange={(e) => { setSelectedStatus(e.target.value); setCurrentPage(1); }}>
+  <option value="All">All Statuses</option>
+  {uniqueStatuses.map(s => <option key={s} value={s}>{getStatusDisplay(s)}</option>)}
+  </Select>
+  </div>
+  <div className="flex-1 max-w-[200px]">
+  <Select value={selectedTime} onChange={(e) => { setSelectedTime(e.target.value); setCurrentPage(1); }}>
+  <option value="All">All Time</option>
+  <option value="7 Days">Last 7 Days</option>
+  <option value="30 Days">Last 30 Days</option>
+  <option value="90 Days">Last 90 Days</option>
+  </Select>
+  </div>
+  </div>
+  <Button variant="secondary" className="px-5" onClick={handleReset} disabled={!isFilterActive}>
+  Reset
+  </Button>
  </div>
 
  {/* Table */}
