@@ -188,10 +188,10 @@ export function NewRequest() {
     }
   };
 
-  const requiredDocs = service.document_requirements.filter(req => req.requirement_type === 'REQUIRED');
-  const conditionalDocs = service.document_requirements.filter(req => req.requirement_type === 'CONDITIONAL');
+  const requiredDocs = service.document_requirements;
+  const conditionalDocs: typeof requiredDocs = [];
 
-  const hasAllRequiredDocuments = requiredDocs
+  const hasAllRequiredDocuments = service.document_requirements
     .every(req => documents.some(doc => doc.requirement_id === req.id && doc.status !== 'REJECTED'));
 
   const filteredCentres = centres.filter(c => 
@@ -286,7 +286,7 @@ export function NewRequest() {
                         <div>
                           <p className="font-medium text-mono-text text-sm flex items-center gap-2">
                             {req.name}
-                            <span className="text-red-600 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-red-50 rounded">Required</span>
+                            
                           </p>
                           {req.description && (
                             <p className="text-xs text-mono-muted mt-1">{req.description}</p>
@@ -298,29 +298,9 @@ export function NewRequest() {
                 </div>
               )}
 
-              {conditionalDocs.length > 0 && (
-                <div>
-                  <h3 className="text-[11px] font-bold text-mono-muted mb-4 uppercase tracking-wider">Conditional Documents</h3>
-                  <ul className="space-y-3">
-                    {conditionalDocs.map(req => (
-                      <li key={req.id} className="flex items-start gap-3 bg-mono-surface p-4 rounded-xl border border-mono-border">
-                        <div className="w-[18px] h-[18px] rounded-full border-2 border-mono-muted mt-0.5 shrink-0"></div>
-                        <div>
-                          <p className="font-medium text-mono-text text-sm flex items-center gap-2">
-                            {req.name}
-                            <span className="text-orange-500 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-orange-50 rounded">Conditional</span>
-                          </p>
-                          {req.conditional_rule && (
-                            <p className="text-xs text-orange-600 mt-1 italic">When to upload: {req.conditional_rule}</p>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
 
-              {requiredDocs.length === 0 && conditionalDocs.length === 0 && (
+
+              {requiredDocs.length === 0 && (
                 <p className="text-mono-muted text-sm">No documents required for this service.</p>
               )}
             </div>
@@ -473,30 +453,7 @@ export function NewRequest() {
                 </div>
               )}
 
-              {conditionalDocs.length > 0 && (
-                <div>
-                  <h3 className="text-[13px] font-bold text-mono-muted mb-4 uppercase tracking-wider border-b border-mono-border pb-2">Conditional Documents</h3>
-                  <div className="space-y-4">
-                    {conditionalDocs.map(req => {
-                      const existingDoc = documents.find(d => d.requirement_id === req.id);
-                      return (
-                        <DocumentUpload
-                          key={req.id}
-                          requestId={requestId!}
-                          requirement={req}
-                          existingDocument={existingDoc}
-                          onUploadSuccess={(newDoc) => {
-                            setDocuments(prev => {
-                              const filtered = prev.filter(d => d.requirement_id !== newDoc.requirement_id);
-                              return [...filtered, newDoc];
-                            });
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+
             </div>
 
             <div className="mt-8 flex justify-between">

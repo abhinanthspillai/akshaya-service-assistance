@@ -110,15 +110,6 @@ export function DocumentUpload({ requestId, requirement, existingDocument, onUpl
         <div className="flex-1">
           <h3 className="font-semibold text-mono-text flex items-center gap-3 text-[16px] leading-tight">
             {requirement.name}
-            {requirement.requirement_type === 'REQUIRED' && (
-              <span className="text-mono-text text-[11px] font-bold uppercase tracking-wider">Required</span>
-            )}
-            {requirement.requirement_type === 'CONDITIONAL' && (
-              <span className="text-orange-600 text-[11px] font-bold uppercase tracking-wider">Conditional</span>
-            )}
-            {requirement.requirement_type === 'OPTIONAL' && (
-              <span className="text-mono-muted text-[11px] font-bold uppercase tracking-wider">Optional</span>
-            )}
           </h3>
           {!existingDocument && requirement.description && (
             <p className="text-[13px] text-mono-muted mt-2">{requirement.description}</p>

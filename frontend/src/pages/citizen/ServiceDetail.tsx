@@ -131,10 +131,10 @@ export function ServiceDetail() {
  <div className="flex items-center gap-2">
  <span className="font-medium text-mono-text">{req.name}</span>
  {req.requirement_type === 'REQUIRED' && (
- <span className="text-[10px] uppercase tracking-wider font-bold text-red-600 bg-red-600/10 px-2 py-0.5 rounded">Required</span>
+ 
  )}
  {req.requirement_type === 'CONDITIONAL' && (
- <span className="text-[10px] uppercase tracking-wider font-bold text-orange-600 bg-orange-100 px-2 py-0.5 rounded">Conditional</span>
+ 
  )}
  {req.requirement_type === 'OPTIONAL' && (
  <span className="text-[10px] uppercase tracking-wider font-bold text-mono-muted bg-ink-200 px-2 py-0.5 rounded">Optional</span>
