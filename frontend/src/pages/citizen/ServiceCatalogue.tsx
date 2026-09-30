@@ -26,6 +26,13 @@ export function ServiceCatalogue() {
  const [search, setSearch] = useState('');
  const [activeCategory, setActiveCategory] = useState<Category>('All Services');
  const [currentPage, setCurrentPage] = useState(1);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+    return (localStorage.getItem('serviceCatalogueViewMode') as 'grid' | 'list') || 'grid';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('serviceCatalogueViewMode', viewMode);
+  }, [viewMode]);
  const itemsPerPage = 12;
  const navigate = useNavigate();
 
@@ -160,13 +167,19 @@ export function ServiceCatalogue() {
  <div className="flex items-center gap-2">
  <span className="text-[13px] font-medium text-mono-muted">View</span>
  <div className="flex items-center bg-mono-surface rounded-lg p-1 border border-mono-border">
- <button className="p-1.5 bg-mono-text text-mono-bg rounded-md shadow-sm">
- <LayoutGrid size={16} />
- </button>
- <button className="p-1.5 text-mono-muted hover:text-mono-text rounded-md transition-colors">
- <List size={16} />
- </button>
- </div>
+  <button 
+    onClick={() => setViewMode('grid')}
+    className={clsx("p-1.5 rounded-md shadow-sm transition-colors", viewMode === 'grid' ? "bg-mono-text text-mono-bg" : "text-mono-muted hover:text-mono-text")}
+  >
+  <LayoutGrid size={16} />
+  </button>
+  <button 
+    onClick={() => setViewMode('list')}
+    className={clsx("p-1.5 rounded-md shadow-sm transition-colors", viewMode === 'list' ? "bg-mono-text text-mono-bg" : "text-mono-muted hover:text-mono-text")}
+  >
+  <List size={16} />
+  </button>
+  </div>
  </div>
  </div>
  </div>
@@ -188,41 +201,70 @@ export function ServiceCatalogue() {
  />
  </div>
  ) : (
- <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
- {paginatedServices.map((service) => {
- const cat = getCategory(service.service_type);
+ <div className={clsx("grid gap-4", viewMode === 'grid' ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "grid-cols-1")}>
+  {paginatedServices.map((service) => {
+  const cat = getCategory(service.service_type);
 
- return (
- <button
- key={service.id}
- onClick={() => navigate(`/services/${service.id}`)}
- className="bg-mono-bg p-5 rounded-xl shadow-sm border border-mono-border hover:border-mono-text/30 transition-all text-left flex flex-col h-full group"
- >
- <div className="flex items-start gap-3 mb-4">
- <div className="w-10 h-10 rounded-xl bg-mono-surface flex items-center justify-center text-mono-text shrink-0">
- {getServiceIcon(service.name, 20)}
- </div>
- <div>
- <h3 className="font-semibold text-[15px] text-mono-text leading-tight group-hover:text-black">{service.name}</h3>
- <p className="text-mono-muted text-[13px] font-medium mt-1 line-clamp-2">
- {service.description || `Apply for ${service.name.toLowerCase()} online.`}
- </p>
- </div>
- </div>
- 
- <div className="mt-auto pt-4 flex items-center justify-between w-full">
- <span className="inline-block px-3 py-1 bg-mono-surface text-mono-text text-[11px] font-semibold rounded-md">
- {cat}
- </span>
- <ChevronRight size={18} className="text-mono-muted group-hover:text-mono-text transition-colors" />
- </div>
- </button>
- );
- })}
- </div>
- )}
+  if (viewMode === 'list') {
+    return (
+      <button
+        key={service.id}
+        onClick={() => navigate(`/services/${service.id}`)}
+        className="bg-mono-bg p-4 rounded-xl shadow-sm border border-mono-border hover:border-mono-text/30 transition-all text-left flex items-center gap-4 group"
+      >
+        <div className="w-10 h-10 rounded-xl bg-mono-surface flex items-center justify-center text-mono-text shrink-0">
+          {getServiceIcon(service.name, 20)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-[15px] text-mono-text leading-tight group-hover:text-black truncate">{service.name}</h3>
+            <span className="hidden sm:inline-block px-2 py-0.5 bg-mono-surface text-mono-text text-[11px] font-semibold rounded-md shrink-0">
+              {cat}
+            </span>
+          </div>
+          <p className="text-mono-muted text-[13px] font-medium mt-1 truncate">
+            {service.description || `Apply for ${service.name.toLowerCase()} online.`}
+          </p>
+        </div>
+        <span className="sm:hidden px-2 py-0.5 bg-mono-surface text-mono-text text-[11px] font-semibold rounded-md shrink-0">
+          {cat.split(' ')[0]}
+        </span>
+        <ChevronRight size={18} className="text-mono-muted group-hover:text-mono-text transition-colors shrink-0" />
+      </button>
+    );
+  }
 
- {/* Pagination */}
+  return (
+  <button
+  key={service.id}
+  onClick={() => navigate(`/services/${service.id}`)}
+  className="bg-mono-bg p-5 rounded-xl shadow-sm border border-mono-border hover:border-mono-text/30 transition-all text-left flex flex-col h-full group"
+  >
+  <div className="flex items-start gap-3 mb-4">
+  <div className="w-10 h-10 rounded-xl bg-mono-surface flex items-center justify-center text-mono-text shrink-0">
+  {getServiceIcon(service.name, 20)}
+  </div>
+  <div>
+  <h3 className="font-semibold text-[15px] text-mono-text leading-tight group-hover:text-black">{service.name}</h3>
+  <p className="text-mono-muted text-[13px] font-medium mt-1 line-clamp-2">
+  {service.description || `Apply for ${service.name.toLowerCase()} online.`}
+  </p>
+  </div>
+  </div>
+  
+  <div className="mt-auto pt-4 flex items-center justify-between w-full">
+  <span className="inline-block px-3 py-1 bg-mono-surface text-mono-text text-[11px] font-semibold rounded-md">
+  {cat}
+  </span>
+  <ChevronRight size={18} className="text-mono-muted group-hover:text-mono-text transition-colors" />
+  </div>
+  </button>
+  );
+  })}
+  </div>
+  )}
+
+
  {filteredServices.length > 0 && (
  <div className="mt-8 pt-6 flex items-center justify-between border-t border-mono-border">
  <p className="text-[13px] font-medium text-mono-muted">
