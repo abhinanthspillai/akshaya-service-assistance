@@ -236,7 +236,10 @@ export function Queue() {
       {/* Metrics Banner */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
         {/* Metric 1: New / Intake */}
-        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+        <div 
+          className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between cursor-pointer hover:border-indigo-300 transition-colors"
+          onClick={() => { setActiveTab('all'); setStatusFilter('WAITING_FOR_CENTRE'); }}
+        >
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-semibold uppercase tracking-wider">New Intake</span>
             <span className="p-1.5 bg-amber-50 text-amber-600 rounded-lg">
@@ -250,7 +253,10 @@ export function Queue() {
         </div>
 
         {/* Metric 2: Under Review & Processing */}
-        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+        <div 
+          className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between cursor-pointer hover:border-indigo-300 transition-colors"
+          onClick={() => { setActiveTab('all'); setStatusFilter('PROCESSING'); }}
+        >
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-semibold uppercase tracking-wider">In Progress</span>
             <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
@@ -264,7 +270,10 @@ export function Queue() {
         </div>
 
         {/* Metric 3: Awaiting Citizen */}
-        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+        <div 
+          className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between cursor-pointer hover:border-indigo-300 transition-colors"
+          onClick={() => { setActiveTab('all'); setStatusFilter('CORRECTION_REQUIRED'); }}
+        >
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-semibold uppercase tracking-wider">Awaiting Citizen</span>
             <span className="p-1.5 bg-purple-50 text-purple-600 rounded-lg">
@@ -278,7 +287,10 @@ export function Queue() {
         </div>
 
         {/* Metric 4: Completed Today */}
-        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+        <div 
+          className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between cursor-pointer hover:border-indigo-300 transition-colors"
+          onClick={() => { setActiveTab('all'); setStatusFilter('COMPLETED'); }}
+        >
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-semibold uppercase tracking-wider">Completed Today</span>
             <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
@@ -292,7 +304,10 @@ export function Queue() {
         </div>
 
         {/* Metric 5: Rejected (30d) */}
-        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between col-span-2 md:col-span-1">
+        <div 
+          className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between col-span-2 md:col-span-1 cursor-pointer hover:border-indigo-300 transition-colors"
+          onClick={() => { setActiveTab('all'); setStatusFilter('UNABLE_TO_PROCEED'); }}
+        >
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-semibold uppercase tracking-wider">Rejected (30d)</span>
             <span className="p-1.5 bg-rose-50 text-rose-600 rounded-lg">
