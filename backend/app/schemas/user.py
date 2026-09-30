@@ -1,6 +1,7 @@
 from uuid import UUID
 
 import email_validator
+from datetime import date
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 # Enable RFC test environment so @akshaya.test domains are accepted
@@ -39,6 +40,27 @@ class UserAuthMe(UserRead):
     centre_id: UUID | None = None
     approval_status: str | None = None
     notification_preferences: dict | None = None
+    date_of_birth: date | None = None
+    gender: str | None = None
+    address_line1: str | None = None
+    address_line2: str | None = None
+    city: str | None = None
+    district: str | None = None
+    state: str | None = None
+    pin_code: str | None = None
+
+class ProfileUpdate(BaseModel):
+    full_name: str | None = Field(None, min_length=2, max_length=160)
+    phone: str | None = Field(None, max_length=32)
+    date_of_birth: date | None = None
+    gender: str | None = None
+    address_line1: str | None = None
+    address_line2: str | None = None
+    city: str | None = None
+    district: str | None = None
+    state: str | None = None
+    pin_code: str | None = None
+
 
 class NotificationPreferences(BaseModel):
     request_updates: bool = True

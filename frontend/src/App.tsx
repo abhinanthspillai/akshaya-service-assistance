@@ -20,6 +20,7 @@ import { SupportAdmin } from './pages/admin/SupportAdmin';
 import { AuditLogs } from './pages/admin/AuditLogs';
 import { SysAdminDashboard } from './pages/admin/SysAdminDashboard';
 import { PendingApproval } from './pages/auth/PendingApproval';
+import { LandingPage } from './pages/LandingPage';
 import { Loader2 } from 'lucide-react';
 
 type UserRole = 'citizen' | 'centre_employee' | 'centre_administrator' | 'system_administrator';
@@ -114,7 +115,7 @@ export default function App() {
  <Route path="/register" element={<PublicOnlyRoute><AuthContainer /></PublicOnlyRoute>} />
  <Route path="/forgot-password" element={<PublicOnlyRoute><ForgotPassword /></PublicOnlyRoute>} />
 
- <Route path="/" element={<RootRedirect />} />
+ <Route path="/" element={<PublicOnlyRoute><LandingPage /></PublicOnlyRoute>} />
  
  {/* Citizen Routes */}
  <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['citizen']}><Dashboard /></ProtectedRoute>} />
@@ -126,7 +127,7 @@ export default function App() {
  <Route path="/notifications" element={<ProtectedRoute allowedRoles={['citizen']}><Notifications /></ProtectedRoute>} />
  <Route path="/support" element={<ProtectedRoute allowedRoles={['citizen']}><Support /></ProtectedRoute>} />
  <Route path="/support/:id" element={<ProtectedRoute allowedRoles={['citizen']}><TicketDetail /></ProtectedRoute>} />
- <Route path="/profile" element={<ProtectedRoute allowedRoles={['citizen']}><Profile /></ProtectedRoute>} />
+ <Route path="/profile" element={<ProtectedRoute allowedRoles={['citizen', 'centre_employee']}><Profile /></ProtectedRoute>} />
 
  {/* Employee Routes */}
  <Route path="/queue" element={<ProtectedRoute allowedRoles={['centre_employee']}><Queue /></ProtectedRoute>} />

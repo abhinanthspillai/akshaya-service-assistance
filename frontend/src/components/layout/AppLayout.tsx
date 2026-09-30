@@ -1,7 +1,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, LogOut, FileSearch, Bell, LifeBuoy, Menu, X, Search } from 'lucide-react';
+import { LayoutDashboard, FileText, LogOut, FileSearch, Bell, LifeBuoy, User, Menu, X, Search } from 'lucide-react';
 import clsx from 'clsx';
 import { api } from '../../lib/api';
 
@@ -50,10 +50,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
  { name: 'Help & Support', path: '/support', icon: LifeBuoy },
  ];
  } else if (user?.role === 'centre_employee') {
- navItems = [
- { name: 'Queue', path: '/queue', icon: LayoutDashboard },
- { name: 'Support Tickets', path: '/support', icon: LifeBuoy },
- ];
+    navItems = [
+      { name: 'Queue', path: '/queue', icon: LayoutDashboard },
+      { name: 'Support Tickets', path: '/support', icon: LifeBuoy },
+      { name: 'Profile', path: '/profile', icon: User },
+    ];
  } else if (user?.role === 'centre_administrator') {
  navItems = [
  { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },

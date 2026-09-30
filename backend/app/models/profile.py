@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
-    DateTime,
+    DateTime, Date,
     ForeignKey,
     Index,
     Integer,
@@ -27,7 +27,15 @@ class CitizenProfile(Base):
     )
     full_name: Mapped[str] = mapped_column(String(160), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    address_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    date_of_birth: Mapped[datetime | None] = mapped_column(Date, nullable=True)
+    gender: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    address_line1: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    address_line2: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    district: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    pin_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.now(), nullable=False
     )
@@ -46,6 +54,7 @@ class EmployeeProfile(Base):
         UUID(as_uuid=True), ForeignKey("akshaya_centres.id"), index=True, nullable=False
     )
     full_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     max_active_requests: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     approval_status: Mapped[str] = mapped_column(

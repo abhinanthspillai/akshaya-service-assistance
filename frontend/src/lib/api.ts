@@ -17,6 +17,15 @@ export interface User {
   email: string;
   role: string;
   full_name?: string;
+  phone?: string;
+  date_of_birth?: string;
+  gender?: string;
+  address_line1?: string;
+  address_line2?: string;
+  city?: string;
+  district?: string;
+  state?: string;
+  pin_code?: string;
   centre_id?: string;
   approval_status?: string;
 }

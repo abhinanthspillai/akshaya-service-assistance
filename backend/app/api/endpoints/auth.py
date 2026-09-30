@@ -101,12 +101,21 @@ def get_auth_me(current_user: CurrentUser, session: SessionDep) -> UserAuthMe:
         if profile:
             response.full_name = profile.full_name
             response.phone = profile.phone
+            response.date_of_birth = profile.date_of_birth
+            response.gender = profile.gender
+            response.address_line1 = profile.address_line1
+            response.address_line2 = profile.address_line2
+            response.city = profile.city
+            response.district = profile.district
+            response.state = profile.state
+            response.pin_code = profile.pin_code
     elif current_user.role == "centre_employee":
         emp_profile = session.scalar(
             select(EmployeeProfile).where(EmployeeProfile.user_id == current_user.id)
         )
         if emp_profile:
             response.full_name = emp_profile.full_name
+            response.phone = emp_profile.phone
             response.centre_id = emp_profile.centre_id
             response.approval_status = emp_profile.approval_status
     elif current_user.role == "centre_administrator":
@@ -130,3 +139,49 @@ def update_notification_preferences(
     session.add(current_user)
     session.commit()
     return current_user.notification_preferences
+
+
+from app.schemas.user import ProfileUpdate
+
+@router.patch("/me/profile", response_model=UserAuthMe)
+def update_profile(
+    profile_in: ProfileUpdate,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    if current_user.role == "citizen":
+        profile = session.scalar(select(CitizenProfile).where(CitizenProfile.user_id == current_user.id))
+        if profile:
+            for field, value in profile_in.model_dump(exclude_unset=True).items():
+                if hasattr(profile, field):
+                    setattr(profile, field, value)
+            session.add(profile)
+    elif current_user.role == "centre_employee":
+        profile = session.scalar(select(EmployeeProfile).where(EmployeeProfile.user_id == current_user.id))
+        if profile:
+            for field, value in profile_in.model_dump(exclude_unset=True).items():
+                if hasattr(profile, field):
+                    setattr(profile, field, value)
+            session.add(profile)
+    session.commit()
+    return get_auth_me(current_user=current_user, session=session)
+
+
+from pydantic import BaseModel
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+@router.put("/me/password")
+def change_password(
+    data: PasswordChange,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    if not verify_password(data.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Incorrect current password")
+    
+    current_user.password_hash = get_password_hash(data.new_password)
+    session.add(current_user)
+    session.commit()
+    return {"message": "Password updated successfully"}
