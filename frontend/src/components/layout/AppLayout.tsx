@@ -11,6 +11,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
  const location = useLocation();
  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
  const [unreadCount, setUnreadCount] = useState(0);
+ const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+
+ useEffect(() => {
+   const handleEsc = (e: KeyboardEvent) => {
+     if (e.key === 'Escape') setIsAccountMenuOpen(false);
+   };
+   window.addEventListener('keydown', handleEsc);
+   return () => window.removeEventListener('keydown', handleEsc);
+ }, []);
 
  useEffect(() => {
    if (user) {
@@ -62,16 +71,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
  return (
  <div className="flex h-screen bg-mono-bg text-mono-text overflow-hidden font-sans">
- {/* Mobile header */}
- <div className="md:hidden absolute top-0 left-0 right-0 h-16 bg-mono-bg border-b border-mono-border flex items-center justify-between px-4 z-20">
- <div className="flex items-center gap-2">
- <div className="w-6 h-6 rounded bg-mono-text"></div>
- <h1 className="text-xl font-bold text-mono-text">SAHAYA</h1>
- </div>
- <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-mono-text p-2">
- {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
- </button>
- </div>
 
  {/* Sidebar Overlay */}
  {isMobileMenuOpen && (
@@ -158,32 +157,65 @@ export function AppLayout({ children }: { children: ReactNode }) {
  </div>
 
  {/* Main Content */}
- <div className="flex-1 flex flex-col overflow-hidden md:mt-0 mt-16 bg-mono-bg">
- {/* Desktop Top Bar */}
- <header className="hidden md:flex h-20 border-b border-mono-border items-center justify-between px-8 shrink-0">
- <div className="flex items-center flex-1 max-w-xl">
- <div className="relative w-full">
- <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-mono-muted" size={18} />
- <input 
- type="text" 
- placeholder="Search for services, requests or help..." 
- className="w-full pl-11 pr-4 py-2.5 bg-mono-bg border border-mono-border rounded-full text-sm font-medium placeholder:text-mono-muted focus:outline-none focus:border-mono-text transition-all"
- onKeyDown={(e) => { if (e.key === 'Enter') navigate('/services'); }}
- />
- </div>
- </div>
- <div className="flex items-center gap-4">
- <button onClick={() => navigate('/notifications')} className="relative p-2 text-mono-text hover:bg-mono-surface rounded-full transition-colors">
- <Bell size={24} strokeWidth={2} />
- {unreadCount > 0 && (
-   <span className="absolute top-1 right-1 w-4 h-4 bg-mono-text text-mono-bg text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-mono-bg">{unreadCount}</span>
- )}
- </button>
- <div className="w-px h-6 bg-mono-border"></div>
- <button onClick={() => navigate('/profile')} className="flex items-center justify-center w-8 h-8 rounded-full bg-mono-text text-mono-bg text-sm font-bold hover:opacity-90 transition-opacity">
- {user?.full_name ? user.full_name.charAt(0).toUpperCase() : 'S'}
- </button>
- </div>
+ <div className="flex-1 flex flex-col overflow-hidden  bg-mono-bg">
+ {/* Unified Header */}
+ <header className="sticky top-0 z-20 h-16 border-b border-mono-border bg-mono-bg flex items-center justify-between px-4 md:px-8 shrink-0">
+   <div className="flex items-center gap-4">
+     <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="md:hidden text-mono-text p-2 -ml-2">
+       {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+     </button>
+     <div className="hidden md:block">
+       <h2 className="text-[16px] font-bold text-mono-text">
+         Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user?.full_name ? user.full_name.split(' ')[0] : 'User'}
+       </h2>
+     </div>
+     <div className="md:hidden flex items-center gap-2">
+       <h1 className="text-[16px] font-bold text-mono-text uppercase tracking-tight">SAHAYA</h1>
+     </div>
+   </div>
+   
+   <div className="flex items-center gap-2 sm:gap-4 relative">
+     <button onClick={() => navigate('/notifications')} className="relative p-2 text-mono-text hover:bg-mono-surface rounded-full transition-colors">
+       <Bell size={20} strokeWidth={2.5} />
+       {unreadCount > 0 && (
+         <span className="absolute top-1 right-1 w-4 h-4 bg-mono-text text-mono-bg text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-mono-bg">{unreadCount > 9 ? '9+' : unreadCount}</span>
+       )}
+     </button>
+     <div className="hidden sm:block w-px h-5 bg-mono-border"></div>
+     <button 
+       onClick={() => setIsAccountMenuOpen(!isAccountMenuOpen)}
+       className="flex items-center justify-center w-8 h-8 rounded-full bg-mono-text text-mono-bg text-sm font-bold hover:opacity-90 transition-opacity"
+     >
+       {user?.full_name ? user.full_name.charAt(0).toUpperCase() : 'S'}
+     </button>
+
+     {/* Dropdown Menu */}
+     {isAccountMenuOpen && (
+       <>
+         <div className="fixed inset-0 z-30" onClick={() => setIsAccountMenuOpen(false)}></div>
+         <div className="absolute top-full right-0 mt-2 w-56 bg-mono-bg border border-mono-border rounded-[12px] shadow-sm border-mono-border z-40 overflow-hidden">
+           <div className="p-4 border-b border-mono-border bg-mono-surface/30">
+             <p className="text-sm font-bold text-mono-text truncate">{user?.full_name || 'User'}</p>
+             <p className="text-[11px] font-semibold text-mono-muted tracking-wider uppercase mt-1">{user?.role === 'citizen' ? 'Citizen' : user?.role.replace('_', ' ')}</p>
+           </div>
+           <div className="p-1.5 bg-mono-bg">
+             <button 
+               onClick={() => { setIsAccountMenuOpen(false); navigate('/profile'); }}
+               className="w-full text-left px-3 py-2.5 text-[14px] font-semibold text-mono-text hover:bg-mono-surface rounded-lg transition-colors"
+             >
+               My Profile
+             </button>
+             <button 
+               onClick={() => { setIsAccountMenuOpen(false); handleLogout(); }}
+               className="w-full text-left px-3 py-2.5 text-[14px] font-semibold text-red-500 hover:bg-red-50 rounded-lg transition-colors mt-0.5"
+             >
+               Logout
+             </button>
+           </div>
+         </div>
+       </>
+     )}
+   </div>
  </header>
 
  <div className="flex-1 overflow-auto bg-mono-bg">
