@@ -134,18 +134,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
  </nav>
 
  <div className="p-4 mt-auto">
- <div className="flex items-center gap-3 px-3 mb-4">
- <div className="w-10 h-10 rounded-full bg-mono-surface flex items-center justify-center text-mono-text font-bold text-sm border border-mono-border shrink-0">
- {user?.full_name ? user.full_name.charAt(0).toUpperCase() : 'S'}
- </div>
- <div className="flex-1 min-w-0">
- <p className="text-sm font-bold text-mono-text truncate">{user?.full_name || 'Sample'}</p>
- <p className="text-xs font-medium text-mono-muted capitalize mt-0.5">{user?.role === 'citizen' ? 'Citizen' : user?.role.replace('_', ' ')}</p>
- </div>
- <button onClick={() => navigate('/profile')} className="text-mono-muted hover:text-mono-text">
- <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
- </button>
- </div>
+  <button onClick={() => navigate('/profile')} className="w-full flex items-center gap-3 px-3 py-2 mb-2 rounded-lg hover:bg-mono-surface transition-colors group text-left focus:outline-none focus:ring-2 focus:ring-mono-text focus:ring-offset-2 focus:ring-offset-mono-bg">
+  <div className="w-10 h-10 rounded-full bg-mono-surface flex items-center justify-center text-mono-text font-bold text-sm border border-mono-border shrink-0">
+  {user?.full_name ? user.full_name.charAt(0).toUpperCase() : 'S'}
+  </div>
+  <div className="flex-1 min-w-0">
+  <p className="text-sm font-bold text-mono-text truncate group-hover:text-black">{user?.full_name || 'Sample'}</p>
+  <p className="text-xs font-medium text-mono-muted capitalize mt-0.5">{user?.role === 'citizen' ? 'Citizen' : user?.role.replace('_', ' ')}</p>
+  </div>
+  <div className="text-mono-muted group-hover:text-mono-text">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+  </div>
+  </button>
  <button
  onClick={handleLogout}
  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-mono-text hover:bg-mono-surface transition-colors"
