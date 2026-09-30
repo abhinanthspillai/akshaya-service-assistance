@@ -129,20 +129,29 @@ export function NewRequest() {
       const finalDraftId = draftId as string;
       setCurrentStep('centre');
 
-      if (navigator.geolocation) {
+      // Wrap geolocation in a Promise with a 3 second timeout
+      const getLocation = () => new Promise<{lat: number, lng: number}>((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error('Geolocation not supported'));
+          return;
+        }
         navigator.geolocation.getCurrentPosition(
-          async (position) => {
-            const { latitude, longitude } = position.coords;
-            setUserLocation({ lat: latitude, lng: longitude });
-            await fetchCentres(finalDraftId, latitude, longitude);
-          },
-          async () => {
-            setLocationDenied(true);
-            await fetchCentres(finalDraftId);
-          }
+          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          (err) => reject(err),
+          { timeout: 3000 }
         );
-      } else {
+        // Fallback timeout in case the browser doesn't respect the timeout option or permission dialog hangs
+        setTimeout(() => reject(new Error('Geolocation timeout')), 3000);
+      });
+
+      try {
+        const { lat, lng } = await getLocation();
+        setUserLocation({ lat, lng });
+        await fetchCentres(finalDraftId, lat, lng);
+      } catch (err) {
         setLocationDenied(true);
+        // Fallback to All Centres
+        if (activeTab === 'nearest') setActiveTab('all');
         await fetchCentres(finalDraftId);
       }
     } catch (err) {
@@ -344,7 +353,7 @@ export function NewRequest() {
             )}
 
             <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-              {filteredCentres.map((centre, idx) => (
+              {(activeTab === 'nearest' ? filteredCentres.slice(0, 5) : filteredCentres).map((centre, idx) => (
                 <label 
                   key={centre.id} 
                   className={clsx(
