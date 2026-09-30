@@ -38,3 +38,9 @@ class UserAuthMe(UserRead):
     phone: str | None = None
     centre_id: UUID | None = None
     approval_status: str | None = None
+    notification_preferences: dict | None = None
+
+class NotificationPreferences(BaseModel):
+    request_updates: bool = True
+    service_updates: bool = True
+    system: bool = True

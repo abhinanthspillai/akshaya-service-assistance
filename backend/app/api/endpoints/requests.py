@@ -1835,6 +1835,21 @@ def _safe_add_notification(
     body: str | None = None,
 ) -> None:
     try:
+        from app.models.user import User
+        user = session.get(User, user_id)
+        if user and user.notification_preferences:
+            prefs = user.notification_preferences
+            if event_type == "status_change" and not prefs.get("request_updates", True):
+                return
+            if event_type == "message" and not prefs.get("request_updates", True):
+                return
+            if event_type == "payment" and not prefs.get("request_updates", True):
+                return
+            if event_type == "ticket_update" and not prefs.get("system", True):
+                return
+            if event_type == "system" and not prefs.get("system", True):
+                return
+        
         session.add(
             Notification(
                 user_id=user_id,

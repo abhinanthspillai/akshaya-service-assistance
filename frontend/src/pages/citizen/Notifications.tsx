@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, Loader2, CheckSquare, Settings, FileText, Clock, Users, Info, ChevronRight, HelpCircle, ExternalLink, ArrowRight } from 'lucide-react';
 import { api } from '../../lib/api';
 import clsx from 'clsx';
+import { Modal } from '../../components/ui/Modal';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -25,7 +26,38 @@ export function Notifications() {
  const [error, setError] = useState('');
  const [activeTab, setActiveTab] = useState<Tab>('All');
  const [selectedId, setSelectedId] = useState<string | null>(null);
- const navigate = useNavigate();
+ 
+ const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+ const [preferences, setPreferences] = useState({ request_updates: true, service_updates: true, system: true });
+ const [isSavingPrefs, setIsSavingPrefs] = useState(false);
+
+ useEffect(() => {
+   const fetchPrefs = async () => {
+     try {
+       const res = await api.get('/auth/me');
+       if (res.data.notification_preferences) {
+         setPreferences(res.data.notification_preferences);
+       }
+     } catch {
+       console.error("Failed to load preferences", e);
+     }
+   };
+   fetchPrefs();
+ }, []);
+
+ const savePreferences = async () => {
+   setIsSavingPrefs(true);
+   try {
+     const res = await api.put('/auth/me/notification-preferences', preferences);
+     setPreferences(res.data);
+     setIsSettingsOpen(false);
+   } catch {
+     setError('Failed to save settings.');
+   } finally {
+     setIsSavingPrefs(false);
+   }
+ };
+const navigate = useNavigate();
 
  useEffect(() => {
  const fetchNotifications = async () => {
@@ -118,6 +150,51 @@ export function Notifications() {
  return (
  <div className="flex justify-center items-center h-64">
  <Loader2 className="animate-spin text-mono-text" size={32} />
+
+  <Modal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} title="Notification Settings">
+    <div className="space-y-4">
+      <p className="text-[14px] text-mono-muted mb-4">Choose which notifications you want to receive.</p>
+      
+      <div className="flex items-center justify-between p-4 border border-mono-border rounded-xl">
+        <div>
+          <h4 className="text-[14px] font-bold text-mono-text">Request Updates</h4>
+          <p className="text-[12px] text-mono-muted">Status changes, messages, and payments</p>
+        </div>
+        <label className="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" className="sr-only peer" checked={preferences.request_updates} onChange={(e) => setPreferences({...preferences, request_updates: e.target.checked})} />
+          <div className="w-11 h-6 bg-mono-surface border border-mono-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-mono-text"></div>
+        </label>
+      </div>
+
+      <div className="flex items-center justify-between p-4 border border-mono-border rounded-xl">
+        <div>
+          <h4 className="text-[14px] font-bold text-mono-text">Service Updates</h4>
+          <p className="text-[12px] text-mono-muted">New services and general announcements</p>
+        </div>
+        <label className="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" className="sr-only peer" checked={preferences.service_updates} onChange={(e) => setPreferences({...preferences, service_updates: e.target.checked})} />
+          <div className="w-11 h-6 bg-mono-surface border border-mono-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-mono-text"></div>
+        </label>
+      </div>
+
+      <div className="flex items-center justify-between p-4 border border-mono-border rounded-xl">
+        <div>
+          <h4 className="text-[14px] font-bold text-mono-text">System Alerts</h4>
+          <p className="text-[12px] text-mono-muted">Support tickets and security alerts</p>
+        </div>
+        <label className="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" className="sr-only peer" checked={preferences.system} onChange={(e) => setPreferences({...preferences, system: e.target.checked})} />
+          <div className="w-11 h-6 bg-mono-surface border border-mono-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-mono-text"></div>
+        </label>
+      </div>
+      
+      <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-mono-border">
+        <Button variant="ghost" onClick={() => setIsSettingsOpen(false)}>Cancel</Button>
+        <Button onClick={savePreferences} isLoading={isSavingPrefs}>Save Preferences</Button>
+      </div>
+    </div>
+  </Modal>
+
  </div>
  );
  }
@@ -135,6 +212,7 @@ export function Notifications() {
  <Button 
  variant="ghost"
  onClick={markAllAsRead}
+ disabled={!notifications.some(n => !n.is_read)}
  icon={<CheckSquare size={16} />}
  >
  Mark all as read
@@ -142,6 +220,7 @@ export function Notifications() {
  <div className="w-px h-4 bg-mono-border"></div>
  <Button 
  variant="ghost"
+ onClick={() => setIsSettingsOpen(true)}
  icon={<Settings size={16} />}
  >
  Notification settings
@@ -339,6 +418,51 @@ export function Notifications() {
  )}
  </div>
  </div>
+
+  <Modal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} title="Notification Settings">
+    <div className="space-y-4">
+      <p className="text-[14px] text-mono-muted mb-4">Choose which notifications you want to receive.</p>
+      
+      <div className="flex items-center justify-between p-4 border border-mono-border rounded-xl">
+        <div>
+          <h4 className="text-[14px] font-bold text-mono-text">Request Updates</h4>
+          <p className="text-[12px] text-mono-muted">Status changes, messages, and payments</p>
+        </div>
+        <label className="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" className="sr-only peer" checked={preferences.request_updates} onChange={(e) => setPreferences({...preferences, request_updates: e.target.checked})} />
+          <div className="w-11 h-6 bg-mono-surface border border-mono-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-mono-text"></div>
+        </label>
+      </div>
+
+      <div className="flex items-center justify-between p-4 border border-mono-border rounded-xl">
+        <div>
+          <h4 className="text-[14px] font-bold text-mono-text">Service Updates</h4>
+          <p className="text-[12px] text-mono-muted">New services and general announcements</p>
+        </div>
+        <label className="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" className="sr-only peer" checked={preferences.service_updates} onChange={(e) => setPreferences({...preferences, service_updates: e.target.checked})} />
+          <div className="w-11 h-6 bg-mono-surface border border-mono-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-mono-text"></div>
+        </label>
+      </div>
+
+      <div className="flex items-center justify-between p-4 border border-mono-border rounded-xl">
+        <div>
+          <h4 className="text-[14px] font-bold text-mono-text">System Alerts</h4>
+          <p className="text-[12px] text-mono-muted">Support tickets and security alerts</p>
+        </div>
+        <label className="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" className="sr-only peer" checked={preferences.system} onChange={(e) => setPreferences({...preferences, system: e.target.checked})} />
+          <div className="w-11 h-6 bg-mono-surface border border-mono-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-mono-text"></div>
+        </label>
+      </div>
+      
+      <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-mono-border">
+        <Button variant="ghost" onClick={() => setIsSettingsOpen(false)}>Cancel</Button>
+        <Button onClick={savePreferences} isLoading={isSavingPrefs}>Save Preferences</Button>
+      </div>
+    </div>
+  </Modal>
+
  </div>
  );
 }

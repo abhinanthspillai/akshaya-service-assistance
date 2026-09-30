@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -10,7 +10,7 @@ from app.models.centre import AkshayaCentre
 from app.models.profile import CentreAdministrator, CitizenProfile, EmployeeProfile
 from app.models.user import User
 from app.schemas.token import Token
-from app.schemas.user import UserAuthMe, UserRead, UserRegister
+from app.schemas.user import UserAuthMe, UserRead, UserRegister, NotificationPreferences
 
 router = APIRouter()
 
@@ -118,3 +118,15 @@ def get_auth_me(current_user: CurrentUser, session: SessionDep) -> UserAuthMe:
             response.centre_id = admin_profile.centre_id
 
     return response
+
+
+@router.put("/me/notification-preferences", response_model=NotificationPreferences)
+def update_notification_preferences(
+    preferences: NotificationPreferences,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    current_user.notification_preferences = preferences.model_dump()
+    session.add(current_user)
+    session.commit()
+    return current_user.notification_preferences
