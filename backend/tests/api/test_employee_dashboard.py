@@ -260,3 +260,18 @@ def test_dashboard_needs_attention_ranking(
     assert len(needs_attention) >= 2
     # Re-uploaded doc request must be ranked first (Priority 1)
     assert needs_attention[0]["id"] == str(req_reuploaded.id)
+
+def test_employee_queue_filters(client: TestClient, dashboard_fixture: dict):
+    emp_a_token = dashboard_fixture["headers_a"]["Authorization"]
+
+    # Test unassigned requests filter
+    resp = client.get("/api/v1/requests/?assigned=UNASSIGNED", headers={"Authorization": emp_a_token})
+    assert resp.status_code == 200
+    
+    # Test assigned to me filter
+    resp = client.get("/api/v1/requests/?assigned=ME", headers={"Authorization": emp_a_token})
+    assert resp.status_code == 200
+    
+    # Test search query
+    resp = client.get("/api/v1/requests/?q=Certificate", headers={"Authorization": emp_a_token})
+    assert resp.status_code == 200
