@@ -213,6 +213,56 @@ export function Profile() {
           </div>
         </div>
 
+        {isEmployee && (
+          <div className="bg-mono-bg border-2 border-mono-border rounded-xl shadow-[4px_4px_0_0_rgba(0,0,0,1)] flex flex-col h-full col-span-1 md:col-span-2 mt-4">
+            <div className="flex justify-between items-center p-4 border-b border-mono-border bg-mono-surface/50">
+              <div className="flex items-center gap-3">
+                <ShieldCheck size={20} className="text-mono-text" />
+                <h3 className="font-bold text-mono-text text-base">Employment Details</h3>
+              </div>
+              <span className="text-xs font-bold text-mono-muted uppercase tracking-widest px-2.5 py-1 bg-mono-surface rounded-md border border-mono-border">
+                Read Only
+              </span>
+            </div>
+            <div className="p-2 flex-1">
+              <table className="w-full text-sm">
+                <tbody className="divide-y divide-mono-border/50">
+                  <tr className="hover:bg-mono-surface/30 transition-colors">
+                    <td className="py-4 pl-4 font-medium text-mono-muted w-1/3 md:w-1/4">Assigned Centre</td>
+                    <td className="py-4 pr-4 font-bold text-mono-text">
+                      {user?.centre_name || <span className="text-mono-muted font-medium italic">Unassigned</span>}
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-mono-surface/30 transition-colors">
+                    <td className="py-4 pl-4 font-medium text-mono-muted">System Role</td>
+                    <td className="py-4 pr-4 font-bold text-mono-text capitalize">
+                      {user?.role.replace('_', ' ') || 'Unknown'}
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-mono-surface/30 transition-colors">
+                    <td className="py-4 pl-4 font-medium text-mono-muted">Account Status</td>
+                    <td className="py-4 pr-4 font-bold text-mono-text">
+                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-widest uppercase border ${
+                        user?.approval_status === 'APPROVED' ? 'bg-[#E5F3EC] text-[#0A5C36] border-[#0A5C36]/20' :
+                        user?.approval_status === 'PENDING' ? 'bg-[#FFF3E0] text-[#E65100] border-[#E65100]/20' :
+                        'bg-mono-surface text-mono-muted border-mono-border'
+                      }`}>
+                        {user?.approval_status || 'Unknown'}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-mono-surface/30 transition-colors">
+                    <td className="py-4 pl-4 font-medium text-mono-muted">Capacity Limit</td>
+                    <td className="py-4 pr-4 font-bold text-mono-text">
+                      {user?.max_active_requests ? `${user.max_active_requests} requests` : <span className="text-mono-muted font-medium italic">Not set</span>}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* Address Information */}
         {!isEmployee && (
           <div className="bg-mono-bg rounded-2xl border border-mono-border shadow-sm overflow-hidden flex flex-col">

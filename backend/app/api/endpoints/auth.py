@@ -118,6 +118,11 @@ def get_auth_me(current_user: CurrentUser, session: SessionDep) -> UserAuthMe:
             response.phone = emp_profile.phone
             response.centre_id = emp_profile.centre_id
             response.approval_status = emp_profile.approval_status
+            response.max_active_requests = emp_profile.max_active_requests
+            if emp_profile.centre_id:
+                centre = session.get(AkshayaCentre, emp_profile.centre_id)
+                if centre:
+                    response.centre_name = centre.name
     elif current_user.role == "centre_administrator":
         admin_profile = session.scalar(
             select(CentreAdministrator).where(CentreAdministrator.user_id == current_user.id)

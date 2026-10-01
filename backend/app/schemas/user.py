@@ -38,7 +38,9 @@ class UserAuthMe(UserRead):
     full_name: str | None = None
     phone: str | None = None
     centre_id: UUID | None = None
+    centre_name: str | None = None
     approval_status: str | None = None
+    max_active_requests: int | None = None
     notification_preferences: dict | None = None
     date_of_birth: date | None = None
     gender: str | None = None
