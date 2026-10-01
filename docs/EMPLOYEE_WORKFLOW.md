@@ -52,34 +52,50 @@ Requests are scoped by the `selected_centre_id`. According to the implementation
 ## Mermaid Diagram
 ```mermaid
 stateDiagram-v2
-    [*] --> DRAFT : Citizen creates
-    DRAFT --> SUBMITTED : Citizen submits
-    SUBMITTED --> WAITING_FOR_CENTRE : System routing
+    [*] --> DRAFT: Citizen creates
+    DRAFT --> SUBMITTED: Citizen submits
+    SUBMITTED --> WAITING_FOR_CENTRE: Auto-routed
+    WAITING_FOR_CENTRE --> ACCEPTED: Employee accepts
+    ACCEPTED --> UNDER_REVIEW: Employee starts review
     
-    WAITING_FOR_CENTRE --> ACCEPTED : Employee accepts
-    ACCEPTED --> UNDER_REVIEW : Employee begins review
+    UNDER_REVIEW --> CORRECTION_REQUIRED: Request correction
+    CORRECTION_REQUIRED --> UNDER_REVIEW: Citizen re-uploads
     
-    UNDER_REVIEW --> CORRECTION_REQUIRED : Employee requests doc replacement
-    CORRECTION_REQUIRED --> UNDER_REVIEW : Citizen resubmits
+    UNDER_REVIEW --> INTERACTION_REQUIRED: Needs Interaction
+    INTERACTION_REQUIRED --> INTERACTION_SCHEDULED: Citizen schedules
+    INTERACTION_SCHEDULED --> UNDER_REVIEW: Interaction completed
     
-    UNDER_REVIEW --> READY_FOR_PROCESSING : Employee approves docs
-    READY_FOR_PROCESSING --> PROCESSING : Employee processes
+    UNDER_REVIEW --> READY_FOR_PROCESSING: All approved
+    READY_FOR_PROCESSING --> PROCESSING: Begin centre work
     
-    PROCESSING --> PAYMENT_PENDING : Employee requests payment
-    PAYMENT_PENDING --> PROCESSING : System confirms payment
+    PROCESSING --> PAYMENT_PENDING: Request fee
+    PAYMENT_PENDING --> PROCESSING: Payment confirmed
     
-    PROCESSING --> COMPLETED : Employee completes
+    PROCESSING --> COMPLETED: Final approval
     
-    UNDER_REVIEW --> UNABLE_TO_PROCEED : Employee rejects request
-    READY_FOR_PROCESSING --> UNABLE_TO_PROCEED : Employee rejects
-    PROCESSING --> UNABLE_TO_PROCEED : Employee rejects
-    
-    WAITING_FOR_CENTRE --> CANCELLED : Citizen cancels
-    ACCEPTED --> CANCELLED : Citizen cancels
-    UNDER_REVIEW --> CANCELLED : Citizen cancels
+    ACCEPTED --> UNABLE_TO_PROCEED: Reject entirely
+    UNDER_REVIEW --> UNABLE_TO_PROCEED: Reject entirely
+    PROCESSING --> UNABLE_TO_PROCEED: Reject entirely
 ```
 
 ## Gaps & Inconsistencies
 - `CANCELLED` is an allowed transition from `PAYMENT_PENDING`, which may complicate refunds if the cancellation occurs concurrently with a payment attempt.
 - Document rejection transitions the request to `CORRECTION_REQUIRED`, but does not verify if multiple documents are simultaneously rejected (though this is mitigated by the atomic nature of the review endpoint, doing it in bulk might be cleaner).
 - The transition from `DRAFT` to `SUBMITTED` involves citizen action, but `SUBMITTED` immediately transitions to `WAITING_FOR_CENTRE` via the `SUBMIT_REQUEST_ROUTING` action in the same API call. `SUBMITTED` is basically transient.
+
+### Employee Capacity Meter
+Each employee has a `max_active_requests` limit to prevent them from taking on too many requests simultaneously. A visual capacity meter displays in the Queue header, showing how many active assignments the employee holds against their limit. If they attempt to accept a request when at maximum capacity, the system prevents it and returns a 409 conflict error.
+
+### Queue Filters
+The employee dashboard includes server-side queue filters to help manage workloads efficiently:
+*   **Assigned To**: Filter by `ME` (assigned to the current employee), `UNASSIGNED` (waiting to be picked up), or `OTHERS` (assigned to colleagues in the same centre).
+*   **Status**: Filter by specific request status (e.g., `WAITING_FOR_CENTRE`, `UNDER_REVIEW`, `PAYMENT_PENDING`).
+*   **Search**: Full-text search on request IDs and citizen names.
+*   **Service & Date Range**: Narrow down requests by specific service type or submission date range.
+All these filters map directly to URL search parameters for deep-linking.
+
+### Support Tickets Access Rules
+Employees can interact with Support Tickets under strict scoping rules:
+*   **Access**: Employees can only view tickets linked to requests assigned to their specific centre.
+*   **Actions**: Employees can read messages and post replies to the citizen.
+*   **Restrictions**: Employees *cannot* create new support tickets, nor can they change the status (open/close) of tickets. Centre scoping ensures they receive a 403 Forbidden error if they attempt to access tickets belonging to another centre.
