@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, FileText, MessageSquare, ChevronDown, ChevronUp, Phone, Mail, MapPin, ArrowRight, Loader2, ArrowLeft, LifeBuoy } from 'lucide-react';
 import { api } from '../../lib/api';
@@ -42,6 +43,7 @@ const FAQS = [
 ];
 
 export function Support() {
+  const { user } = useAuth();
  const [view, setView] = useState<'faq' | 'ticket'>('faq');
  const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
  

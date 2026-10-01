@@ -1,3 +1,4 @@
+import { useAuth } from '../../contexts/AuthContext';
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Loader2, CheckSquare, Settings, FileText, Clock, Users, Info, ChevronRight, HelpCircle, ExternalLink, ArrowRight } from 'lucide-react';
@@ -21,6 +22,7 @@ interface NotificationItem {
 type Tab = 'All' | 'Unread' | 'Requests' | 'Service Updates' | 'System';
 
 export function Notifications() {
+  const { user } = useAuth();
  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
  const [isLoading, setIsLoading] = useState(true);
  const [error, setError] = useState('');

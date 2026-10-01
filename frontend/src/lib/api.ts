@@ -27,5 +27,7 @@ export interface User {
   state?: string;
   pin_code?: string;
   centre_id?: string;
+  centre_name?: string;
+  max_active_requests?: number;
   approval_status?: string;
 }

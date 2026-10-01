@@ -85,24 +85,36 @@ const STATUS_BADGES: Record<string, { bg: string; text: string; border: string }
 
 export function Queue() {
   const { user } = useAuth();
+  useEffect(() => {
+    document.title = 'Centre Dashboard';
+  }, []);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = (searchParams.get('tab') as 'attention' | 'all' | 'activity') || 'attention';
   const statusFilter = searchParams.get('status') || 'ALL';
   const searchQuery = searchParams.get('q') || '';
   const assignedFilter = searchParams.get('assigned') || 'ALL';
+  const serviceIdFilter = searchParams.get('service_id') || 'ALL';
+  const dateFromFilter = searchParams.get('date_from') || '';
+  const dateToFilter = searchParams.get('date_to') || '';
   const page = parseInt(searchParams.get('page') || '1', 10);
-  
+
   const setActiveTab = (tab: string) => setSearchParams(prev => { prev.set('tab', tab); return prev; });
   const setStatusFilter = (status: string) => setSearchParams(prev => { prev.set('status', status); prev.set('page', '1'); return prev; });
   const setSearchQuery = (q: string) => setSearchParams(prev => { prev.set('q', q); prev.set('page', '1'); return prev; });
   const setAssignedFilter = (assigned: string) => setSearchParams(prev => { prev.set('assigned', assigned); prev.set('page', '1'); return prev; });
+  const setServiceIdFilter = (serviceId: string) => setSearchParams(prev => { prev.set('service_id', serviceId); prev.set('page', '1'); return prev; });
+  const setDateFromFilter = (date: string) => setSearchParams(prev => { prev.set('date_from', date); prev.set('page', '1'); return prev; });
+  const setDateToFilter = (date: string) => setSearchParams(prev => { prev.set('date_to', date); prev.set('page', '1'); return prev; });
   const setPage = (p: number) => setSearchParams(prev => { prev.set('page', p.toString()); return prev; });
 
   const clearFilters = () => setSearchParams(prev => {
     prev.delete('status');
     prev.delete('q');
     prev.delete('assigned');
+    prev.delete('service_id');
+    prev.delete('date_from');
+    prev.delete('date_to');
     prev.delete('page');
     return prev;
   });
@@ -135,23 +147,33 @@ export function Queue() {
   const fetchAllRequests = useCallback(async () => {
     setLoadingAll(true);
     try {
-      let url = '/requests/?limit=50';
-      if (statusFilter !== 'ALL') {
-        url += `&status=${statusFilter}`;
-      }
-      if (searchQuery.trim()) {
-        url += `&q=${encodeURIComponent(searchQuery.trim())}`;
-      }
-      const res = await api.get(url);
+      const searchParamsObj = new URLSearchParams();
+      searchParamsObj.set('limit', '20');
+      searchParamsObj.set('page', page.toString());
+      
+      if (assignedFilter !== 'ALL') searchParamsObj.set('assigned', assignedFilter);
+      if (statusFilter !== 'ALL') searchParamsObj.set('status', statusFilter);
+      if (searchQuery.trim()) searchParamsObj.set('q', searchQuery.trim());
+      if (serviceIdFilter !== 'ALL') searchParamsObj.set('service_id', serviceIdFilter);
+      if (dateFromFilter) searchParamsObj.set('date_from', dateFromFilter);
+      if (dateToFilter) searchParamsObj.set('date_to', dateToFilter);
+      
+      const res = await api.get('/requests/?' + searchParamsObj.toString());
       const items = res.data.items || (Array.isArray(res.data) ? res.data : []);
-      // Filter out drafts as they are citizen-only
+      
+      if (res.data.pages !== undefined) {
+          setTotalPages(res.data.pages);
+      } else {
+          setTotalPages(1);
+      }
+      
       setAllRequests(items.filter((r: ServiceRequest) => r.status !== 'DRAFT'));
     } catch {
       // non-fatal
     } finally {
       setLoadingAll(false);
     }
-  }, [statusFilter, searchQuery]);
+  }, [page, assignedFilter, statusFilter, searchQuery, serviceIdFilter, dateFromFilter, dateToFilter]);
 
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
@@ -300,6 +322,7 @@ export function Queue() {
             </div>
           </div>
         )}
+      </div>
       </div>
 
       {error && (

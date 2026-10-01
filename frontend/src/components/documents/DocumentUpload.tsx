@@ -28,6 +28,10 @@ interface DocumentUploadProps {
   requirement: Requirement;
   existingDocument?: RequestDocument;
   onUploadSuccess: (document: RequestDocument) => void;
+  stagedFile?: File | null;
+  onFileStage?: (file: File | null) => void;
+  uploadStatus?: 'idle' | 'uploading' | 'success' | 'error';
+  uploadProgressError?: string | null;
 }
 
 export function DocumentUpload({ 
@@ -89,8 +93,8 @@ export function DocumentUpload({
 
   const handleUpload = async () => {
     if (!file || onFileStage) return; // In staged mode, upload is handled externally
-    setLocalIsUploading(true);
-    setLocalError(null);
+    setIsUploading(true);
+    setError(null);
 
     const formData = new FormData();
     formData.append('requirement_id', requirement.id);
@@ -102,14 +106,14 @@ export function DocumentUpload({
           'Content-Type': 'multipart/form-data',
         },
       });
-      setLocalFile(null);
+      setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (onUploadSuccess) onUploadSuccess(res.data);
     } catch (err) {
       const error = err as AxiosError<{ detail: string }>;
-      setLocalError(error.response?.data?.detail || 'Failed to upload document.');
+      setError(error.response?.data?.detail || 'Failed to upload document.');
     } finally {
-      setLocalIsUploading(false);
+      setIsUploading(false);
     }
   };
 
@@ -229,7 +233,7 @@ export function DocumentUpload({
               <div className="flex items-center gap-1.5 shrink-0">
                 {uploadStatus !== 'success' && uploadStatus !== 'uploading' && (
                   <button
-                    onClick={() => { if (onFileStage) onFileStage(null); else setLocalFile(null); }}
+                    onClick={() => { if (onFileStage) onFileStage(null); else setFile(null); }}
                     className="p-1.5 text-mono-muted hover:text-red-600 hover:bg-red-50 rounded-md transition"
                     disabled={isUploading}
                   >

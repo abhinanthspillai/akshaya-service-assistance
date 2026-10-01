@@ -153,11 +153,13 @@ export function RequestWorkspace() {
 
   // Interactive Action Modals
   const [activeModal, setActiveModal] = useState<
-    'correction' | 'require_interaction' | 'schedule_interaction' | 'unable_to_proceed' | 'complete' | 'accept' | 'confirm_payment' | null
+    'correction' | 'require_interaction' | 'schedule_interaction' | 'unable_to_proceed' | 'complete' | 'accept' | 'confirm_payment' | 'start_review' | 'approve_doc' | 'reject_doc' | 'mark_ready' | 'start_processing' | 'request_payment' | null
   >(null);
 
   // Modal form states
   const [targetDocId, setTargetDocId] = useState<string>('');
+  const [paymentAmount, setPaymentAmount] = useState<string>('');
+  const [rejectDocReason, setRejectDocReason] = useState<string>('');
   const [correctionReason, setCorrectionReason] = useState<string>('');
   const [targetRequirementId, setTargetRequirementId] = useState<string>('');
   const [interactionReason, setInteractionReason] = useState<string>('');
@@ -247,7 +249,8 @@ export function RequestWorkspace() {
     }
   };
 
-  const handleStartReview = async () => {
+  const handleStartReview = () => setActiveModal('start_review');
+  const submitStartReview = async () => {
     if (!request) return;
     setIsActionLoading(true);
     try {
@@ -364,7 +367,8 @@ export function RequestWorkspace() {
     }
   };
 
-  const handleMarkReady = async () => {
+  const handleMarkReady = () => setActiveModal('mark_ready');
+  const submitMarkReady = async () => {
     if (!request) return;
     setIsActionLoading(true);
     try {
@@ -379,7 +383,8 @@ export function RequestWorkspace() {
     }
   };
 
-  const handleStartProcessing = async () => {
+  const handleStartProcessing = () => setActiveModal('start_processing');
+  const submitStartProcessing = async () => {
     if (!request) return;
     setIsActionLoading(true);
     try {

@@ -54,6 +54,7 @@ export function NewRequest() {
   const navigate = useNavigate();
 
   const [service, setService] = useState<ServiceDetail | null>(null);
+  const [activeTab, setActiveTab] = useState<'nearest' | 'all'>('nearest');
   const [centres, setCentres] = useState<Centre[]>([]);
   const [documents, setDocuments] = useState<RequestDocument[]>([]);
   const [stagedFiles, setStagedFiles] = useState<Record<string, File>>({});
@@ -548,8 +549,6 @@ export function NewRequest() {
                             setUploadStatuses(prev => ({ ...prev, [req.id]: 'pending' }));
                             setUploadErrors(prev => ({ ...prev, [req.id]: '' }));
                           }}
-                          uploadStatus={uploadStatuses[req.id] || 'pending'}
-                          uploadProgressError={uploadErrors[req.id] || ''}
                           onUploadSuccess={(newDoc) => {
                             setDocuments(prev => {
                               const filtered = prev.filter(d => d.requirement_id !== newDoc.requirement_id);
