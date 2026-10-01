@@ -168,6 +168,27 @@ def _perform_transition(
         body=notification_body,
     )
 
+
+
+def _notify_assigned_employees(session, request_id, event_type, title, body):
+    from app.models.assignment import RequestAssignment
+    from sqlalchemy import select
+    assignments = session.scalars(
+        select(RequestAssignment).where(RequestAssignment.request_id == request_id, RequestAssignment.is_active.is_(True))
+    ).all()
+    for assignment in assignments:
+        _safe_add_notification(session, assignment.employee_id, request_id, event_type, title, body)
+
+def _notify_centre_employees(session, centre_id, request_id, event_type, title, body):
+    from app.models.profile import EmployeeProfile
+    from sqlalchemy import select
+    employees = session.scalars(
+        select(EmployeeProfile)
+        .where(EmployeeProfile.centre_id == centre_id, EmployeeProfile.approval_status == "APPROVED")
+    ).all()
+    for emp in employees:
+        _safe_add_notification(session, emp.user_id, request_id, event_type, title, body)
+
 _ALLOWED_EXTENSIONS_BY_MIME = {
     "application/pdf": {".pdf"},
     "image/jpeg": {".jpg", ".jpeg"},
@@ -207,6 +228,7 @@ def list_requests(
     req_status: str | None = Query(None, alias="status"),
     service_id: UUID | None = None,
     q: str | None = None,
+    assigned: str | None = None,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100, alias="limit"),
     size: int | None = Query(None, ge=1, le=100),
@@ -270,7 +292,26 @@ def list_requests(
                 | (cast(ServiceRequest.id, String).ilike(f"{escaped_q}%", escape="\\"))
             )
 
+
+    if assigned:
+        from app.models.assignment import RequestAssignment
+        if assigned == "ME":
+            stmt = stmt.join(
+                RequestAssignment,
+                (RequestAssignment.request_id == ServiceRequest.id) & (RequestAssignment.is_active.is_(True)) & (RequestAssignment.employee_id == current_user.id)
+            )
+        elif assigned == "UNASSIGNED":
+            # Exclude requests that have an active assignment
+            subq = select(RequestAssignment.request_id).where(RequestAssignment.is_active.is_(True))
+            stmt = stmt.where(ServiceRequest.id.notin_(subq))
+        elif assigned == "OTHERS":
+            stmt = stmt.join(
+                RequestAssignment,
+                (RequestAssignment.request_id == ServiceRequest.id) & (RequestAssignment.is_active.is_(True)) & (RequestAssignment.employee_id != current_user.id)
+            )
+
     # Get total count
+
     total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     
     import math
@@ -425,11 +466,29 @@ def get_dashboard_data(
         .limit(10)
     ).all()
 
+    from app.models.profile import CitizenProfile, EmployeeProfile
+    from app.models.assignment import RequestAssignment
+
     seen_ids = set()
     needs_attention = []
     for req in (*reuploaded_requests, *waiting_requests, *untouched_requests):
         if req.id not in seen_ids:
             seen_ids.add(req.id)
+            
+            # citizen name
+            citizen_profile = session.scalar(select(CitizenProfile).where(CitizenProfile.user_id == req.citizen_id))
+            if citizen_profile:
+                setattr(req, 'citizen_name', citizen_profile.full_name)
+            
+            # assigned to name
+            assignment = session.scalar(
+                select(RequestAssignment).where(RequestAssignment.request_id == req.id, RequestAssignment.is_active.is_(True))
+            )
+            if assignment:
+                emp_profile = session.scalar(select(EmployeeProfile).where(EmployeeProfile.user_id == assignment.employee_id))
+                if emp_profile:
+                    setattr(req, 'assigned_to_name', emp_profile.full_name)
+            
             needs_attention.append(req)
         if len(needs_attention) >= 10:
             break
@@ -457,6 +516,15 @@ def get_dashboard_data(
         for h in recent_history
     ]
 
+    from app.models.assignment import RequestAssignment
+    active_assignments_count = session.scalar(
+        select(func.count(RequestAssignment.id))
+        .where(
+            RequestAssignment.employee_id == current_user.id,
+            RequestAssignment.is_active.is_(True)
+        )
+    ) or 0
+
     return {
         "status_counts": status_counts,
         "completed_today": completed_today,
@@ -464,6 +532,7 @@ def get_dashboard_data(
         "buckets": buckets,
         "needs_attention": needs_attention,
         "recent_activity": recent_activity,
+        "active_assignments_count": active_assignments_count,
     }
 
 
@@ -554,6 +623,10 @@ def submit_request(
         notification_event="request_submitted",
         notification_title="Request submitted",
         notification_body="Your request has been submitted to the selected centre."
+    )
+    _notify_centre_employees(
+        session, service_request.selected_centre_id, service_request.id,
+        "new_request_arrived", "New Request", f"A new request for {service_request.service_name_snapshot} has arrived."
     )
     session.commit()
     session.refresh(service_request)
@@ -734,6 +807,12 @@ async def upload_request_document(
         ) or 0
         if pending_reupload == 0:
             _perform_transition(session, service_request, current_user, "UNDER_REVIEW", RequestAction.SUBMIT_CORRECTION, note="All replacements uploaded.")
+        
+        # Notify assigned employees
+        _notify_assigned_employees(
+            session, service_request.id, "document_uploaded", "Document Uploaded", 
+            f"Citizen re-uploaded a document for request {service_request.id}."
+        )
 
     session.commit()
     session.refresh(document)

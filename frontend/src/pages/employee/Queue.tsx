@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../lib/api';
 import {
   Loader2,
@@ -33,6 +34,8 @@ interface ServiceRequest {
   updated_at: string;
   selected_centre_id: string | null;
   citizen_id: string;
+  citizen_name?: string;
+  assigned_to_name?: string;
 }
 
 interface RecentActivityItem {
@@ -61,6 +64,7 @@ interface DashboardData {
   buckets: DashboardBuckets;
   needs_attention: ServiceRequest[];
   recent_activity: RecentActivityItem[];
+  active_assignments_count: number;
 }
 
 const STATUS_BADGES: Record<string, { bg: string; text: string; border: string }> = {
@@ -80,8 +84,29 @@ const STATUS_BADGES: Record<string, { bg: string; text: string; border: string }
 };
 
 export function Queue() {
+  const { user } = useAuth();
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [activeTab, setActiveTab] = useState<'attention' | 'all' | 'activity'>('attention');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = (searchParams.get('tab') as 'attention' | 'all' | 'activity') || 'attention';
+  const statusFilter = searchParams.get('status') || 'ALL';
+  const searchQuery = searchParams.get('q') || '';
+  const assignedFilter = searchParams.get('assigned') || 'ALL';
+  const page = parseInt(searchParams.get('page') || '1', 10);
+  
+  const setActiveTab = (tab: string) => setSearchParams(prev => { prev.set('tab', tab); return prev; });
+  const setStatusFilter = (status: string) => setSearchParams(prev => { prev.set('status', status); prev.set('page', '1'); return prev; });
+  const setSearchQuery = (q: string) => setSearchParams(prev => { prev.set('q', q); prev.set('page', '1'); return prev; });
+  const setAssignedFilter = (assigned: string) => setSearchParams(prev => { prev.set('assigned', assigned); prev.set('page', '1'); return prev; });
+  const setPage = (p: number) => setSearchParams(prev => { prev.set('page', p.toString()); return prev; });
+
+  const clearFilters = () => setSearchParams(prev => {
+    prev.delete('status');
+    prev.delete('q');
+    prev.delete('assigned');
+    prev.delete('page');
+    return prev;
+  });
+
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -89,8 +114,7 @@ export function Queue() {
   // "All Requests" tab states
   const [allRequests, setAllRequests] = useState<ServiceRequest[]>([]);
   const [loadingAll, setLoadingAll] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [totalPages, setTotalPages] = useState(1);
 
   const navigate = useNavigate();
 
@@ -129,9 +153,36 @@ export function Queue() {
     }
   }, [statusFilter, searchQuery]);
 
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
   useEffect(() => {
     fetchDashboard();
+    setLastUpdated(new Date());
   }, [fetchDashboard]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchDashboard(true);
+        if (activeTab === 'all') fetchAllRequests();
+        setLastUpdated(new Date());
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchDashboard(true);
+        if (activeTab === 'all') fetchAllRequests();
+        setLastUpdated(new Date());
+      }
+    }, 60000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(intervalId);
+    };
+  }, [fetchDashboard, fetchAllRequests, activeTab]);
 
   useEffect(() => {
     if (activeTab === 'all') {
@@ -203,27 +254,52 @@ export function Queue() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
-              <Users size={26} className="text-slate-800" />
-              Akshaya Centre Request Queue
-            </h1>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-semibold text-mono-muted uppercase tracking-widest flex items-center gap-2">
+              <Calendar size={14} />
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </span>
           </div>
-          <p className="text-slate-500 text-sm mt-1">
-            Real-time citizen intake, document verification, and application delivery pipeline.
+          <h1 className="text-2xl font-bold text-mono-text tracking-tight flex items-center gap-2.5">
+            Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {user?.full_name ? user.full_name.split(' ')[0] : 'Employee'}
+          </h1>
+          <p className="text-mono-muted text-sm mt-1 flex items-center gap-1.5">
+            <Users size={15} />
+            {user?.centre_name || 'Akshaya Centre'} Dashboard
           </p>
         </div>
 
-        <button
-          onClick={handleManualRefresh}
+        <div className="flex flex-col sm:items-end gap-3">
+          <button
+            onClick={handleManualRefresh}
           disabled={isRefreshing}
           className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-all shadow-sm disabled:opacity-50"
         >
+          <div className="text-[11px] text-mono-muted font-medium mr-2">
+            Last updated: {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </div>
           <RefreshCw size={15} className={isRefreshing ? 'animate-spin' : ''} />
           {isRefreshing ? 'Refreshing...' : 'Refresh Queue'}
         </button>
+        
+        {user?.max_active_requests && dashboard && (
+          <div className="flex items-center gap-2 text-sm bg-mono-surface px-3 py-1.5 rounded-lg border border-mono-border">
+            <span className="font-semibold text-mono-text">Capacity:</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-16 h-2 rounded-full bg-mono-border overflow-hidden">
+                <div 
+                  className={`h-full rounded-full transition-all ${dashboard.active_assignments_count >= user.max_active_requests ? 'bg-red-500' : 'bg-green-500'}`} 
+                  style={{ width: `${Math.min(100, (dashboard.active_assignments_count / user.max_active_requests) * 100)}%` }}
+                ></div>
+              </div>
+              <span className={`font-bold ${dashboard.active_assignments_count >= user.max_active_requests ? 'text-red-500' : 'text-mono-text'}`}>
+                {dashboard.active_assignments_count} / {user.max_active_requests}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -238,7 +314,7 @@ export function Queue() {
         {/* Metric 1: New / Intake */}
         <div 
           className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between cursor-pointer hover:border-indigo-300 transition-colors"
-          onClick={() => { setActiveTab('all'); setStatusFilter('WAITING_FOR_CENTRE'); }}
+          onClick={() => setSearchParams({ tab: 'all', status: 'WAITING_FOR_CENTRE' })}
         >
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-semibold uppercase tracking-wider">New Intake</span>
@@ -272,7 +348,7 @@ export function Queue() {
         {/* Metric 3: Awaiting Citizen */}
         <div 
           className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between cursor-pointer hover:border-indigo-300 transition-colors"
-          onClick={() => { setActiveTab('all'); setStatusFilter('CORRECTION_REQUIRED'); }}
+          onClick={() => setSearchParams({ tab: 'all', status: 'CORRECTION_REQUIRED' })}
         >
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-semibold uppercase tracking-wider">Awaiting Citizen</span>
@@ -289,7 +365,7 @@ export function Queue() {
         {/* Metric 4: Completed Today */}
         <div 
           className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between cursor-pointer hover:border-indigo-300 transition-colors"
-          onClick={() => { setActiveTab('all'); setStatusFilter('COMPLETED'); }}
+          onClick={() => setSearchParams({ tab: 'all', status: 'COMPLETED' })}
         >
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-semibold uppercase tracking-wider">Completed Today</span>
@@ -306,7 +382,7 @@ export function Queue() {
         {/* Metric 5: Rejected (30d) */}
         <div 
           className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between col-span-2 md:col-span-1 cursor-pointer hover:border-indigo-300 transition-colors"
-          onClick={() => { setActiveTab('all'); setStatusFilter('UNABLE_TO_PROCEED'); }}
+          onClick={() => setSearchParams({ tab: 'all', status: 'UNABLE_TO_PROCEED' })}
         >
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-semibold uppercase tracking-wider">Rejected (30d)</span>
@@ -468,7 +544,7 @@ export function Queue() {
               <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search by request ID or service name..."
+                placeholder="Search by ID, Citizen, Service..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 bg-slate-50 rounded-xl text-xs border border-transparent focus:bg-white focus:border-slate-300 outline-none transition-all"
@@ -476,6 +552,25 @@ export function Queue() {
             </div>
 
             <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+              {(statusFilter !== 'ALL' || searchQuery !== '' || assignedFilter !== 'ALL') && (
+                <button
+                  onClick={clearFilters}
+                  className="px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-semibold text-slate-700 border border-slate-200 outline-none transition-colors whitespace-nowrap flex items-center gap-1.5"
+                >
+                  <XCircle size={14} />
+                  Clear Filters
+                </button>
+              )}
+              <select
+                value={assignedFilter}
+                onChange={(e) => setAssignedFilter(e.target.value)}
+                className="px-3 py-2 bg-slate-50 rounded-xl text-xs font-semibold text-slate-700 border border-slate-200 outline-none"
+              >
+                <option value="ALL">All Assignments</option>
+                <option value="ME">Assigned to Me</option>
+                <option value="UNASSIGNED">Unassigned</option>
+                <option value="OTHERS">Assigned to Others</option>
+              </select>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -511,8 +606,21 @@ export function Queue() {
               </p>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-              <ul className="divide-y divide-slate-100">
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Service</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Request ID</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Citizen</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Assigned To</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Submitted</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Waiting Time</th>
+                    <th scope="col" className="relative px-6 py-3"><span className="sr-only">Action</span></th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-slate-200">
                 {allRequests.map((req) => {
                   const badge = STATUS_BADGES[req.status] || {
                     bg: 'bg-slate-100',
@@ -520,43 +628,100 @@ export function Queue() {
                     border: 'border-slate-200',
                   };
 
-                  return (
-                    <li key={req.id}>
-                      <button
-                        onClick={() => navigate('/employee/requests/' + req.id)}
-                        className="w-full flex items-center justify-between p-4.5 hover:bg-slate-50/80 transition-colors text-left"
-                      >
-                        <div className="min-w-0 flex-1 pr-4">
-                          <div className="flex items-center gap-2.5 mb-1">
-                            <span className="font-bold text-sm text-slate-900 truncate">
-                              {req.service_name_snapshot}
-                            </span>
-                            <span
-                              className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${badge.bg} ${badge.text} ${badge.border}`}
-                            >
-                              {formatStatus(req.status)}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-slate-500">
-                            <span>ID: <span className="font-mono text-slate-700">{req.id.slice(0, 8)}</span></span>
-                            <span>•</span>
-                            <span>Type {req.service_type_snapshot}</span>
-                            <span>•</span>
-                            <span>{req.fee_snapshot ? `₹${req.fee_snapshot}` : 'Free'}</span>
-                            <span>•</span>
-                            <span>{new Date(req.created_at).toLocaleDateString()}</span>
-                          </div>
-                        </div>
+                  const waitingTime = req.submitted_at 
+                    ? Math.floor((new Date().getTime() - new Date(req.submitted_at).getTime()) / (1000 * 3600 * 24))
+                    : 0;
 
-                        <div className="flex items-center gap-2 text-slate-400">
-                          <span className="text-xs font-semibold text-slate-600 hidden sm:inline">Workspace</span>
-                          <ChevronRight size={16} />
+                  return (
+                    <tr key={req.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-bold text-slate-900 truncate max-w-xs" title={req.service_name_snapshot}>
+                          {req.service_name_snapshot}
                         </div>
-                      </button>
-                    </li>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-mono text-slate-700">{req.id.slice(0, 8)}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-slate-900">{req.citizen_name || 'Unknown'}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${badge.bg} ${badge.text} ${badge.border}`}>
+                          {formatStatus(req.status)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-slate-500">{req.assigned_to_name || 'Unassigned'}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-slate-500">
+                          {req.submitted_at ? new Date(req.submitted_at).toLocaleDateString() : 'N/A'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                        {req.submitted_at ? `${waitingTime} day(s)` : '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button
+                          onClick={() => navigate('/employee/requests/' + req.id)}
+                          className="text-indigo-600 hover:text-indigo-900 flex items-center justify-end gap-1 font-semibold"
+                        >
+                          Open <ChevronRight size={16} />
+                        </button>
+                      </td>
+                    </tr>
                   );
                 })}
-              </ul>
+              </tbody>
+            </table>
+              
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="px-4 py-3 flex items-center justify-between border-t border-slate-200 sm:px-6 bg-slate-50">
+                  <div className="flex-1 flex justify-between sm:hidden">
+                    <button
+                      onClick={() => setPage(Math.max(1, page - 1))}
+                      disabled={page === 1}
+                      className="relative inline-flex items-center px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      onClick={() => setPage(Math.min(totalPages, page + 1))}
+                      disabled={page === totalPages}
+                      className="ml-3 relative inline-flex items-center px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </div>
+                  <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm text-slate-700">
+                        Showing page <span className="font-medium">{page}</span> of{' '}
+                        <span className="font-medium">{totalPages}</span>
+                      </p>
+                    </div>
+                    <div>
+                      <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                        <button
+                          onClick={() => setPage(Math.max(1, page - 1))}
+                          disabled={page === 1}
+                          className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          onClick={() => setPage(Math.min(totalPages, page + 1))}
+                          disabled={page === totalPages}
+                          className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          Next
+                        </button>
+                      </nav>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -622,6 +787,54 @@ export function Queue() {
                   );
                 })}
               </ul>
+              
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="px-4 py-3 flex items-center justify-between border-t border-slate-200 sm:px-6 bg-slate-50">
+                  <div className="flex-1 flex justify-between sm:hidden">
+                    <button
+                      onClick={() => setPage(Math.max(1, page - 1))}
+                      disabled={page === 1}
+                      className="relative inline-flex items-center px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      onClick={() => setPage(Math.min(totalPages, page + 1))}
+                      disabled={page === totalPages}
+                      className="ml-3 relative inline-flex items-center px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </div>
+                  <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm text-slate-700">
+                        Showing page <span className="font-medium">{page}</span> of{' '}
+                        <span className="font-medium">{totalPages}</span>
+                      </p>
+                    </div>
+                    <div>
+                      <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                        <button
+                          onClick={() => setPage(Math.max(1, page - 1))}
+                          disabled={page === 1}
+                          className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          onClick={() => setPage(Math.min(totalPages, page + 1))}
+                          disabled={page === totalPages}
+                          className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          Next
+                        </button>
+                      </nav>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

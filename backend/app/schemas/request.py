@@ -47,6 +47,8 @@ class ServiceRequestResponse(BaseModel):
     fee_snapshot: Decimal | None
     submitted_at: datetime | None
     completed_at: datetime | None
+    citizen_name: str | None = None
+    assigned_to_name: str | None = None
     cancelled_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -88,3 +90,4 @@ class DashboardResponse(BaseModel):
     buckets: DashboardBuckets
     needs_attention: list[ServiceRequestResponse]
     recent_activity: list[RecentActivityItem]
+    active_assignments_count: int = 0
