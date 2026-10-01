@@ -11,6 +11,30 @@ from app.models.request import ServiceRequest
 
 router = APIRouter()
 
+def _assert_employee_can_access_ticket(session: SessionDep, user: CurrentUser, ticket: SupportTicket):
+    if user.role == "centre_employee":
+        from app.models.profile import EmployeeProfile
+        employee = session.get(EmployeeProfile, user.id)
+        if not employee or employee.approval_status != "APPROVED":
+            raise HTTPException(status_code=403, detail="Not authorized")
+        if not ticket.request_id:
+            raise HTTPException(status_code=403, detail="Not authorized (ticket not linked to a request)")
+        service_request = session.get(ServiceRequest, ticket.request_id)
+        if not service_request or service_request.selected_centre_id != employee.centre_id:
+            raise HTTPException(status_code=403, detail="Not authorized for this ticket")
+    elif user.role == "centre_administrator":
+        from app.models.profile import CentreAdministrator
+        admin = session.get(CentreAdministrator, user.id)
+        if not admin:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        if not ticket.request_id:
+            raise HTTPException(status_code=403, detail="Not authorized (ticket not linked to a request)")
+        service_request = session.get(ServiceRequest, ticket.request_id)
+        if not service_request or service_request.selected_centre_id != admin.centre_id:
+            raise HTTPException(status_code=403, detail="Not authorized for this ticket")
+
+
+
 @router.post("/", response_model=SupportTicketResponse)
 def create_ticket(
     *,
@@ -81,36 +105,8 @@ def get_ticket(
         raise HTTPException(status_code=404, detail="Ticket not found")
     if current_user.role == "citizen" and ticket.citizen_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
-    elif current_user.role == "centre_employee":
-        from app.models.profile import EmployeeProfile
-        employee = session.get(EmployeeProfile, current_user.id)
-        if not employee or employee.approval_status != "APPROVED":
-            raise HTTPException(status_code=403, detail="Not authorized")
-        if not ticket.request_id:
-            raise HTTPException(status_code=403, detail="Not authorized (ticket not linked to a request)")
-        service_request = session.get(ServiceRequest, ticket.request_id)
-        if not service_request or service_request.selected_centre_id != employee.centre_id:
-            raise HTTPException(status_code=403, detail="Not authorized for this ticket")
-    elif current_user.role == "centre_employee":
-        from app.models.profile import EmployeeProfile
-        employee = session.get(EmployeeProfile, current_user.id)
-        if not employee or employee.approval_status != "APPROVED":
-            raise HTTPException(status_code=403, detail="Not authorized")
-        if not ticket.request_id:
-            raise HTTPException(status_code=403, detail="Not authorized (ticket not linked to a request)")
-        service_request = session.get(ServiceRequest, ticket.request_id)
-        if not service_request or service_request.selected_centre_id != employee.centre_id:
-            raise HTTPException(status_code=403, detail="Not authorized for this ticket")
-    elif current_user.role == "centre_employee":
-        from app.models.profile import EmployeeProfile
-        employee = session.get(EmployeeProfile, current_user.id)
-        if not employee or employee.approval_status != "APPROVED":
-            raise HTTPException(status_code=403, detail="Not authorized")
-        if not ticket.request_id:
-            raise HTTPException(status_code=403, detail="Not authorized (ticket not linked to a request)")
-        service_request = session.get(ServiceRequest, ticket.request_id)
-        if not service_request or service_request.selected_centre_id != employee.centre_id:
-            raise HTTPException(status_code=403, detail="Not authorized for this ticket")
+    elif current_user.role in ("centre_employee", "centre_administrator"):
+        _assert_employee_can_access_ticket(session, current_user, ticket)
     return ticket
 
 @router.post("/{ticket_id}/status", response_model=SupportTicketResponse)
@@ -161,36 +157,8 @@ def list_ticket_messages(
         raise HTTPException(status_code=404, detail="Ticket not found")
     if current_user.role == "citizen" and ticket.citizen_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
-    elif current_user.role == "centre_employee":
-        from app.models.profile import EmployeeProfile
-        employee = session.get(EmployeeProfile, current_user.id)
-        if not employee or employee.approval_status != "APPROVED":
-            raise HTTPException(status_code=403, detail="Not authorized")
-        if not ticket.request_id:
-            raise HTTPException(status_code=403, detail="Not authorized (ticket not linked to a request)")
-        service_request = session.get(ServiceRequest, ticket.request_id)
-        if not service_request or service_request.selected_centre_id != employee.centre_id:
-            raise HTTPException(status_code=403, detail="Not authorized for this ticket")
-    elif current_user.role == "centre_employee":
-        from app.models.profile import EmployeeProfile
-        employee = session.get(EmployeeProfile, current_user.id)
-        if not employee or employee.approval_status != "APPROVED":
-            raise HTTPException(status_code=403, detail="Not authorized")
-        if not ticket.request_id:
-            raise HTTPException(status_code=403, detail="Not authorized (ticket not linked to a request)")
-        service_request = session.get(ServiceRequest, ticket.request_id)
-        if not service_request or service_request.selected_centre_id != employee.centre_id:
-            raise HTTPException(status_code=403, detail="Not authorized for this ticket")
-    elif current_user.role == "centre_employee":
-        from app.models.profile import EmployeeProfile
-        employee = session.get(EmployeeProfile, current_user.id)
-        if not employee or employee.approval_status != "APPROVED":
-            raise HTTPException(status_code=403, detail="Not authorized")
-        if not ticket.request_id:
-            raise HTTPException(status_code=403, detail="Not authorized (ticket not linked to a request)")
-        service_request = session.get(ServiceRequest, ticket.request_id)
-        if not service_request or service_request.selected_centre_id != employee.centre_id:
-            raise HTTPException(status_code=403, detail="Not authorized for this ticket")
+    elif current_user.role in ("centre_employee", "centre_administrator"):
+        _assert_employee_can_access_ticket(session, current_user, ticket)
         
     messages = session.scalars(
         select(TicketMessage).where(TicketMessage.ticket_id == ticket_id).order_by(TicketMessage.created_at)
@@ -210,36 +178,8 @@ def add_ticket_message(
         raise HTTPException(status_code=404, detail="Ticket not found")
     if current_user.role == "citizen" and ticket.citizen_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
-    elif current_user.role == "centre_employee":
-        from app.models.profile import EmployeeProfile
-        employee = session.get(EmployeeProfile, current_user.id)
-        if not employee or employee.approval_status != "APPROVED":
-            raise HTTPException(status_code=403, detail="Not authorized")
-        if not ticket.request_id:
-            raise HTTPException(status_code=403, detail="Not authorized (ticket not linked to a request)")
-        service_request = session.get(ServiceRequest, ticket.request_id)
-        if not service_request or service_request.selected_centre_id != employee.centre_id:
-            raise HTTPException(status_code=403, detail="Not authorized for this ticket")
-    elif current_user.role == "centre_employee":
-        from app.models.profile import EmployeeProfile
-        employee = session.get(EmployeeProfile, current_user.id)
-        if not employee or employee.approval_status != "APPROVED":
-            raise HTTPException(status_code=403, detail="Not authorized")
-        if not ticket.request_id:
-            raise HTTPException(status_code=403, detail="Not authorized (ticket not linked to a request)")
-        service_request = session.get(ServiceRequest, ticket.request_id)
-        if not service_request or service_request.selected_centre_id != employee.centre_id:
-            raise HTTPException(status_code=403, detail="Not authorized for this ticket")
-    elif current_user.role == "centre_employee":
-        from app.models.profile import EmployeeProfile
-        employee = session.get(EmployeeProfile, current_user.id)
-        if not employee or employee.approval_status != "APPROVED":
-            raise HTTPException(status_code=403, detail="Not authorized")
-        if not ticket.request_id:
-            raise HTTPException(status_code=403, detail="Not authorized (ticket not linked to a request)")
-        service_request = session.get(ServiceRequest, ticket.request_id)
-        if not service_request or service_request.selected_centre_id != employee.centre_id:
-            raise HTTPException(status_code=403, detail="Not authorized for this ticket")
+    elif current_user.role in ("centre_employee", "centre_administrator"):
+        _assert_employee_can_access_ticket(session, current_user, ticket)
         
     message = TicketMessage(
         ticket_id=ticket_id,

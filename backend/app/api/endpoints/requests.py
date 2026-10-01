@@ -1,3 +1,4 @@
+from datetime import datetime
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path, PurePath
@@ -229,6 +230,8 @@ def list_requests(
     service_id: UUID | None = None,
     q: str | None = None,
     assigned: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100, alias="limit"),
     size: int | None = Query(None, ge=1, le=100),
