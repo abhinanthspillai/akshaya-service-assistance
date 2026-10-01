@@ -153,7 +153,7 @@ export function RequestWorkspace() {
 
   // Interactive Action Modals
   const [activeModal, setActiveModal] = useState<
-    'correction' | 'require_interaction' | 'schedule_interaction' | 'unable_to_proceed' | 'complete' | null
+    'correction' | 'require_interaction' | 'schedule_interaction' | 'unable_to_proceed' | 'complete' | 'accept' | 'confirm_payment' | null
   >(null);
 
   // Modal form states
@@ -232,10 +232,16 @@ export function RequestWorkspace() {
     try {
       await api.post(`/requests/${request.id}/accept`);
       triggerNotification('Request accepted into your queue.');
+      setActiveModal(null);
       await fetchWorkspace();
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } } };
-      setError(err.response?.data?.detail || 'Failed to accept request.');
+      const err = e as { response?: { status?: number, data?: { detail?: string } } };
+      if (err.response?.status === 409) {
+        setError('This request has already been assigned to another employee.');
+      } else {
+        setError(err.response?.data?.detail || 'Failed to accept request.');
+      }
+      setActiveModal(null);
     } finally {
       setIsActionLoading(false);
     }
@@ -432,11 +438,11 @@ export function RequestWorkspace() {
       });
       setActiveModal(null);
       setUnableReason('');
-      triggerNotification('Request marked Unable to Proceed.');
+      triggerNotification('Request marked as unable to proceed.');
       await fetchWorkspace();
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } } };
-      setError(err.response?.data?.detail || 'Failed to mark unable to proceed.');
+      const err = e as { response?: { status?: number, data?: { detail?: string } } };
+      setError(err.response?.data?.detail || 'Failed to mark request.');
     } finally {
       setIsActionLoading(false);
     }
