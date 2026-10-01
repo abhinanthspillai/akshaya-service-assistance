@@ -10,6 +10,7 @@ from app.models.centre import AkshayaCentre
 from app.models.document import RequestDocument
 from app.models.profile import CitizenProfile, EmployeeProfile
 from app.models.request import ServiceRequest
+from app.models.assignment import RequestAssignment
 from app.models.service import CentreSupportedService, Service, ServiceDocumentRequirement
 from app.models.user import User
 
@@ -261,12 +262,73 @@ def test_dashboard_needs_attention_ranking(
     # Re-uploaded doc request must be ranked first (Priority 1)
     assert needs_attention[0]["id"] == str(req_reuploaded.id)
 
-def test_employee_queue_filters(client: TestClient, dashboard_fixture: dict):
+def test_employee_queue_filters(client: TestClient, db_session: Session, dashboard_fixture: dict):
     emp_a_token = dashboard_fixture["headers_a"]["Authorization"]
+    centre_a = dashboard_fixture["centre_a"]
+    svc = dashboard_fixture["service"]
+    cit = dashboard_fixture["citizen"]
+    emp_a = dashboard_fixture["emp_a"]
+    
+    # Create request 1: Unassigned
+    req_unassigned = ServiceRequest(
+        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_a.id,
+        status="WAITING_FOR_CENTRE", service_name_snapshot="Svc", service_type_snapshot="A", fee_snapshot=100
+    )
+    # Create request 2: Assigned to ME (emp_a)
+    req_me = ServiceRequest(
+        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_a.id,
+        status="ACCEPTED", service_name_snapshot="Svc", service_type_snapshot="A", fee_snapshot=100
+    )
+    # Create request 3: Assigned to OTHERS
+    req_others = ServiceRequest(
+        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_a.id,
+        status="ACCEPTED", service_name_snapshot="Svc", service_type_snapshot="A", fee_snapshot=100
+    )
+    
+    db_session.add_all([req_unassigned, req_me, req_others])
+    db_session.commit()
+    
+    # Add assignments
+    assign_me = RequestAssignment(request_id=req_me.id, employee_id=emp_a.id, is_active=True)
+    import uuid
+    dummy_emp_id = uuid.uuid4()
+    assign_others = RequestAssignment(request_id=req_others.id, employee_id=dummy_emp_id, is_active=True)
+    db_session.add_all([assign_me, assign_others])
+    db_session.commit()
 
-    # Test unassigned requests filter
+    # Test UNASSIGNED
     resp = client.get("/api/v1/requests/?assigned=UNASSIGNED", headers={"Authorization": emp_a_token})
     assert resp.status_code == 200
+    data = resp.json()["items"]
+    ids = [d["id"] for d in data]
+    assert str(req_unassigned.id) in ids
+    assert str(req_me.id) not in ids
+    assert str(req_others.id) not in ids
+
+    # Test ME
+    resp = client.get("/api/v1/requests/?assigned=ME", headers={"Authorization": emp_a_token})
+    assert resp.status_code == 200
+    data = resp.json()["items"]
+    ids = [d["id"] for d in data]
+    assert str(req_me.id) in ids
+    assert str(req_unassigned.id) not in ids
+    
+    # Test OTHERS
+    resp = client.get("/api/v1/requests/?assigned=OTHERS", headers={"Authorization": emp_a_token})
+    assert resp.status_code == 200
+    data = resp.json()["items"]
+    ids = [d["id"] for d in data]
+    assert str(req_others.id) in ids
+    assert str(req_unassigned.id) not in ids
+    
+    # Test q filter
+    
+    db_session.commit()
+    resp = client.get("/api/v1/requests/?q=Svc", headers={"Authorization": emp_a_token})
+    assert resp.status_code == 200
+    data = resp.json()["items"]
+    ids = [d["id"] for d in data]
+    assert str(req_unassigned.id) in ids
     
     # Test assigned to me filter
     resp = client.get("/api/v1/requests/?assigned=ME", headers={"Authorization": emp_a_token})
