@@ -14,6 +14,8 @@ import {
   FileCheck
 } from 'lucide-react';
 import { formatStatus } from '../../utils/format';
+import { useAuth } from '../../contexts/AuthContext';
+import { Avatar } from '../../components/ui/Avatar';
 
 interface ServiceRequest {
   id: string;
@@ -78,6 +80,7 @@ export function EmployeeDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const fetchDashboard = useCallback(async (isRefresh = false) => {
     if (isRefresh) setIsRefreshing(true);
@@ -130,8 +133,12 @@ export function EmployeeDashboard() {
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-mono-text tracking-tight">Akshaya Centre Dashboard</h1>
+        <div className="flex items-center gap-4">
+          <Avatar photoUrl={user?.photo_url} name={user?.full_name || 'Employee'} className="w-16 h-16 text-2xl" />
+          <div>
+            <h1 className="text-3xl font-bold text-mono-text tracking-tight">Akshaya Centre Dashboard</h1>
+            <p className="text-mono-muted mt-1">Welcome back, {user?.full_name || 'Employee'}</p>
+          </div>
         </div>
         <button
           onClick={() => fetchDashboard(true)}

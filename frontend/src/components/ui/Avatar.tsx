@@ -20,7 +20,7 @@ export function Avatar({ photoUrl, name, className }: AvatarProps) {
     >
       {photoUrl ? (
         <img 
-          src={`${api.defaults.baseURL}/profile/employee/photo?filename=${photoUrl}`} 
+          src={photoUrl.startsWith('http') || photoUrl.startsWith('/') ? photoUrl : `${api.defaults.baseURL?.replace('/api/v1', '')}${photoUrl.startsWith('/') ? '' : '/'}${photoUrl}`} 
           alt={name || "Avatar"} 
           className="w-full h-full object-cover"
         />

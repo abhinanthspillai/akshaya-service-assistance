@@ -1,15 +1,21 @@
 import { useNavigate } from 'react-router-dom';
 import { Shield, LifeBuoy, FileText, Users } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { Avatar } from '../../components/ui/Avatar';
 
 export function SysAdminDashboard() {
  const navigate = useNavigate();
+ const { user } = useAuth();
 
  return (
  <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
  <div className="flex items-center justify-between mb-8">
- <div>
- <h1 className="text-3xl font-bold text-mono-text">System Administration</h1>
- <p className="text-mono-muted mt-1">Manage global platform settings, services, and security</p>
+ <div className="flex items-center gap-4">
+   <Avatar photoUrl={user?.photo_url} name={user?.full_name || 'Admin'} className="w-16 h-16 text-2xl" />
+   <div>
+     <h1 className="text-3xl font-bold text-mono-text">System Administration</h1>
+     <p className="text-mono-muted mt-1">Welcome back, {user?.full_name || 'Admin'}</p>
+   </div>
  </div>
  <span className="px-4 py-2 bg-blue-600/10 text-mono-text font-medium rounded-full text-sm">
  SysAdmin Role

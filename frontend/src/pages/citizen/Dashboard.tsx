@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { FileText, AlertCircle, CheckCircle, Search, ArrowRight, Loader2, Plus, Clock, FileEdit, HelpCircle, PhoneCall, ChevronRight, Info } from 'lucide-react';
 import clsx from 'clsx';
 import { PageHeader } from '../../components/ui/PageHeader';
+import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -109,13 +110,18 @@ export function Dashboard() {
   return (
   <div className="space-y-6 pb-12">
   {/* Header Area */}
-  <PageHeader 
-  subtitle="Here's a quick overview of your requests."
-  >
-  <Button onClick={() => navigate('/services')} icon={<Plus size={18} strokeWidth={2.5} />}>
-  New Request
-  </Button>
-  </PageHeader>
+  <div className="flex items-center gap-4 mb-8">
+    <Avatar photoUrl={user?.photo_url} name={user?.full_name} className="w-16 h-16 text-2xl" />
+    <PageHeader 
+      title={`Welcome back, ${user?.full_name || 'Citizen'}`}
+      subtitle="Here's a quick overview of your requests."
+      className="mb-0"
+    >
+      <Button onClick={() => navigate('/services')} icon={<Plus size={18} strokeWidth={2.5} />}>
+        New Request
+      </Button>
+    </PageHeader>
+  </div>
 
  {/* Primary Stats Grid */}
  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

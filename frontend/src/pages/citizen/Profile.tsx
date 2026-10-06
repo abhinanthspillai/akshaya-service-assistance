@@ -1,16 +1,60 @@
+import { useState, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { User, MapPin, ShieldCheck, Lock, Bell, Globe, FileText, Trash2, Edit2, ChevronRight } from 'lucide-react';
+import { User, MapPin, ShieldCheck, Lock, Bell, Globe, FileText, Trash2, Edit2, ChevronRight, Loader2 } from 'lucide-react';
+import { api } from '../../lib/api';
+import { Avatar } from '../../components/ui/Avatar';
 
 
 
 export function Profile() {
- const { user } = useAuth();
- 
+  const { user, refreshUser } = useAuth();
+  const [photoError, setPhotoError] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoError('');
+    if (file.size > 2 * 1024 * 1024) {
+      setPhotoError('File too large. Maximum 2 MB allowed.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setPhotoError('Only JPEG, PNG, and WebP are allowed.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      await api.post('/users/me/photo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      await refreshUser();
+    } catch (err: any) {
+      setPhotoError(err.response?.data?.detail || 'Failed to upload photo');
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handlePhotoRemove = async () => {
+    setPhotoError('');
+    try {
+      await api.delete('/users/me/photo');
+      await refreshUser();
+    } catch (err: any) {
+      setPhotoError(err.response?.data?.detail || 'Failed to remove photo');
+    }
+  };
 
  // Safely parse name or fallback
  const fullName = user?.full_name || 'Sample';
- const initial = fullName.charAt(0).toUpperCase();
  const email = user?.email || 'sample@example.com';
  const role = user?.role.replace('_', ' ') || 'Citizen';
 
@@ -25,8 +69,18 @@ export function Profile() {
  {/* Top Card: Basic Info */}
  <div className="bg-mono-bg rounded-2xl border border-mono-border p-8 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
  <div className="flex items-center gap-6">
- <div className="w-24 h-24 rounded-full bg-mono-surface flex items-center justify-center shrink-0">
- <span className="text-4xl font-bold text-mono-text">{initial}</span>
+ <div className="relative group shrink-0">
+  <Avatar photoUrl={user?.photo_url ? `${user.photo_url}?ts=${Date.now()}` : undefined} name={fullName} className="w-24 h-24 text-4xl" />
+  <label className="absolute inset-0 bg-black/50 text-white rounded-full flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
+    <input type="file" ref={fileInputRef} className="hidden" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoUpload} disabled={isUploading} />
+    {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Edit2 size={20} />}
+    <span className="text-xs font-medium mt-1">Change</span>
+  </label>
+  {user?.photo_url && (
+    <button onClick={handlePhotoRemove} className="absolute -top-1 -right-1 bg-red-100 text-red-600 p-1.5 rounded-full hover:bg-red-200 transition-colors" title="Remove Photo">
+      <Trash2 size={14} />
+    </button>
+  )}
  </div>
  <div>
  <h2 className="text-2xl font-bold text-mono-text mb-1">{fullName}</h2>
@@ -35,6 +89,7 @@ export function Profile() {
  <User size={14} />
  <span>#{user?.id ? user.id.substring(0, 8).toUpperCase() : 'UNKNOWN'}</span>
  </div>
+ {photoError && <p className="text-sm text-red-600 mt-2 font-medium">{photoError}</p>}
  </div>
  </div>
  
