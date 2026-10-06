@@ -38,3 +38,4 @@ class UserAuthMe(UserRead):
     phone: str | None = None
     centre_id: UUID | None = None
     approval_status: str | None = None
+    photo_url: str | None = None

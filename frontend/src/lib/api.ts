@@ -19,4 +19,5 @@ export interface User {
   full_name?: string;
   centre_id?: string;
   approval_status?: string;
+  photo_url?: string;
 }

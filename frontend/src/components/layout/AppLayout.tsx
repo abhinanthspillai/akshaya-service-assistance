@@ -1,5 +1,6 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { getGreeting } from '../../utils/greeting';
+import { Avatar } from '../ui/Avatar';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, FileText, LogOut, FileSearch, Bell, LifeBuoy, Menu, X, Search } from 'lucide-react';
@@ -137,9 +138,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
  <div className="p-4 mt-auto">
  <div className="flex items-center gap-3 px-3 mb-4">
- <div className="w-10 h-10 rounded-full bg-mono-surface flex items-center justify-center text-mono-text font-bold text-sm border border-mono-border shrink-0">
- {user?.full_name ? user.full_name.charAt(0).toUpperCase() : 'S'}
- </div>
+ <Avatar photoUrl={user?.photo_url} name={user?.full_name} className="w-10 h-10 text-sm" />
  <div className="flex-1 min-w-0">
  <p className="text-sm font-bold text-mono-text truncate">{user?.full_name || 'Sample'}</p>
  <p className="text-xs font-medium text-mono-muted capitalize mt-0.5">{user?.role === 'citizen' ? 'Citizen' : user?.role.replace('_', ' ')}</p>
@@ -184,8 +183,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
  )}
  </button>
  <div className="w-px h-6 bg-mono-border"></div>
- <button onClick={() => navigate('/profile')} className="flex items-center justify-center w-8 h-8 rounded-full bg-mono-text text-mono-bg text-sm font-bold hover:opacity-90 transition-opacity">
- {user?.full_name ? user.full_name.charAt(0).toUpperCase() : 'S'}
+ <button onClick={() => navigate('/profile')} className="hover:opacity-90 transition-opacity flex items-center justify-center">
+ <Avatar photoUrl={user?.photo_url} name={user?.full_name} className="w-8 h-8 text-sm" />
  </button>
  </div>
  </header>

@@ -109,6 +109,7 @@ def get_auth_me(current_user: CurrentUser, session: SessionDep) -> UserAuthMe:
             response.full_name = emp_profile.full_name
             response.centre_id = emp_profile.centre_id
             response.approval_status = emp_profile.approval_status
+            response.photo_url = emp_profile.photo_url
     elif current_user.role == "centre_administrator":
         admin_profile = session.scalar(
             select(CentreAdministrator).where(CentreAdministrator.user_id == current_user.id)
