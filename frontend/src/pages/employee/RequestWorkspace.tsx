@@ -261,6 +261,51 @@ export function RequestWorkspace() {
   };
 
   // State Transition Handlers
+  const handleAcceptAndStartReview = async () => {
+    if (!request) return;
+    setIsActionLoading(true);
+    try {
+      await api.post(`/requests/${request.id}/accept-and-start-review`);
+      triggerNotification('Request accepted and review started.');
+      await fetchWorkspace();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      setError(err.response?.data?.detail || 'Failed to accept and start review.');
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleApproveAllDocuments = async () => {
+    if (!request) return;
+    setIsActionLoading(true);
+    try {
+      await api.post(`/requests/${request.id}/documents/approve-all`);
+      triggerNotification('All documents approved.');
+      await fetchWorkspace();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      setError(err.response?.data?.detail || 'Failed to approve all documents.');
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleMarkReadyAndStartProcessing = async () => {
+    if (!request) return;
+    setIsActionLoading(true);
+    try {
+      await api.post(`/requests/${request.id}/mark-ready-and-start-processing`);
+      triggerNotification('Request marked ready and processing started.');
+      await fetchWorkspace();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      setError(err.response?.data?.detail || 'Failed to mark ready and start processing.');
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
   const handleAcceptRequest = async () => {
     if (!request) return;
     setIsActionLoading(true);
@@ -613,100 +658,49 @@ export function RequestWorkspace() {
           <div className="flex flex-wrap items-center gap-2.5">
             {request.status === 'WAITING_FOR_CENTRE' && (
               <button
-                onClick={handleAcceptRequest}
+                onClick={handleAcceptAndStartReview}
                 disabled={isActionLoading}
                 className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
               >
                 {isActionLoading && <Loader2 size={14} className="animate-spin" />}
-                Accept Request
+                Accept and start review
               </button>
             )}
 
-            {request.status === 'ACCEPTED' && (
+            {request.status === 'UNDER_REVIEW' && !allDocsApproved && (
               <button
-                onClick={handleStartReview}
+                onClick={handleApproveAllDocuments}
                 disabled={isActionLoading}
                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
               >
                 {isActionLoading && <Loader2 size={14} className="animate-spin" />}
-                Start Document Review
+                Approve all documents
               </button>
             )}
 
-            {request.status === 'UNDER_REVIEW' && (
-              <>
-                <button
-                  onClick={handleMarkReady}
-                  disabled={isActionLoading || !allDocsApproved}
-                  title={!allDocsApproved ? 'All uploaded documents must be approved before marking ready' : ''}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-40"
-                >
-                  <Check size={14} />
-                  Mark Ready for Processing
-                </button>
-
-                {interactionRequirements.length > 0 && (
-                  <button
-                    onClick={() => {
-                      setTargetRequirementId(interactionRequirements[0]?.id || '');
-                      setActiveModal('require_interaction');
-                    }}
-                    className="px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-semibold rounded-xl transition-all"
-                  >
-                    Require Citizen Visit
-                  </button>
-                )}
-              </>
-            )}
-
-            {request.status === 'READY_FOR_PROCESSING' && (
+            {request.status === 'UNDER_REVIEW' && allDocsApproved && (
               <button
-                onClick={handleStartProcessing}
+                onClick={handleMarkReadyAndStartProcessing}
                 disabled={isActionLoading}
-                className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-2"
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
               >
                 {isActionLoading && <Loader2 size={14} className="animate-spin" />}
-                Start Processing
+                Mark ready and start processing
               </button>
             )}
 
             {request.status === 'PROCESSING' && (
-              <>
-                {request.fee_snapshot && Number(request.fee_snapshot) > 0 && (
-                  <button
-                    onClick={handleRequestPayment}
-                    disabled={isActionLoading}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5"
-                  >
-                    <CreditCard size={14} />
-                    Request Fee Payment
-                  </button>
-                )}
-
-                <button
-                  onClick={() => {
-                    setActiveModal('complete');
-                    setFeeAmount(request.fee_snapshot || 0);
-                    setFeeCollected(true);
-                  }}
-                  disabled={isActionLoading}
-                  className="px-4.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5"
-                >
-                  <CheckCircle2 size={14} />
-                  Complete Request
-                </button>
-              </>
-            )}
-
-            {/* Terminal Actions */}
-            {['ACCEPTED', 'UNDER_REVIEW', 'READY_FOR_PROCESSING', 'PROCESSING', 'INTERACTION_REQUIRED', 'INTERACTION_SCHEDULED'].includes(
-              request.status
-            ) && (
               <button
-                onClick={() => setActiveModal('unable_to_proceed')}
-                className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-xl transition-all"
+                onClick={() => {
+                  setActiveModal('complete');
+                  setFeeAmount(request.fee_snapshot || 0);
+                  setFeeCollected(true);
+                }}
+                disabled={isActionLoading}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5"
               >
-                Unable to Proceed
+                <CheckCircle2 size={14} />
+                Mark completed
               </button>
             )}
           </div>
@@ -849,6 +843,52 @@ export function RequestWorkspace() {
           )}
         </div>
 
+                {/* Secondary Sections */}
+        <details className="group [&_summary::-webkit-details-marker]:hidden border-t border-slate-100 pt-6 mt-6">
+          <summary className="flex items-center justify-between cursor-pointer list-none py-2 font-bold text-slate-800 text-sm">
+            <span>More actions (Interactions, Payments, Messages, History)</span>
+            <span className="transition group-open:rotate-180">
+              <ChevronDown size={20} />
+            </span>
+          </summary>
+          <div className="mt-6 space-y-8">
+            {/* Secondary Buttons */}
+            <div className="flex flex-wrap gap-3 pb-6 border-b border-slate-100">
+              {['ACCEPTED', 'UNDER_REVIEW', 'READY_FOR_PROCESSING', 'PROCESSING', 'INTERACTION_REQUIRED', 'INTERACTION_SCHEDULED'].includes(
+                request.status
+              ) && (
+                <button
+                  onClick={() => setActiveModal('unable_to_proceed')}
+                  className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-xl transition-all"
+                >
+                  Unable to Proceed
+                </button>
+              )}
+              
+              {request.status === 'PROCESSING' && request.fee_snapshot && Number(request.fee_snapshot) > 0 && (
+                <button
+                  onClick={handleRequestPayment}
+                  disabled={isActionLoading}
+                  className="px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-semibold rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                >
+                  <CreditCard size={14} />
+                  Request Fee Payment
+                </button>
+              )}
+              
+              {request.status === 'UNDER_REVIEW' && interactionRequirements.length > 0 && (
+                <button
+                  onClick={() => {
+                    setTargetRequirementId(interactionRequirements[0]?.id || '');
+                    setActiveModal('require_interaction');
+                  }}
+                  className="px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-semibold rounded-xl transition-all"
+                >
+                  Require Citizen Visit
+                </button>
+              )}
+            </div>
+            
         {/* 2. Physical / Biometric Interactions Section */}
         {(interactions.length > 0 || interactionRequirements.length > 0) && (
           <div className="space-y-4 pt-4 border-t border-slate-100">
@@ -1004,6 +1044,8 @@ export function RequestWorkspace() {
             ))}
           </div>
         </div>
+          </div>
+        </details>
       </div>
 
       {/* MODAL 1: Document Correction */}

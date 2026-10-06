@@ -97,8 +97,8 @@ describe('RequestWorkspace.tsx', () => {
     expect(screen.getByText('ration_card.pdf')).toBeInTheDocument();
     expect(screen.getByText('Re-uploaded (v2)')).toBeInTheDocument();
 
-    // Verify action button "Mark Ready" is available for UNDER_REVIEW
-    expect(screen.getByText('Mark Ready for Processing')).toBeInTheDocument();
+    // Verify action button "Approve all documents" is available for UNDER_REVIEW since allDocsApproved is false
+    expect(screen.getByText('Approve all documents')).toBeInTheDocument();
 
     // Click "Request Correction" on the document
     const correctBtn = screen.getByText('Request Correction');
@@ -159,13 +159,27 @@ describe('RequestWorkspace.tsx', () => {
     });
 
     // For PROCESSING status, "Complete Request" button should be available
-    const completeBtn = screen.getByText('Complete Request');
+    const completeBtn = screen.getByText('Mark completed');
     fireEvent.click(completeBtn);
 
     // Completion modal opens
     expect(screen.getByText('Complete Service Delivery')).toBeInTheDocument();
 
     vi.mocked(api.post).mockResolvedValue({ data: { success: true } });
+    
+    // Get the textarea within the modal
+    const textareas = document.querySelectorAll('textarea');
+    let targetTextarea;
+    for (const ta of textareas) {
+        if (ta.hasAttribute('required')) {
+            targetTextarea = ta;
+            break;
+        }
+    }
+    if (!targetTextarea) throw new Error("Could not find required textarea in modal");
+    
+    fireEvent.change(targetTextarea, { target: { value: 'Physical signed document available' } });
+    
     const deliverBtn = screen.getByText('Complete & Deliver Output');
     fireEvent.click(deliverBtn);
 
