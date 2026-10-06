@@ -39,3 +39,7 @@ To enable end-to-end evaluation of employee workflows prior to dedicated centre-
 - Admin-provisioned employees via staff administration remain `approval_status="APPROVED"` immediately.
 - Frontend renders a dedicated `PendingApproval` barrier screen until approval is active.
 
+### Employee Dashboard UX Enhancements
+- To reduce clicks in the employee workflow, clicking a request row automatically triggers `Accept` (if `WAITING_FOR_CENTRE`) and `Start Document Review` transitions before opening the workspace.
+- Replaced document downloads with an inline file viewer (`iframe` or `img`) for PDFs and images to save processing time.
+- Added a `photo_url` field to `employee_profiles` and an `Avatar` component for employees to upload a profile photo.
