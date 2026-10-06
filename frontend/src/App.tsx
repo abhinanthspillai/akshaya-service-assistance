@@ -45,7 +45,7 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode,
 
  if (isLoading) {
  return (
- <div className="h-screen w-screen flex items-center justify-center bg-[#f8fafc]">
+ <div className="h-screen w-screen flex items-center justify-center bg-mono-50">
  <Loader2 className="animate-spin text-mono-text" size={40} />
  </div>
  );
@@ -71,7 +71,7 @@ function RootRedirect() {
  
  if (isLoading) {
  return (
- <div className="h-screen w-screen flex items-center justify-center bg-[#f8fafc]">
+ <div className="h-screen w-screen flex items-center justify-center bg-mono-50">
  <Loader2 className="animate-spin text-mono-text" size={40} />
  </div>
  );
@@ -93,7 +93,7 @@ function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
  
  if (isLoading) {
  return (
- <div className="h-screen w-screen flex items-center justify-center bg-[#f8fafc]">
+ <div className="h-screen w-screen flex items-center justify-center bg-mono-50">
  <Loader2 className="animate-spin text-mono-text" size={40} />
  </div>
  );

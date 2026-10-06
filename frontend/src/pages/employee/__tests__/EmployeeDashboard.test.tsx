@@ -7,7 +7,18 @@ import { api } from '../../../lib/api';
 vi.mock('../../../lib/api', () => ({
   api: {
     get: vi.fn(),
+    post: vi.fn(),
+    delete: vi.fn(),
+    patch: vi.fn(),
+    put: vi.fn(),
   },
+}));
+
+vi.mock('../../../contexts/AuthContext', () => ({
+  useAuth: () => ({
+    user: { full_name: 'Test Employee', photo_url: null },
+    refreshUser: vi.fn()
+  })
 }));
 
 describe('EmployeeDashboard.tsx', () => {
