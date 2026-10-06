@@ -819,9 +819,11 @@ export function RequestWorkspace() {
                       )}
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
           )}
         </div>
 
@@ -833,35 +835,35 @@ export function RequestWorkspace() {
               Physical / Biometric Verification
             </h2>
 
-            {interactions.map((int) => (
+            {interactions.map((interaction) => (
               <div
-                key={int.id}
+                key={interaction.id}
                 className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4"
               >
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-bold text-slate-900">{int.reason}</span>
+                    <span className="text-xs font-bold text-slate-900">{interaction.reason}</span>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
-                      {int.status}
+                      {interaction.status}
                     </span>
                   </div>
-                  {int.instructions && (
+                  {interaction.instructions && (
                     <p className="text-xs text-slate-600 mb-1">
-                      <strong>Instructions:</strong> {int.instructions}
+                      <strong>Instructions:</strong> {interaction.instructions}
                     </p>
                   )}
-                  {int.scheduled_at && (
+                  {interaction.scheduled_at && (
                     <p className="text-xs text-indigo-700 font-semibold">
-                      Scheduled for: {new Date(int.scheduled_at).toLocaleString()}
+                      Scheduled for: {new Date(interaction.scheduled_at).toLocaleString()}
                     </p>
                   )}
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  {int.status === 'REQUESTED' && (
+                  {interaction.status === 'REQUESTED' && (
                     <button
                       onClick={() => {
-                        setTargetInteractionId(int.id);
+                        setTargetInteractionId(interaction.id);
                         setActiveModal('schedule_interaction');
                       }}
                       className="px-3.5 py-1.5 bg-slate-900 text-white rounded-xl text-xs font-semibold hover:bg-slate-800"
@@ -870,17 +872,17 @@ export function RequestWorkspace() {
                     </button>
                   )}
 
-                  {int.status === 'SCHEDULED' && (
+                  {interaction.status === 'SCHEDULED' && (
                     <>
                       <button
-                        onClick={() => handleInteractionOutcome(int.id, 'COMPLETED')}
+                        onClick={() => handleInteractionOutcome(interaction.id, 'COMPLETED')}
                         disabled={isActionLoading}
                         className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700"
                       >
                         Mark Completed
                       </button>
                       <button
-                        onClick={() => handleInteractionOutcome(int.id, 'MISSED')}
+                        onClick={() => handleInteractionOutcome(interaction.id, 'MISSED')}
                         disabled={isActionLoading}
                         className="px-3 py-1.5 bg-rose-100 text-rose-700 rounded-xl text-xs font-bold hover:bg-rose-200"
                       >

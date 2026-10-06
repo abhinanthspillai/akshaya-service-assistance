@@ -44,8 +44,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
  ];
  } else if (user?.role === 'centre_employee') {
  navItems = [
- { name: 'Queue', path: '/queue', icon: LayoutDashboard },
- { name: 'Support Tickets', path: '/support', icon: LifeBuoy },
+ { name: 'Dashboard', path: '/queue', icon: LayoutDashboard },
+ { name: 'Requests', path: '/queue', icon: FileText },
+ { name: 'Notifications', path: '/notifications', icon: Bell },
+ { name: 'Help & Support', path: '/support', icon: LifeBuoy },
  ];
  } else if (user?.role === 'centre_administrator') {
  navItems = [
@@ -140,7 +142,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
  <div className="flex items-center gap-3 px-3 mb-4">
  <Avatar photoUrl={user?.photo_url} name={user?.full_name} className="w-10 h-10 text-sm" />
  <div className="flex-1 min-w-0">
- <p className="text-sm font-bold text-mono-text truncate">{user?.full_name || 'Sample'}</p>
+ <p className="text-sm font-bold text-mono-text truncate" title={user?.full_name || 'Sample'}>{user?.full_name || 'Sample'}</p>
  <p className="text-xs font-medium text-mono-muted capitalize mt-0.5">{user?.role === 'citizen' ? 'Citizen' : user?.role.replace('_', ' ')}</p>
  </div>
  <button onClick={() => navigate('/profile')} className="text-mono-muted hover:text-mono-text">
@@ -161,17 +163,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
  <div className="flex-1 flex flex-col overflow-hidden md:mt-0 mt-16 bg-mono-bg">
  {/* Desktop Top Bar */}
  <header className="hidden md:flex h-20 border-b border-mono-border items-center justify-between px-8 shrink-0">
- <div className="flex items-center flex-1 max-w-xl">
- <div className="relative w-full">
- <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-mono-muted" size={18} />
- <input 
- type="text" 
- placeholder="Search for services, requests or help..." 
- className="w-full pl-11 pr-4 py-2.5 bg-mono-bg border border-mono-border rounded-full text-sm font-medium placeholder:text-mono-muted focus:outline-none focus:border-mono-text transition-all"
- onKeyDown={(e) => { if (e.key === 'Enter') navigate('/services'); }}
- />
- </div>
- </div>
+ <div className="flex-1"></div>
  <div className="flex items-center gap-4">
  <span className="text-sm font-bold text-mono-text hidden lg:block mr-2">
  {getGreeting(user?.full_name)}

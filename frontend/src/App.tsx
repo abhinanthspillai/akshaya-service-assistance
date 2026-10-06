@@ -123,10 +123,10 @@ export default function App() {
  <Route path="/services/:id/request" element={<ProtectedRoute allowedRoles={['citizen']}><NewRequest /></ProtectedRoute>} />
  <Route path="/requests" element={<ProtectedRoute allowedRoles={['citizen']}><MyRequests /></ProtectedRoute>} />
  <Route path="/requests/:id" element={<ProtectedRoute allowedRoles={['citizen']}><RequestDetail /></ProtectedRoute>} />
- <Route path="/notifications" element={<ProtectedRoute allowedRoles={['citizen']}><Notifications /></ProtectedRoute>} />
- <Route path="/support" element={<ProtectedRoute allowedRoles={['citizen']}><Support /></ProtectedRoute>} />
- <Route path="/support/:id" element={<ProtectedRoute allowedRoles={['citizen']}><TicketDetail /></ProtectedRoute>} />
- <Route path="/profile" element={<ProtectedRoute allowedRoles={['citizen']}><Profile /></ProtectedRoute>} />
+ <Route path="/notifications" element={<ProtectedRoute allowedRoles={['citizen', 'centre_employee']}><Notifications /></ProtectedRoute>} />
+ <Route path="/support" element={<ProtectedRoute allowedRoles={['citizen', 'centre_employee']}><Support /></ProtectedRoute>} />
+ <Route path="/support/:id" element={<ProtectedRoute allowedRoles={['citizen', 'centre_employee']}><TicketDetail /></ProtectedRoute>} />
+ <Route path="/profile" element={<ProtectedRoute allowedRoles={['citizen', 'centre_employee', 'centre_administrator', 'system_administrator']}><Profile /></ProtectedRoute>} />
 
  {/* Employee Routes */}
  <Route path="/queue" element={<ProtectedRoute allowedRoles={['centre_employee']}><Queue /></ProtectedRoute>} />
