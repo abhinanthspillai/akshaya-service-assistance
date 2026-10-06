@@ -1,4 +1,5 @@
 import { ReactNode, useState, useEffect } from 'react';
+import { getGreeting } from '../../utils/greeting';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, FileText, LogOut, FileSearch, Bell, LifeBuoy, Menu, X, Search } from 'lucide-react';
@@ -173,6 +174,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
  </div>
  </div>
  <div className="flex items-center gap-4">
+ <span className="text-sm font-bold text-mono-text hidden lg:block mr-2">
+ {getGreeting(user?.full_name)}
+ </span>
  <button onClick={() => navigate('/notifications')} className="relative p-2 text-mono-text hover:bg-mono-surface rounded-full transition-colors">
  <Bell size={24} strokeWidth={2} />
  {unreadCount > 0 && (

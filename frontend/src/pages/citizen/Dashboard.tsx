@@ -110,7 +110,6 @@ export function Dashboard() {
   <div className="space-y-6 pb-12">
   {/* Header Area */}
   <PageHeader 
-  title={`Good morning, ${user?.full_name || 'User'}`}
   subtitle="Here's a quick overview of your requests."
   >
   <Button onClick={() => navigate('/services')} icon={<Plus size={18} strokeWidth={2.5} />}>
