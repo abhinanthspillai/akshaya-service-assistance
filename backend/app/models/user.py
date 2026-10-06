@@ -23,6 +23,7 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False
     )
+    profile_photo: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     __table_args__ = (
         CheckConstraint(
