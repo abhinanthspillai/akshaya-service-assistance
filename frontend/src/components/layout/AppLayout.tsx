@@ -45,7 +45,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
  } else if (user?.role === 'centre_employee') {
  navItems = [
  { name: 'Dashboard', path: '/queue', icon: LayoutDashboard },
- { name: 'Requests', path: '/queue', icon: FileText },
+ { name: 'Requests', path: '/employee/requests', icon: FileText },
  { name: 'Notifications', path: '/notifications', icon: Bell },
  { name: 'Help & Support', path: '/support', icon: LifeBuoy },
  ];

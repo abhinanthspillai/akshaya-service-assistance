@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -22,5 +22,9 @@ class CompletedOutput(Base):
     
     # Text instructions for physical collection
     collection_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    fee_collected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

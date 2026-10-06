@@ -131,7 +131,15 @@ const STATUS_BADGES: Record<string, { bg: string; text: string; border: string }
   UNABLE_TO_PROCEED: { bg: 'bg-red-50', text: 'text-red-800', border: 'border-red-200' },
 };
 
+
+interface CitizenDetails {
+  full_name: string;
+  phone: string | null;
+  address_text: string | null;
+}
+
 export function RequestWorkspace() {
+
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
@@ -157,6 +165,8 @@ export function RequestWorkspace() {
     'correction' | 'require_interaction' | 'schedule_interaction' | 'unable_to_proceed' | 'complete' | null
   >(null);
 
+  const [citizen, setCitizen] = useState<CitizenDetails | null>(null);
+  
   // Modal form states
   const [targetDocId, setTargetDocId] = useState<string>('');
   const [correctionReason, setCorrectionReason] = useState<string>('');
@@ -169,16 +179,21 @@ export function RequestWorkspace() {
   const [collectionInstructions, setCollectionInstructions] = useState<string>(
     'Physical signed document available for collection from the Akshaya Centre during office hours (9 AM - 5 PM). Bring original Aadhaar for verification.'
   );
+  const [feeCollected, setFeeCollected] = useState(false);
+  const [feeAmount, setFeeAmount] = useState<number | ''>('');
+  const [completionNote, setCompletionNote] = useState('');
 
   const fetchWorkspace = useCallback(async () => {
     if (!id) return;
     try {
-      const [reqRes, histRes] = await Promise.all([
+      const [reqRes, histRes, citizenRes] = await Promise.all([
         api.get(`/requests/${id}`),
         api.get(`/requests/${id}/history`),
+        api.get(`/requests/${id}/citizen`),
       ]);
       setRequest(reqRes.data);
       setHistory(histRes.data);
+      setCitizen(citizenRes.data);
 
       try {
         const [docsRes, reviewsRes, serviceRes, interactionsRes, messagesRes, paymentsRes] =
@@ -430,6 +445,9 @@ export function RequestWorkspace() {
     try {
       await api.post(`/requests/${request.id}/complete`, {
         collection_instructions: collectionInstructions.trim(),
+        fee_collected: feeCollected,
+        amount: feeAmount === '' ? null : feeAmount,
+        note: completionNote.trim() || null,
       });
       setActiveModal(null);
       triggerNotification('Request completed and output delivered.');
@@ -666,7 +684,11 @@ export function RequestWorkspace() {
                 )}
 
                 <button
-                  onClick={() => setActiveModal('complete')}
+                  onClick={() => {
+                    setActiveModal('complete');
+                    setFeeAmount(request.fee_snapshot || 0);
+                    setFeeCollected(true);
+                  }}
                   disabled={isActionLoading}
                   className="px-4.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5"
                 >

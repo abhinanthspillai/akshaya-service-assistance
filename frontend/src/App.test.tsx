@@ -12,8 +12,8 @@ vi.mock('./pages/citizen/Dashboard', () => ({
   Dashboard: () => <div>Mock Citizen Dashboard</div>,
 }));
 
-vi.mock('./pages/employee/Queue', () => ({
-  Queue: () => <div>Mock Queue</div>,
+vi.mock('./pages/employee/EmployeeDashboard', () => ({
+  EmployeeDashboard: () => <div>Mock Employee Dashboard</div>,
 }));
 
 describe('App Routing', () => {
@@ -69,7 +69,7 @@ describe('App Routing', () => {
 
     window.history.pushState({}, '', '/');
     render(<App />);
-    expect(screen.getByText('Mock Queue')).toBeInTheDocument();
+    expect(screen.getByText('Mock Employee Dashboard')).toBeInTheDocument();
   });
 
   it('Pending Employee is blocked and renders PendingApproval screen', () => {

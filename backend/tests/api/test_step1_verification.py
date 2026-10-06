@@ -101,6 +101,7 @@ def test_cross_centre_action_endpoints_forbidden(
         "messages",
         "payments",
         "history",
+        "citizen",
         "",
     ],
 )
@@ -184,6 +185,7 @@ CROSS_CENTRE_COVERED_ROUTES = {
     ("GET", "/api/v1/requests/{request_id}/messages"),
     ("GET", "/api/v1/requests/{request_id}/payments"),
     ("GET", "/api/v1/requests/{request_id}/history"),
+    ("GET", "/api/v1/requests/{request_id}/citizen"),
 }
 
 

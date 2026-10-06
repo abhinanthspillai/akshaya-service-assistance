@@ -73,6 +73,7 @@ describe('RequestWorkspace.tsx', () => {
       if (url === '/requests/req-uuid-1234/interactions') return Promise.resolve({ data: [] });
       if (url === '/requests/req-uuid-1234/messages') return Promise.resolve({ data: [] });
       if (url === '/requests/req-uuid-1234/payments') return Promise.resolve({ data: [] });
+      if (url === '/requests/req-uuid-1234/citizen') return Promise.resolve({ data: { full_name: 'John Doe', phone: '1234567890', address_text: 'Test Address' } });
       return Promise.reject(new Error(`Unhandled URL: ${url}`));
     });
 
@@ -141,6 +142,7 @@ describe('RequestWorkspace.tsx', () => {
       if (url === '/requests/req-uuid-1234/interactions') return Promise.resolve({ data: [] });
       if (url === '/requests/req-uuid-1234/messages') return Promise.resolve({ data: [] });
       if (url === '/requests/req-uuid-1234/payments') return Promise.resolve({ data: [] });
+      if (url === '/requests/req-uuid-1234/citizen') return Promise.resolve({ data: { full_name: 'John Doe', phone: '1234567890', address_text: 'Test Address' } });
       return Promise.reject(new Error(`Unhandled URL: ${url}`));
     });
 

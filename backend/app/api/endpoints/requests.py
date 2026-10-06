@@ -481,6 +481,29 @@ def get_request(
     return service_request
 
 
+@router.get("/{request_id}/citizen")
+def get_request_citizen_details(
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    _verify_request_access(current_user, service_request, session)
+    
+    from app.models.profile import CitizenProfile
+    profile = session.get(CitizenProfile, service_request.citizen_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Citizen profile not found")
+        
+    return {
+        "full_name": profile.full_name,
+        "phone": profile.phone,
+        "address_text": profile.address_text
+    }
+
+
 @router.post("/{request_id}/select-centre", response_model=ServiceRequestResponse)
 def select_centre(
     *,
@@ -1919,6 +1942,9 @@ def complete_request(
         request_id=request_id,
         created_by_id=current_user.id,
         collection_instructions=body.collection_instructions,
+        fee_collected=body.fee_collected,
+        amount=body.amount,
+        note=body.note,
     )
     session.add(output)
 

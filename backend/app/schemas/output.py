@@ -4,8 +4,13 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from pydantic import BaseModel, Field
+
 class CompletedOutputCreate(BaseModel):
     collection_instructions: Optional[str] = None
+    fee_collected: bool = Field(default=False)
+    amount: Optional[float] = None
+    note: Optional[str] = None
 
 class CompletedOutputResponse(BaseModel):
     id: UUID
@@ -14,6 +19,9 @@ class CompletedOutputResponse(BaseModel):
     original_filename: Optional[str]
     content_type: Optional[str]
     collection_instructions: Optional[str]
+    fee_collected: bool
+    amount: Optional[float]
+    note: Optional[str]
     created_at: datetime
 
     class Config:

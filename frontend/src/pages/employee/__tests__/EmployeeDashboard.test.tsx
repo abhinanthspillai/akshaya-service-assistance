@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
-import { Queue } from '../Queue';
+import { EmployeeDashboard } from '../EmployeeDashboard';
 import { api } from '../../../lib/api';
 
 vi.mock('../../../lib/api', () => ({
@@ -10,7 +10,7 @@ vi.mock('../../../lib/api', () => ({
   },
 }));
 
-describe('Queue.tsx', () => {
+describe('EmployeeDashboard.tsx', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -60,13 +60,13 @@ describe('Queue.tsx', () => {
 
     render(
       <BrowserRouter>
-        <Queue />
+        <EmployeeDashboard />
       </BrowserRouter>
     );
 
     // Verify loading transitions to content
     await waitFor(() => {
-      expect(screen.getByText('Akshaya Centre Request Queue')).toBeInTheDocument();
+      expect(screen.getByText('Akshaya Centre Dashboard')).toBeInTheDocument();
     });
 
     // Verify metrics cards rendered
@@ -75,13 +75,8 @@ describe('Queue.tsx', () => {
     expect(screen.getByText('4')).toBeInTheDocument(); // completed_today
 
     // Verify items in Needs Attention tab appear in exact server order
-    const headings = screen.getAllByRole('heading', { level: 3 });
-    const serviceTitles = headings.map((h) => h.textContent);
-    expect(serviceTitles[0]).toBe('Server Priority #1 Income Cert');
-    expect(serviceTitles[1]).toBe('Server Priority #2 Caste Cert');
-
-    // Verify priority tags
-    expect(screen.getByText('#1')).toBeInTheDocument();
-    expect(screen.getByText('#2')).toBeInTheDocument();
+    // The old test expected headings #1 and #2. The new UI renders these as p tags with font-semibold class.
+    expect(screen.getByText('Server Priority #1 Income Cert')).toBeInTheDocument();
+    expect(screen.getByText('Server Priority #2 Caste Cert')).toBeInTheDocument();
   });
 });

@@ -13,7 +13,8 @@ import { Notifications } from './pages/citizen/Notifications';
 import { Support } from './pages/citizen/Support';
 import { TicketDetail } from './pages/citizen/TicketDetail';
 import { Profile } from './pages/citizen/Profile';
-import { Queue } from './pages/employee/Queue';
+import { EmployeeDashboard } from './pages/employee/EmployeeDashboard';
+import { EmployeeRequests } from './pages/employee/EmployeeRequests';
 import { RequestWorkspace } from './pages/employee/RequestWorkspace';
 import { Escalations } from './pages/admin/Escalations';
 import { SupportAdmin } from './pages/admin/SupportAdmin';
@@ -129,7 +130,8 @@ export default function App() {
  <Route path="/profile" element={<ProtectedRoute allowedRoles={['citizen', 'centre_employee', 'centre_administrator', 'system_administrator']}><Profile /></ProtectedRoute>} />
 
  {/* Employee Routes */}
- <Route path="/queue" element={<ProtectedRoute allowedRoles={['centre_employee']}><Queue /></ProtectedRoute>} />
+ <Route path="/queue" element={<ProtectedRoute allowedRoles={['centre_employee']}><EmployeeDashboard /></ProtectedRoute>} />
+ <Route path="/employee/requests" element={<ProtectedRoute allowedRoles={['centre_employee']}><EmployeeRequests /></ProtectedRoute>} />
  <Route path="/employee/requests/:id" element={<ProtectedRoute allowedRoles={['centre_employee']}><RequestWorkspace /></ProtectedRoute>} />
 
  {/* Admin Routes */}
