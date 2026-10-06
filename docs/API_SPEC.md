@@ -241,16 +241,15 @@ Implemented Phase 1 development/mock payment flow. It does not process real mone
 ## Rate limits baseline
 At minimum: register/login, document upload and support/contact endpoints. Exact production limits may be environment configurable.
 
-## Profiles
+## Users
 
-### POST /profile/employee/photo
-Centre Employee.
-Upload an employee profile photo.
-- Request: multipart/form-data with file field
-- Response: `{"photo_url": "/api/v1/profile/employee/photo?filename=..."}`
-
-### GET /profile/employee/photo
+### POST /users/me/photo
 Authenticated.
-Get an employee profile photo.
-- Request: Query param `filename`
-- Response: image/png
+Upload a profile photo.
+- Request: multipart/form-data with file field (JPEG/PNG/WebP, max 2MB)
+- Response: `{"photo_url": "/api/v1/avatars/..."}`
+
+### DELETE /users/me/photo
+Authenticated.
+Remove current user's profile photo.
+- Response: 204 No Content
