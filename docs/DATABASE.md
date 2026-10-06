@@ -31,6 +31,7 @@
 - password_hash VARCHAR(255) NOT NULL
 - role VARCHAR(32) NOT NULL CHECK in citizen, centre_employee, centre_administrator, system_administrator
 - is_active BOOLEAN NOT NULL DEFAULT true
+- profile_photo VARCHAR(512) NULL
 - created_at TIMESTAMPTZ NOT NULL
 - updated_at TIMESTAMPTZ NOT NULL
 Indexes: unique(email), role, is_active.

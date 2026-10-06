@@ -52,6 +52,7 @@ Examples:
 - authorized download
 - prevent path traversal
 - do not place raw private uploads under publicly served static paths
+- **Exception**: Public profile avatars are served as static files. Their URLs contain a UUID making them unguessable, but they are not access-controlled.
 
 ## Data protection
 - TLS outside local development
