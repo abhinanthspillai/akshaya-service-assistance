@@ -145,6 +145,7 @@ export function RequestWorkspace() {
   const [completedOutput, setCompletedOutput] = useState<CompletedOutput | null>(null);
   const [messages, setMessages] = useState<RequestMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [documentUrls, setDocumentUrls] = useState<Record<string, {url: string, type: string}>>({});
 
   const [isLoading, setIsLoading] = useState(true);
   const [isActionLoading, setIsActionLoading] = useState(false);
@@ -219,6 +220,25 @@ export function RequestWorkspace() {
   useEffect(() => {
     fetchWorkspace();
   }, [fetchWorkspace]);
+
+  useEffect(() => {
+    if (!request || documents.length === 0) return;
+    const currentDocs = documents.filter((d) => d.is_current);
+    
+    currentDocs.forEach(async (doc) => {
+      if (!documentUrls[doc.id]) {
+        try {
+          const res = await api.get(`/requests/${request.id}/documents/${doc.id}/download`, {
+            responseType: 'blob',
+          });
+          const url = window.URL.createObjectURL(new Blob([res.data], { type: doc.content_type }));
+          setDocumentUrls(prev => ({ ...prev, [doc.id]: { url, type: doc.content_type } }));
+        } catch (e) {
+          console.error("Failed to load preview for", doc.id);
+        }
+      }
+    });
+  }, [documents, request, documentUrls]);
 
   const triggerNotification = (msg: string) => {
     setSuccessNotice(msg);
@@ -697,8 +717,9 @@ export function RequestWorkspace() {
                 return (
                   <div
                     key={doc.id}
-                    className="p-4 bg-slate-50/70 border border-slate-200 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4"
+                    className="p-4 bg-slate-50/70 border border-slate-200 rounded-2xl flex flex-col gap-4"
                   >
+                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-bold text-slate-900">{doc.original_filename}</span>
@@ -740,11 +761,26 @@ export function RequestWorkspace() {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => handleDownloadDocument(doc.id, doc.original_filename)}
-                        className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm"
-                      >
+                    <div className="flex flex-col gap-4">
+                      {documentUrls[doc.id] ? (
+                        <div className="w-full bg-white border border-slate-200 rounded-xl overflow-hidden shadow-inner h-[500px]">
+                          {documentUrls[doc.id].type.startsWith('image/') ? (
+                            <img src={documentUrls[doc.id].url} alt={doc.original_filename} className="w-full h-full object-contain bg-slate-100" />
+                          ) : (
+                            <iframe src={documentUrls[doc.id].url} className="w-full h-full" title={doc.original_filename} />
+                          )}
+                        </div>
+                      ) : (
+                        <div className="w-full h-32 bg-slate-100 border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 text-sm font-medium">
+                          <Loader2 className="animate-spin mr-2" size={16} /> Loading preview...
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-2 shrink-0 bg-white p-3 rounded-xl border border-slate-200 shadow-sm self-start">
+                        <button
+                          onClick={() => handleDownloadDocument(doc.id, doc.original_filename)}
+                          className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+                        >
                         <Download size={13} />
                         Download
                       </button>

@@ -146,6 +146,24 @@ export function Queue() {
     }
   };
 
+  const handleRequestClick = async (req: ServiceRequest) => {
+    if (req.status === 'WAITING_FOR_CENTRE') {
+      try {
+        await api.post(`/requests/${req.id}/accept`);
+        await api.post(`/requests/${req.id}/start-review`);
+      } catch (e) {
+        console.error('Failed to auto-transition request:', e);
+      }
+    } else if (req.status === 'ACCEPTED') {
+      try {
+        await api.post(`/requests/${req.id}/start-review`);
+      } catch (e) {
+        console.error('Failed to auto-transition request:', e);
+      }
+    }
+    navigate('/employee/requests/' + req.id);
+  };
+
   const getPriorityReason = (req: ServiceRequest, index: number) => {
     if (req.status === 'UNDER_REVIEW' || req.status === 'CORRECTION_REQUIRED') {
       return {
@@ -392,7 +410,7 @@ export function Queue() {
                 return (
                   <div
                     key={req.id}
-                    onClick={() => navigate('/employee/requests/' + req.id)}
+                    onClick={() => handleRequestClick(req)}
                     className="group bg-white rounded-2xl border border-slate-200/90 p-4.5 hover:border-slate-400 hover:shadow-md transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                   >
                     <div className="flex items-start gap-3.5 min-w-0">
@@ -508,7 +526,7 @@ export function Queue() {
                   return (
                     <li key={req.id}>
                       <button
-                        onClick={() => navigate('/employee/requests/' + req.id)}
+                        onClick={() => handleRequestClick(req)}
                         className="w-full flex items-center justify-between p-4.5 hover:bg-slate-50/80 transition-colors text-left"
                       >
                         <div className="min-w-0 flex-1 pr-4">
