@@ -22,6 +22,8 @@ from app.models.document import DOCUMENT_REVIEW_DECISIONS, RequestDocument, Requ
 from app.models.interaction import RequestInteraction
 from app.models.message import RequestMessage
 from app.models.notification import Notification
+from app.models.user import User
+from app.models.profile import EmployeeProfile
 from app.models.output import CompletedOutput
 from app.models.payment import RequestPayment
 from app.models.request import ServiceRequest
@@ -578,6 +580,14 @@ def submit_request(
         notification_title="Request submitted",
         notification_body="Your request has been submitted to the selected centre."
     )
+    _notify_centre_employees(
+        session,
+        centre_id=service_request.selected_centre_id,
+        request_id=request_id,
+        event_type="new_request_arrived",
+        title="New Request Arrived",
+        body=f"A new request ({request_id}) has arrived at your centre."
+    )
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -748,6 +758,34 @@ async def upload_request_document(
 
     if service_request.status == "CORRECTION_REQUIRED":
         session.flush()
+        
+        # Notify the assigned employee, or the centre employees if unassigned
+        assignments = session.scalars(
+            select(RequestAssignment).where(
+                RequestAssignment.request_id == request_id,
+                RequestAssignment.is_active.is_(True),
+            )
+        ).all()
+        if assignments:
+            for assignment in assignments:
+                _safe_add_notification(
+                    session,
+                    user_id=assignment.employee_id,
+                    request_id=request_id,
+                    event_type="document_reuploaded",
+                    title="Document Re-uploaded",
+                    body=f"A rejected document for request {request_id} has been re-uploaded."
+                )
+        else:
+            _notify_centre_employees(
+                session,
+                centre_id=service_request.selected_centre_id,
+                request_id=request_id,
+                event_type="document_reuploaded",
+                title="Document Re-uploaded",
+                body=f"A rejected document for request {request_id} has been re-uploaded."
+            )
+
         pending_reupload = session.scalar(
             select(func.count()).select_from(RequestDocument).where(
                 RequestDocument.request_id == request_id,
@@ -1231,17 +1269,27 @@ def cancel_request(
             RequestAssignment.is_active.is_(True),
         )
     ).all()
-    for existing in existing_assignments:
-        existing.is_active = False
-        existing.revoked_at = now
-        session.add(existing)
-        _safe_add_notification(
+    if existing_assignments:
+        for existing in existing_assignments:
+            existing.is_active = False
+            existing.revoked_at = now
+            session.add(existing)
+            _safe_add_notification(
+                session,
+                user_id=existing.employee_id,
+                request_id=request_id,
+                event_type="request_cancelled",
+                title="Request cancelled",
+                body=f"Request {request_id} was cancelled by the citizen.",
+            )
+    else:
+        _notify_centre_employees(
             session,
-            user_id=existing.employee_id,
+            centre_id=service_request.selected_centre_id,
             request_id=request_id,
             event_type="request_cancelled",
             title="Request cancelled",
-            body=f"Request {request_id} was cancelled by the citizen.",
+            body=f"Request {request_id} was cancelled by the citizen."
         )
 
     service_request.cancelled_at = now
@@ -1846,6 +1894,43 @@ def _run_request_pre_validation(
         items=items,
         warnings=warnings,
     )
+
+
+
+def _notify_centre_employees(
+    session: Any,
+    *,
+    centre_id: UUID,
+    request_id: UUID,
+    event_type: str,
+    title: str,
+    body: str | None = None,
+) -> None:
+    employees = session.scalars(
+        select(User).join(EmployeeProfile).where(
+            EmployeeProfile.centre_id == centre_id,
+            User.role == "centre_employee",
+            User.is_active.is_(True),
+            EmployeeProfile.approval_status == "APPROVED",
+        )
+    ).all()
+    for employee in employees:
+        existing = session.scalar(
+            select(Notification).where(
+                Notification.user_id == employee.id,
+                Notification.request_id == request_id,
+                Notification.event_type == event_type,
+            )
+        )
+        if not existing:
+            _safe_add_notification(
+                session,
+                user_id=employee.id,
+                request_id=request_id,
+                event_type=event_type,
+                title=title,
+                body=body,
+            )
 
 
 def _safe_add_notification(
