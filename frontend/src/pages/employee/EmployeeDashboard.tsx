@@ -75,56 +75,67 @@ const STATUS_BADGES: Record<string, { bg: string; text: string; border: string }
 };
 
 export function EmployeeDashboard() {
-  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState<DashboardBuckets | null>(null);
+  const [needsAttention, setNeedsAttention] = useState<ServiceRequest[] | null>(null);
+  const [recentActivity, setRecentActivity] = useState<RecentActivityItem[] | null>(null);
+  
+  const [loading, setLoading] = useState({ stats: true, attention: true, activity: true });
+  const [errors, setErrors] = useState({ stats: '', attention: '', activity: '' });
+  
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState('');
   const navigate = useNavigate();
   const { user } = useAuth();
 
   const fetchDashboard = useCallback(async (isRefresh = false) => {
     if (isRefresh) setIsRefreshing(true);
-    try {
-      const res = await api.get('/requests/dashboard');
-      setDashboard(res.data);
-      setError('');
-    } catch (e: any) {
-      setError(e.response?.data?.detail || 'Failed to load dashboard data');
-    } finally {
-      setIsLoading(false);
-      if (isRefresh) setIsRefreshing(false);
-    }
+    
+    // Start independent fetches
+    const fetchStats = async () => {
+      setLoading(p => ({ ...p, stats: true }));
+      try {
+        const res = await api.get('/requests/dashboard/stats');
+        setStats(res.data);
+        setErrors(p => ({ ...p, stats: '' }));
+      } catch (e: any) {
+        setErrors(p => ({ ...p, stats: 'Failed to load stats' }));
+      } finally {
+        setLoading(p => ({ ...p, stats: false }));
+      }
+    };
+
+    const fetchAttention = async () => {
+      setLoading(p => ({ ...p, attention: true }));
+      try {
+        const res = await api.get('/requests/dashboard/needs-attention');
+        setNeedsAttention(res.data);
+        setErrors(p => ({ ...p, attention: '' }));
+      } catch (e: any) {
+        setErrors(p => ({ ...p, attention: 'Failed to load queue' }));
+      } finally {
+        setLoading(p => ({ ...p, attention: false }));
+      }
+    };
+
+    const fetchActivity = async () => {
+      setLoading(p => ({ ...p, activity: true }));
+      try {
+        const res = await api.get('/requests/dashboard/recent-activity');
+        setRecentActivity(res.data);
+        setErrors(p => ({ ...p, activity: '' }));
+      } catch (e: any) {
+        setErrors(p => ({ ...p, activity: 'Failed to load activity' }));
+      } finally {
+        setLoading(p => ({ ...p, activity: false }));
+      }
+    };
+
+    await Promise.allSettled([fetchStats(), fetchAttention(), fetchActivity()]);
+    if (isRefresh) setIsRefreshing(false);
   }, []);
 
   useEffect(() => {
     fetchDashboard();
   }, [fetchDashboard]);
-
-  if (isLoading) {
-    return (
-      <div className="flex h-[calc(100vh-64px)] items-center justify-center">
-        <Loader2 className="animate-spin text-mono-text" size={40} />
-      </div>
-    );
-  }
-
-  if (error || !dashboard) {
-    return (
-      <div className="p-8 max-w-7xl mx-auto">
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-          <AlertCircle className="mx-auto text-red-500 mb-4" size={32} />
-          <h3 className="text-lg font-bold text-red-900 mb-2">Failed to load dashboard</h3>
-          <p className="text-red-700 mb-4">{error}</p>
-          <button
-            onClick={() => fetchDashboard(true)}
-            className="px-4 py-2 bg-red-100 text-red-800 rounded-lg hover:bg-red-200 transition-colors font-medium"
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   const navigateToFiltered = (filterStr: string) => {
     navigate(`/employee/requests?status=${filterStr}`);
@@ -150,45 +161,62 @@ export function EmployeeDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <button onClick={() => navigateToFiltered('WAITING_FOR_CENTRE,ACCEPTED')} className="bg-white p-6 rounded-2xl border border-mono-border shadow-sm hover:shadow-md transition-all text-left group">
-          <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 mb-4 group-hover:scale-110 transition-transform">
-            <FileText size={24} />
+        {loading.stats ? (
+          Array(5).fill(0).map((_, i) => (
+            <div key={i} className="bg-white p-6 rounded-2xl border border-mono-border shadow-sm flex flex-col justify-between h-32 animate-pulse">
+              <div className="w-12 h-12 bg-mono-accent/10 rounded-xl mb-4"></div>
+              <div className="w-20 h-4 bg-mono-accent/10 rounded"></div>
+              <div className="w-12 h-8 bg-mono-accent/10 rounded mt-1"></div>
+            </div>
+          ))
+        ) : errors.stats ? (
+          <div className="col-span-1 md:col-span-5 bg-red-50 border border-red-200 rounded-2xl p-6 flex flex-col items-center justify-center text-red-800">
+            <p className="font-medium mb-2">{errors.stats}</p>
+            <button onClick={() => fetchDashboard(true)} className="px-4 py-2 bg-white rounded-lg border border-red-200 text-sm font-medium hover:bg-red-50">Retry</button>
           </div>
-          <p className="text-sm font-medium text-mono-muted mb-1">New Intake</p>
-          <h3 className="text-3xl font-bold text-mono-text">{dashboard.buckets.new}</h3>
-        </button>
+        ) : stats && (
+          <>
+            <button onClick={() => navigateToFiltered('WAITING_FOR_CENTRE,ACCEPTED')} className="bg-white p-6 rounded-2xl border border-mono-border shadow-sm hover:shadow-md transition-all text-left group">
+              <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 mb-4 group-hover:scale-110 transition-transform">
+                <FileText size={24} />
+              </div>
+              <p className="text-sm font-medium text-mono-muted mb-1">New Intake</p>
+              <h3 className="text-3xl font-bold text-mono-text">{stats.new}</h3>
+            </button>
 
-        <button onClick={() => navigateToFiltered('UNDER_REVIEW,READY_FOR_PROCESSING,PROCESSING')} className="bg-white p-6 rounded-2xl border border-mono-border shadow-sm hover:shadow-md transition-all text-left group">
-          <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-4 group-hover:scale-110 transition-transform">
-            <Clock size={24} />
-          </div>
-          <p className="text-sm font-medium text-mono-muted mb-1">In Progress</p>
-          <h3 className="text-3xl font-bold text-mono-text">{dashboard.buckets.in_review}</h3>
-        </button>
+            <button onClick={() => navigateToFiltered('UNDER_REVIEW,READY_FOR_PROCESSING,PROCESSING')} className="bg-white p-6 rounded-2xl border border-mono-border shadow-sm hover:shadow-md transition-all text-left group">
+              <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-4 group-hover:scale-110 transition-transform">
+                <Clock size={24} />
+              </div>
+              <p className="text-sm font-medium text-mono-muted mb-1">In Progress</p>
+              <h3 className="text-3xl font-bold text-mono-text">{stats.in_review}</h3>
+            </button>
 
-        <button onClick={() => navigateToFiltered('CORRECTION_REQUIRED,INTERACTION_REQUIRED,INTERACTION_SCHEDULED,PAYMENT_PENDING')} className="bg-white p-6 rounded-2xl border border-mono-border shadow-sm hover:shadow-md transition-all text-left group">
-          <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 mb-4 group-hover:scale-110 transition-transform">
-            <AlertCircle size={24} />
-          </div>
-          <p className="text-sm font-medium text-mono-muted mb-1">Awaiting Citizen</p>
-          <h3 className="text-3xl font-bold text-mono-text">{dashboard.buckets.awaiting_citizen}</h3>
-        </button>
+            <button onClick={() => navigateToFiltered('CORRECTION_REQUIRED,INTERACTION_REQUIRED,INTERACTION_SCHEDULED,PAYMENT_PENDING')} className="bg-white p-6 rounded-2xl border border-mono-border shadow-sm hover:shadow-md transition-all text-left group">
+              <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 mb-4 group-hover:scale-110 transition-transform">
+                <AlertCircle size={24} />
+              </div>
+              <p className="text-sm font-medium text-mono-muted mb-1">Awaiting Citizen</p>
+              <h3 className="text-3xl font-bold text-mono-text">{stats.awaiting_citizen}</h3>
+            </button>
 
-        <button onClick={() => navigateToFiltered('COMPLETED')} className="bg-white p-6 rounded-2xl border border-mono-border shadow-sm hover:shadow-md transition-all text-left group">
-          <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 mb-4 group-hover:scale-110 transition-transform">
-            <CheckCircle2 size={24} />
-          </div>
-          <p className="text-sm font-medium text-mono-muted mb-1">Completed Today</p>
-          <h3 className="text-3xl font-bold text-mono-text">{dashboard.buckets.completed_today}</h3>
-        </button>
+            <button onClick={() => navigateToFiltered('COMPLETED')} className="bg-white p-6 rounded-2xl border border-mono-border shadow-sm hover:shadow-md transition-all text-left group">
+              <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 mb-4 group-hover:scale-110 transition-transform">
+                <CheckCircle2 size={24} />
+              </div>
+              <p className="text-sm font-medium text-mono-muted mb-1">Completed Today</p>
+              <h3 className="text-3xl font-bold text-mono-text">{stats.completed_today}</h3>
+            </button>
 
-        <button onClick={() => navigateToFiltered('UNABLE_TO_PROCEED')} className="bg-white p-6 rounded-2xl border border-mono-border shadow-sm hover:shadow-md transition-all text-left group">
-          <div className="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center text-rose-600 mb-4 group-hover:scale-110 transition-transform">
-            <CheckCircle2 size={24} />
-          </div>
-          <p className="text-sm font-medium text-mono-muted mb-1">Rejected (30d)</p>
-          <h3 className="text-3xl font-bold text-mono-text">{dashboard.buckets.rejected_last_30_days}</h3>
-        </button>
+            <button onClick={() => navigateToFiltered('UNABLE_TO_PROCEED')} className="bg-white p-6 rounded-2xl border border-mono-border shadow-sm hover:shadow-md transition-all text-left group">
+              <div className="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center text-rose-600 mb-4 group-hover:scale-110 transition-transform">
+                <CheckCircle2 size={24} />
+              </div>
+              <p className="text-sm font-medium text-mono-muted mb-1">Rejected (30d)</p>
+              <h3 className="text-3xl font-bold text-mono-text">{stats.rejected_last_30_days}</h3>
+            </button>
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[500px]">
@@ -200,7 +228,18 @@ export function EmployeeDashboard() {
             </h2>
           </div>
           <div className="flex-1 overflow-auto p-2">
-            {dashboard.needs_attention.length === 0 ? (
+            {loading.attention ? (
+              <div className="space-y-2 p-2">
+                {Array(3).fill(0).map((_, i) => (
+                  <div key={i} className="w-full h-20 bg-mono-accent/5 animate-pulse rounded-xl"></div>
+                ))}
+              </div>
+            ) : errors.attention ? (
+              <div className="text-center py-12 text-red-600">
+                <p className="font-medium">{errors.attention}</p>
+                <button onClick={() => fetchDashboard(true)} className="mt-2 text-sm underline hover:text-red-700">Retry</button>
+              </div>
+            ) : needsAttention?.length === 0 ? (
               <div className="text-center py-12 text-mono-muted">
                 <FileCheck size={48} className="mx-auto mb-4 opacity-20" />
                 <p className="font-medium text-mono-text">Queue is clear</p>
@@ -208,7 +247,7 @@ export function EmployeeDashboard() {
               </div>
             ) : (
               <div className="space-y-1">
-                {dashboard.needs_attention.map(req => {
+                {needsAttention?.map(req => {
                   const badge = STATUS_BADGES[req.status] || STATUS_BADGES['WAITING_FOR_CENTRE'];
                   return (
                     <button
@@ -243,17 +282,34 @@ export function EmployeeDashboard() {
               Recent Activity
             </h2>
           </div>
-          <div className="flex-1 overflow-auto p-0">
-            {dashboard.recent_activity.length === 0 ? (
+          <div className="flex-1 overflow-auto p-4">
+            {loading.activity ? (
+              <div className="relative">
+                <div className="absolute top-2 bottom-2 left-[5px] w-px bg-mono-accent/10"></div>
+                <div className="space-y-6 pl-6">
+                  {Array(4).fill(0).map((_, i) => (
+                    <div key={i} className="flex flex-col gap-2 animate-pulse">
+                      <div className="w-32 h-4 bg-mono-accent/10 rounded"></div>
+                      <div className="w-48 h-3 bg-mono-accent/10 rounded"></div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : errors.activity ? (
+              <div className="text-center py-12 text-red-600">
+                <p className="font-medium">{errors.activity}</p>
+                <button onClick={() => fetchDashboard(true)} className="mt-2 text-sm underline hover:text-red-700">Retry</button>
+              </div>
+            ) : recentActivity?.length === 0 ? (
               <div className="text-center py-12 text-mono-muted">
                 <History size={48} className="mx-auto mb-4 opacity-20" />
                 <p className="font-medium text-mono-text">No recent activity</p>
               </div>
             ) : (
-              <div className="relative p-4">
-                <div className="absolute top-6 bottom-4 left-[21px] w-px bg-mono-border"></div>
+              <div className="relative">
+                <div className="absolute top-2 bottom-2 left-[5px] w-px bg-mono-border"></div>
                 <div className="space-y-4">
-                  {dashboard.recent_activity.slice(0, 8).map((activity) => (
+                  {recentActivity?.slice(0, 8).map((activity) => (
                     <div key={activity.id} className="relative flex gap-3 group items-start">
                       <div className="relative z-10 flex-shrink-0 w-2.5 h-2.5 mt-1.5 rounded-full bg-mono-muted"></div>
                       <div className="flex-1 min-w-0">

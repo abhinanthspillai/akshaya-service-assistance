@@ -81,6 +81,13 @@ class DashboardBuckets(BaseModel):
     rejected_last_30_days: int
 
 
+class DashboardStatsResponse(BaseModel):
+    new: int
+    in_review: int
+    awaiting_citizen: int
+    completed_today: int
+    rejected_last_30_days: int
+
 class DashboardResponse(BaseModel):
     status_counts: dict[str, int]
     completed_today: int

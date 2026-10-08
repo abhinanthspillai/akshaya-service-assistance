@@ -49,9 +49,11 @@ from app.schemas.message import RequestMessageCreate, RequestMessageResponse
 from app.schemas.output import CompletedOutputCreate, CompletedOutputResponse
 from app.schemas.payment import RequestPaymentResponse
 from app.schemas.request import (
+    DashboardStatsResponse,
     DashboardResponse,
     PaginatedRequests,
     ReassignRequest,
+    RecentActivityItem,
     RequestPreValidationItem,
     RequestPreValidationResponse,
     SelectCentreRequest,
@@ -291,8 +293,8 @@ def list_requests(
     }
 
 
-@router.get("/dashboard", response_model=DashboardResponse)
-def get_dashboard_data(
+@router.get("/dashboard/stats", response_model=DashboardStatsResponse)
+def get_dashboard_stats(
     session: SessionDep,
     current_user: CurrentUserEmployee,
 ) -> Any:
@@ -301,7 +303,6 @@ def get_dashboard_data(
     from sqlalchemy import func
 
     from app.models.profile import EmployeeProfile
-    from app.models.document import RequestDocument
 
     employee = session.get(EmployeeProfile, current_user.id)
     if not employee:
@@ -353,28 +354,51 @@ def get_dashboard_data(
         or 0
     )
 
-    # 4. Buckets
-    new_count = status_counts.get("WAITING_FOR_CENTRE", 0) + status_counts.get("ACCEPTED", 0)
+    # Status mappings using RequestStatus values:
+    # - New Intake: newly submitted requests not yet picked up
+    new_count = status_counts.get("WAITING_FOR_CENTRE", 0)
+    
+    # - In Progress: requests being processed by the centre
     in_review_count = (
-        status_counts.get("UNDER_REVIEW", 0)
+        status_counts.get("ACCEPTED", 0)
+        + status_counts.get("UNDER_REVIEW", 0)
         + status_counts.get("READY_FOR_PROCESSING", 0)
         + status_counts.get("PROCESSING", 0)
     )
+    
+    # - Awaiting Citizen: requests waiting on the citizen (e.g., a rejected document awaiting re-upload)
     awaiting_citizen_count = (
         status_counts.get("PAYMENT_PENDING", 0)
         + status_counts.get("CORRECTION_REQUIRED", 0)
         + status_counts.get("INTERACTION_REQUIRED", 0)
         + status_counts.get("INTERACTION_SCHEDULED", 0)
     )
-    buckets = {
-        "new": new_count,
-        "in_review": in_review_count,
-        "awaiting_citizen": awaiting_citizen_count,
-        "completed_today": completed_today,
-        "rejected_last_30_days": rejected_last_30_days,
-    }
 
-    # 5. Needs attention ranking:
+    return DashboardStatsResponse(
+        new=new_count,
+        in_review=in_review_count,
+        awaiting_citizen=awaiting_citizen_count,
+        completed_today=completed_today,
+        rejected_last_30_days=rejected_last_30_days,
+    )
+
+
+@router.get("/dashboard/needs-attention", response_model=list[ServiceRequestResponse])
+def get_dashboard_needs_attention(
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+) -> Any:
+    from app.models.profile import EmployeeProfile
+    from app.models.document import RequestDocument
+
+    employee = session.get(EmployeeProfile, current_user.id)
+    if not employee:
+        raise HTTPException(status_code=403, detail="Employee profile not found")
+
+    centre_id = employee.centre_id
+
+
+    # Needs attention ranking:
     # Priority 1: Re-uploaded docs awaiting review (version > 1, is_current=True, in UNDER_REVIEW/CORRECTION_REQUIRED)
     reuploaded_req_ids = session.scalars(
         select(RequestDocument.request_id)
@@ -436,6 +460,23 @@ def get_dashboard_data(
         if len(needs_attention) >= 10:
             break
 
+    return needs_attention
+
+
+@router.get("/dashboard/recent-activity", response_model=list[RecentActivityItem])
+def get_dashboard_recent_activity(
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+) -> Any:
+    from app.models.profile import EmployeeProfile
+    from app.models.history import RequestHistory
+
+    employee = session.get(EmployeeProfile, current_user.id)
+    if not employee:
+        raise HTTPException(status_code=403, detail="Employee profile not found")
+
+    centre_id = employee.centre_id
+
     # 6. Recent activity
     recent_history = session.execute(
         select(RequestHistory, ServiceRequest.service_name_snapshot, ServiceRequest.citizen_id)
@@ -459,14 +500,7 @@ def get_dashboard_data(
         for h in recent_history
     ]
 
-    return {
-        "status_counts": status_counts,
-        "completed_today": completed_today,
-        "rejected_last_30_days": rejected_last_30_days,
-        "buckets": buckets,
-        "needs_attention": needs_attention,
-        "recent_activity": recent_activity,
-    }
+    return recent_activity
 
 
 @router.get("/{request_id}", response_model=ServiceRequestResponse)

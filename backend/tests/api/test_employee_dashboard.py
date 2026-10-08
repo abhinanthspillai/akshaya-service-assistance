@@ -109,16 +109,16 @@ def dashboard_fixture(db_session: Session, client: TestClient):
 
 def test_dashboard_guards(client: TestClient, dashboard_fixture: dict):
     # Citizen gets 403
-    r1 = client.get("/api/v1/requests/dashboard", headers=dashboard_fixture["headers_cit"])
+    r1 = client.get("/api/v1/requests/dashboard/stats", headers=dashboard_fixture["headers_cit"])
     assert r1.status_code == 403
 
     # Pending employee gets 403
-    r2 = client.get("/api/v1/requests/dashboard", headers=dashboard_fixture["headers_pend"])
+    r2 = client.get("/api/v1/requests/dashboard/stats", headers=dashboard_fixture["headers_pend"])
     assert r2.status_code == 403
     assert "pending approval" in r2.json()["detail"].lower()
 
     # Approved employee gets 200
-    r3 = client.get("/api/v1/requests/dashboard", headers=dashboard_fixture["headers_a"])
+    r3 = client.get("/api/v1/requests/dashboard/stats", headers=dashboard_fixture["headers_a"])
     assert r3.status_code == 200
 
 
@@ -185,19 +185,12 @@ def test_dashboard_bucket_counts_and_exclusions(
     ])
     db_session.commit()
 
-    res = client.get("/api/v1/requests/dashboard", headers=dashboard_fixture["headers_a"])
+    res = client.get("/api/v1/requests/dashboard/stats", headers=dashboard_fixture["headers_a"])
     assert res.status_code == 200
-    data = res.json()
+    buckets = res.json()
 
-    # DRAFT and SUBMITTED must be excluded from status_counts
-    status_counts = data["status_counts"]
-    assert "DRAFT" not in status_counts
-    assert "SUBMITTED" not in status_counts
-
-    # Check buckets
-    buckets = data["buckets"]
-    assert buckets["new"] == 2  # WAITING_FOR_CENTRE (1) + ACCEPTED (1)
-    assert buckets["in_review"] == 1  # UNDER_REVIEW (1)
+    assert buckets["new"] == 1  # WAITING_FOR_CENTRE (1)
+    assert buckets["in_review"] == 2  # ACCEPTED (1) + UNDER_REVIEW (1)
     assert buckets["awaiting_citizen"] == 1  # PAYMENT_PENDING (1)
     assert buckets["completed_today"] == 1  # completed today only
     assert buckets["rejected_last_30_days"] == 1  # unable to proceed within 30 days
@@ -254,9 +247,9 @@ def test_dashboard_needs_attention_ranking(
     db_session.add(doc)
     db_session.commit()
 
-    res = client.get("/api/v1/requests/dashboard", headers=dashboard_fixture["headers_a"])
+    res = client.get("/api/v1/requests/dashboard/needs-attention", headers=dashboard_fixture["headers_a"])
     assert res.status_code == 200
-    needs_attention = res.json()["needs_attention"]
+    needs_attention = res.json()
     assert len(needs_attention) >= 2
     # Re-uploaded doc request must be ranked first (Priority 1)
     assert needs_attention[0]["id"] == str(req_reuploaded.id)
