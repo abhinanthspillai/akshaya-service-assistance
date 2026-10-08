@@ -67,10 +67,10 @@ export function Profile() {
  </div>
 
  {/* Top Card: Basic Info */}
- <div className="bg-mono-bg rounded-2xl border border-mono-border p-8 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
- <div className="flex items-center gap-6">
+ <div className="bg-mono-bg rounded-2xl border border-mono-border p-6 md:p-8 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 relative">
+ <div className="flex items-center gap-6 mt-4 md:mt-0">
  <div className="relative group shrink-0">
-  <Avatar photoUrl={user?.photo_url ? `${user.photo_url}?ts=${Date.now()}` : undefined} name={fullName} className="w-24 h-24 text-4xl" />
+  <Avatar photoUrl={user?.photo_url ? `${user.photo_url}?ts=${Date.now()}` : undefined} name={fullName} className="w-20 h-20 md:w-24 md:h-24 text-3xl md:text-4xl" />
   <label className="absolute inset-0 bg-black/50 text-white rounded-full flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
     <input type="file" ref={fileInputRef} className="hidden" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoUpload} disabled={isUploading} />
     {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Edit2 size={20} />}
@@ -93,9 +93,11 @@ export function Profile() {
  </div>
  </div>
  
- <button className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-mono-border text-sm font-bold text-mono-text hover:bg-mono-surface transition-colors self-start md:self-center shrink-0">
+ <div className="absolute top-6 right-6 md:static">
+ <button className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-mono-border bg-mono-bg text-sm font-medium text-mono-text hover:bg-mono-surface transition-colors shadow-sm">
  <Edit2 size={16} /> Edit Profile
  </button>
+ </div>
  </div>
 
  {/* Grid Layout */}
