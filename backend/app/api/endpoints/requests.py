@@ -469,7 +469,7 @@ def get_dashboard_recent_activity(
     current_user: CurrentUserEmployee,
 ) -> Any:
     from app.models.profile import EmployeeProfile
-    from app.models.history import RequestHistory
+    from app.models.assignment import RequestHistory
 
     employee = session.get(EmployeeProfile, current_user.id)
     if not employee:

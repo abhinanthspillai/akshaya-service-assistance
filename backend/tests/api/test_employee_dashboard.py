@@ -253,3 +253,62 @@ def test_dashboard_needs_attention_ranking(
     assert len(needs_attention) >= 2
     # Re-uploaded doc request must be ranked first (Priority 1)
     assert needs_attention[0]["id"] == str(req_reuploaded.id)
+
+def test_dashboard_recent_activity(client: TestClient, db_session: Session, dashboard_fixture: dict):
+    from app.models.assignment import RequestHistory
+
+    centre_a = dashboard_fixture["centre_a"]
+    centre_b = dashboard_fixture["centre_b"]
+    svc = dashboard_fixture["service"]
+    cit = dashboard_fixture["citizen"]
+    now = datetime.now(UTC)
+
+    # Empty state test
+    res = client.get("/api/v1/requests/dashboard/recent-activity", headers=dashboard_fixture["headers_a"])
+    assert res.status_code == 200
+    assert res.json() == []
+
+    # Add activity in Centre A
+    req_a = ServiceRequest(
+        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_a.id,
+        status="DRAFT", service_name_snapshot="Svc A", service_type_snapshot="A", fee_snapshot=100
+    )
+    db_session.add(req_a)
+    db_session.commit()
+
+    hist_a = RequestHistory(
+        request_id=req_a.id,
+        actor_id=cit.id,
+        action="submit_request",
+        note="Test Note",
+        created_at=now
+    )
+    db_session.add(hist_a)
+    db_session.commit()
+
+    # Add activity in Centre B
+    req_b = ServiceRequest(
+        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_b.id,
+        status="DRAFT", service_name_snapshot="Svc B", service_type_snapshot="A", fee_snapshot=100
+    )
+    db_session.add(req_b)
+    db_session.commit()
+
+    hist_b = RequestHistory(
+        request_id=req_b.id,
+        actor_id=cit.id,
+        action="submit_request",
+        note="Test Note B",
+        created_at=now
+    )
+    db_session.add(hist_b)
+    db_session.commit()
+
+    # Verify Employee A only sees Centre A activity
+    res_a = client.get("/api/v1/requests/dashboard/recent-activity", headers=dashboard_fixture["headers_a"])
+    assert res_a.status_code == 200
+    data_a = res_a.json()
+    assert len(data_a) == 1
+    assert data_a[0]["request_id"] == str(req_a.id)
+    assert data_a[0]["request_service_name"] == "Svc A"
+
