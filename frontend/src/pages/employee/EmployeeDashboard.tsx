@@ -5,17 +5,21 @@ import {
   Loader2,
   FileText,
   Clock,
-  CheckCircle2,
+  CheckCircle,
   AlertCircle,
   RefreshCw,
   ChevronRight,
-  ArrowUpRight,
   History,
-  FileCheck
+  CheckCircle2,
+  FileCheck,
+  ArrowRight
 } from 'lucide-react';
 import { formatStatus, formatRelativeTime } from '../../utils/format';
 import { useAuth } from '../../contexts/AuthContext';
 import { Avatar } from '../../components/ui/Avatar';
+import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
+import { EmptyState } from '../../components/ui/EmptyState';
 
 interface ServiceRequest {
   id: string;
@@ -57,22 +61,6 @@ interface DashboardData {
   needs_attention: ServiceRequest[];
   recent_activity: RecentActivityItem[];
 }
-
-const STATUS_BADGES: Record<string, { bg: string; text: string; border: string }> = {
-  WAITING_FOR_CENTRE: { bg: 'bg-amber-50', text: 'text-amber-800', border: 'border-amber-200' },
-  ACCEPTED: { bg: 'bg-blue-50', text: 'text-blue-800', border: 'border-blue-200' },
-  UNDER_REVIEW: { bg: 'bg-indigo-50', text: 'text-indigo-800', border: 'border-indigo-200' },
-  CORRECTION_REQUIRED: { bg: 'bg-rose-50', text: 'text-rose-800', border: 'border-rose-200' },
-  READY_FOR_PROCESSING: { bg: 'bg-teal-50', text: 'text-teal-800', border: 'border-teal-200' },
-  PROCESSING: { bg: 'bg-cyan-50', text: 'text-cyan-800', border: 'border-cyan-200' },
-  PAYMENT_PENDING: { bg: 'bg-purple-50', text: 'text-purple-800', border: 'border-purple-200' },
-  INTERACTION_REQUIRED: { bg: 'bg-orange-50', text: 'text-orange-800', border: 'border-orange-200' },
-  INTERACTION_SCHEDULED: { bg: 'bg-sky-50', text: 'text-sky-800', border: 'border-sky-200' },
-  COMPLETED: { bg: 'bg-emerald-50', text: 'text-emerald-800', border: 'border-emerald-200' },
-  CLOSED: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300' },
-  CANCELLED: { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200' },
-  UNABLE_TO_PROCEED: { bg: 'bg-red-50', text: 'text-red-800', border: 'border-red-200' },
-};
 
 export function EmployeeDashboard() {
   const [stats, setStats] = useState<DashboardBuckets | null>(null);
@@ -120,9 +108,17 @@ export function EmployeeDashboard() {
       setLoading(p => ({ ...p, activity: true }));
       try {
         const res = await api.get('/requests/dashboard/recent-activity');
-        setRecentActivity(res.data);
-        setErrors(p => ({ ...p, activity: '' }));
+        if (Array.isArray(res.data)) {
+            setRecentActivity(res.data);
+            setErrors(p => ({ ...p, activity: '' }));
+        } else {
+            console.error('Invalid activity data:', res.data);
+            setRecentActivity([]);
+            setErrors(p => ({ ...p, activity: '' }));
+        }
       } catch (e: any) {
+        console.error('Failed to load activity:', e);
+        setRecentActivity([]);
         setErrors(p => ({ ...p, activity: 'Failed to load activity' }));
       } finally {
         setLoading(p => ({ ...p, activity: false }));
@@ -142,10 +138,11 @@ export function EmployeeDashboard() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-6 pb-12">
+      {/* Header Area */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-4">
-          <Avatar photoUrl={user?.photo_url} name={user?.full_name || 'Employee'} className="w-12 h-12 text-xl shrink-0" />
+          <Avatar photoUrl={user?.photo_url} name={user?.full_name} className="w-12 h-12 text-xl shrink-0" />
           <div>
             <h1 className="text-2xl font-bold text-mono-text tracking-tight leading-tight">
               Welcome back, {user?.full_name || 'Employee'}
@@ -156,187 +153,225 @@ export function EmployeeDashboard() {
           </div>
         </div>
         <div className="shrink-0">
-          <button
-            onClick={() => fetchDashboard(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-mono-border rounded-lg hover:bg-mono-accent/5 transition-all text-mono-muted hover:text-mono-text font-medium group shadow-sm"
+          <Button 
+            onClick={() => fetchDashboard(true)} 
+            variant="outline"
+            icon={<RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />}
           >
-            <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'} />
             Refresh
-          </button>
+          </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      {/* Primary Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {loading.stats ? (
-          Array(5).fill(0).map((_, i) => (
-            <div key={i} className="bg-white p-6 rounded-2xl border border-mono-border shadow-sm flex flex-col justify-between h-32 animate-pulse">
-              <div className="w-12 h-12 bg-mono-accent/10 rounded-xl mb-4"></div>
-              <div className="w-20 h-4 bg-mono-accent/10 rounded"></div>
-              <div className="w-12 h-8 bg-mono-accent/10 rounded mt-1"></div>
-            </div>
+          Array(4).fill(0).map((_, i) => (
+            <Card key={i} padding="md" className="animate-pulse">
+              <div className="w-10 h-10 bg-mono-surface rounded-full mb-4"></div>
+              <div className="w-16 h-8 bg-mono-surface rounded mb-2"></div>
+              <div className="w-24 h-4 bg-mono-surface rounded"></div>
+            </Card>
           ))
         ) : errors.stats ? (
-          <div className="col-span-1 md:col-span-5 bg-red-50 border border-red-200 rounded-2xl p-6 flex flex-col items-center justify-center text-red-800">
-            <p className="font-medium mb-2">{errors.stats}</p>
-            <button onClick={() => fetchDashboard(true)} className="px-4 py-2 bg-white rounded-lg border border-red-200 text-sm font-medium hover:bg-red-50">Retry</button>
+          <div className="col-span-1 lg:col-span-4 bg-mono-surface/50 border border-mono-border rounded-xl p-6 flex flex-col items-center justify-center">
+            <p className="font-medium text-mono-text mb-2">{errors.stats}</p>
+            <Button onClick={() => fetchDashboard(true)} size="sm">Retry</Button>
           </div>
         ) : stats && (
           <>
-            <button onClick={() => navigateToFiltered('WAITING_FOR_CENTRE,ACCEPTED')} className="bg-white p-6 rounded-2xl border border-mono-border shadow-sm hover:shadow-md transition-all text-left group">
-              <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 mb-4 group-hover:scale-110 transition-transform">
-                <FileText size={24} />
+            <Card padding="md" className="hover:border-mono-text/30 cursor-pointer transition-colors" onClick={() => navigateToFiltered('WAITING_FOR_CENTRE,ACCEPTED')}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-mono-surface flex items-center justify-center text-mono-text">
+                    <FileText size={20} />
+                  </div>
+                  <p className="text-[15px] font-semibold text-mono-text">New Intake</p>
+                </div>
               </div>
-              <p className="text-sm font-medium text-mono-muted mb-1">New Intake</p>
-              <h3 className="text-3xl font-bold text-mono-text">{stats.new}</h3>
-            </button>
+              <div className="flex items-center justify-between mt-2">
+                <div>
+                  <span className="text-3xl font-bold text-mono-text">{stats.new}</span>
+                  <p className="text-[13px] text-mono-muted mt-1">Awaiting acceptance</p>
+                </div>
+                <ChevronRight size={20} className="text-mono-muted" />
+              </div>
+            </Card>
 
-            <button onClick={() => navigateToFiltered('UNDER_REVIEW,READY_FOR_PROCESSING,PROCESSING')} className="bg-white p-6 rounded-2xl border border-mono-border shadow-sm hover:shadow-md transition-all text-left group">
-              <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-4 group-hover:scale-110 transition-transform">
-                <Clock size={24} />
+            <Card padding="md" className="hover:border-mono-text/30 cursor-pointer transition-colors" onClick={() => navigateToFiltered('UNDER_REVIEW,READY_FOR_PROCESSING,PROCESSING')}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-mono-surface flex items-center justify-center text-mono-text">
+                    <Clock size={20} />
+                  </div>
+                  <p className="text-[15px] font-semibold text-mono-text">In Progress</p>
+                </div>
               </div>
-              <p className="text-sm font-medium text-mono-muted mb-1">In Progress</p>
-              <h3 className="text-3xl font-bold text-mono-text">{stats.in_review}</h3>
-            </button>
+              <div className="flex items-center justify-between mt-2">
+                <div>
+                  <span className="text-3xl font-bold text-mono-text">{stats.in_review}</span>
+                  <p className="text-[13px] text-mono-muted mt-1">Currently processing</p>
+                </div>
+                <ChevronRight size={20} className="text-mono-muted" />
+              </div>
+            </Card>
 
-            <button onClick={() => navigateToFiltered('CORRECTION_REQUIRED,INTERACTION_REQUIRED,INTERACTION_SCHEDULED,PAYMENT_PENDING')} className="bg-white p-6 rounded-2xl border border-mono-border shadow-sm hover:shadow-md transition-all text-left group">
-              <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 mb-4 group-hover:scale-110 transition-transform">
-                <AlertCircle size={24} />
+            <Card padding="md" className="hover:border-mono-text/30 cursor-pointer transition-colors" onClick={() => navigateToFiltered('CORRECTION_REQUIRED,INTERACTION_REQUIRED,INTERACTION_SCHEDULED,PAYMENT_PENDING')}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-mono-surface flex items-center justify-center text-mono-text">
+                    <AlertCircle size={20} />
+                  </div>
+                  <p className="text-[15px] font-semibold text-mono-text">Awaiting Citizen</p>
+                </div>
               </div>
-              <p className="text-sm font-medium text-mono-muted mb-1">Awaiting Citizen</p>
-              <h3 className="text-3xl font-bold text-mono-text">{stats.awaiting_citizen}</h3>
-            </button>
+              <div className="flex items-center justify-between mt-2">
+                <div>
+                  <span className="text-3xl font-bold text-mono-text">{stats.awaiting_citizen}</span>
+                  <p className="text-[13px] text-mono-muted mt-1">Needs action</p>
+                </div>
+                <ChevronRight size={20} className="text-mono-muted" />
+              </div>
+            </Card>
 
-            <button onClick={() => navigateToFiltered('COMPLETED')} className="bg-white p-6 rounded-2xl border border-mono-border shadow-sm hover:shadow-md transition-all text-left group">
-              <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 mb-4 group-hover:scale-110 transition-transform">
-                <CheckCircle2 size={24} />
+            <Card padding="md" className="hover:border-mono-text/30 cursor-pointer transition-colors" onClick={() => navigateToFiltered('COMPLETED')}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-mono-surface flex items-center justify-center text-mono-text">
+                    <CheckCircle size={20} />
+                  </div>
+                  <p className="text-[15px] font-semibold text-mono-text">Completed</p>
+                </div>
               </div>
-              <p className="text-sm font-medium text-mono-muted mb-1">Completed Today</p>
-              <h3 className="text-3xl font-bold text-mono-text">{stats.completed_today}</h3>
-            </button>
-
-            <button onClick={() => navigateToFiltered('UNABLE_TO_PROCEED')} className="bg-white p-6 rounded-2xl border border-mono-border shadow-sm hover:shadow-md transition-all text-left group">
-              <div className="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center text-rose-600 mb-4 group-hover:scale-110 transition-transform">
-                <CheckCircle2 size={24} />
+              <div className="flex items-center justify-between mt-2">
+                <div>
+                  <span className="text-3xl font-bold text-mono-text">{stats.completed_today}</span>
+                  <p className="text-[13px] text-mono-muted mt-1">Resolved today</p>
+                </div>
+                <ChevronRight size={20} className="text-mono-muted" />
               </div>
-              <p className="text-sm font-medium text-mono-muted mb-1">Rejected (30d)</p>
-              <h3 className="text-3xl font-bold text-mono-text">{stats.rejected_last_30_days}</h3>
-            </button>
+            </Card>
           </>
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[500px]">
-        <div className="bg-white rounded-2xl border border-mono-border shadow-sm flex flex-col overflow-hidden h-full">
-          <div className="p-6 border-b border-mono-border flex justify-between items-center bg-mono-bg/30">
-            <h2 className="text-lg font-bold text-mono-text flex items-center gap-2">
-              <AlertCircle size={20} className="text-amber-500" />
-              Needs Attention
-            </h2>
-          </div>
-          <div className="flex-1 overflow-auto p-2">
+      {/* Main Area */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column (Needs Attention) */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card padding="md">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-[18px] font-semibold text-mono-text">Needs Attention</h2>
+              <button onClick={() => navigate('/employee/requests')} className="text-[14px] font-semibold text-mono-text flex items-center gap-1 hover:opacity-70 transition-opacity">
+                View all <ArrowRight size={16} />
+              </button>
+            </div>
+
             {loading.attention ? (
-              <div className="space-y-2 p-2">
+              <div className="space-y-4">
                 {Array(3).fill(0).map((_, i) => (
-                  <div key={i} className="w-full h-20 bg-mono-accent/5 animate-pulse rounded-xl"></div>
+                  <div key={i} className="w-full h-20 bg-mono-surface animate-pulse rounded-xl"></div>
                 ))}
               </div>
             ) : errors.attention ? (
-              <div className="text-center py-12 text-red-600">
-                <p className="font-medium">{errors.attention}</p>
-                <button onClick={() => fetchDashboard(true)} className="mt-2 text-sm underline hover:text-red-700">Retry</button>
+              <div className="py-8 flex flex-col items-center justify-center border border-mono-border rounded-xl bg-mono-surface/30">
+                <AlertCircle className="text-mono-text mb-2" size={24} strokeWidth={1.5} />
+                <p className="text-mono-muted text-[13px] font-medium mb-3">Failed to load queue.</p>
+                <Button onClick={() => fetchDashboard(true)} size="sm">Retry</Button>
               </div>
             ) : needsAttention?.length === 0 ? (
-              <div className="text-center py-12 text-mono-muted">
-                <FileCheck size={48} className="mx-auto mb-4 opacity-20" />
-                <p className="font-medium text-mono-text">Queue is clear</p>
-                <p className="text-sm mt-1">No requests currently need your attention.</p>
+              <div className="py-8 border border-mono-border border-dashed rounded-xl bg-mono-surface/30">
+                <EmptyState 
+                  icon={<CheckCircle size={32} />} 
+                  title="Queue is clear" 
+                  description="No requests currently need your attention." 
+                />
               </div>
             ) : (
-              <div className="space-y-1">
-                {needsAttention?.map(req => {
-                  const badge = STATUS_BADGES[req.status] || STATUS_BADGES['WAITING_FOR_CENTRE'];
-                  return (
-                    <button
-                      key={req.id}
-                      onClick={() => navigate(`/employee/requests/${req.id}`)}
-                      className="w-full text-left p-4 rounded-xl hover:bg-mono-accent/5 transition-all flex items-center justify-between group border border-transparent hover:border-mono-border/50"
-                    >
-                      <div>
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span className="font-mono text-xs text-mono-muted">
-                            {req.id.split('-')[0].toUpperCase()}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase border ${badge.bg} ${badge.text} ${badge.border}`}>
-                            {formatStatus(req.status)}
-                          </span>
-                        </div>
-                        <p className="font-semibold text-mono-text line-clamp-1">{req.service_name_snapshot}</p>
+              <div className="space-y-4">
+                {needsAttention?.map(req => (
+                  <button
+                    key={req.id}
+                    onClick={() => navigate(`/employee/requests/${req.id}`)}
+                    className="w-full text-left border border-mono-border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-mono-text/30 transition-colors group"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-mono-surface flex items-center justify-center text-mono-text shrink-0">
+                        <AlertCircle size={24} strokeWidth={1.5} />
                       </div>
-                      <ChevronRight size={20} className="text-mono-muted opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
-                    </button>
-                  );
-                })}
+                      <div>
+                        <h3 className="font-semibold text-mono-text text-[15px] line-clamp-1">{req.service_name_snapshot}</h3>
+                        <p className="text-[14px] text-mono-muted mt-0.5">#{req.id.substring(0, 8).toUpperCase()}</p>
+                        <p className="text-[12px] text-mono-muted mt-2 flex items-center gap-1">
+                          <Clock size={12} /> Updated {new Date(req.updated_at).toLocaleDateString('en-GB')}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:items-end gap-2">
+                      <span className="px-2.5 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wider bg-mono-surface border border-mono-border text-mono-text">
+                        {formatStatus(req.status)}
+                      </span>
+                      <ChevronRight size={20} className="text-mono-muted opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block" />
+                    </div>
+                  </button>
+                ))}
               </div>
             )}
-          </div>
+          </Card>
         </div>
 
-        <div className="bg-white rounded-2xl border border-mono-border shadow-sm flex flex-col overflow-hidden h-full">
-          <div className="p-6 border-b border-mono-border bg-mono-bg/30">
-            <h2 className="text-lg font-bold text-mono-text flex items-center gap-2">
-              <History size={20} className="text-indigo-500" />
-              Recent Activity
-            </h2>
-          </div>
-          <div className="flex-1 overflow-auto p-4">
+        {/* Right Column (Recent Activity) */}
+        <div className="space-y-6">
+          <Card padding="md">
+            <h2 className="text-[18px] font-semibold text-mono-text mb-6">Recent Activity</h2>
+            
             {loading.activity ? (
-              <div className="relative">
-                <div className="absolute top-2 bottom-2 left-[5px] w-px bg-mono-accent/10"></div>
-                <div className="space-y-6 pl-6">
-                  {Array(4).fill(0).map((_, i) => (
-                    <div key={i} className="flex flex-col gap-2 animate-pulse">
-                      <div className="w-32 h-4 bg-mono-accent/10 rounded"></div>
-                      <div className="w-48 h-3 bg-mono-accent/10 rounded"></div>
+              <div className="space-y-6">
+                {Array(4).fill(0).map((_, i) => (
+                  <div key={i} className="flex gap-4 animate-pulse">
+                    <div className="w-2 h-2 mt-2 rounded-full bg-mono-surface shrink-0"></div>
+                    <div className="flex-1 space-y-2">
+                      <div className="w-full h-4 bg-mono-surface rounded"></div>
+                      <div className="w-2/3 h-3 bg-mono-surface rounded"></div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
             ) : errors.activity ? (
-              <div className="text-center py-12 text-red-600">
-                <p className="font-medium">{errors.activity}</p>
-                <button onClick={() => fetchDashboard(true)} className="mt-2 text-sm underline hover:text-red-700">Retry</button>
+              <div className="py-8 flex flex-col items-center justify-center border border-mono-border rounded-xl bg-mono-surface/30">
+                <AlertCircle className="text-mono-text mb-2" size={24} strokeWidth={1.5} />
+                <p className="text-mono-muted text-[13px] font-medium mb-3">Failed to load activity.</p>
+                <Button onClick={() => fetchDashboard(true)} size="sm">Retry</Button>
               </div>
             ) : recentActivity?.length === 0 ? (
-              <div className="text-center py-12 text-mono-muted">
-                <History size={48} className="mx-auto mb-4 opacity-20" />
-                <p className="font-medium text-mono-text">No recent activity</p>
+              <div className="py-8 border border-mono-border border-dashed rounded-xl bg-mono-surface/30">
+                <EmptyState 
+                  icon={<History size={32} />} 
+                  title="No activity" 
+                  description="Recent actions will appear here." 
+                />
               </div>
             ) : (
               <div className="relative">
-                <div className="absolute top-2 bottom-2 left-[5px] w-px bg-mono-border"></div>
-                <div className="space-y-4">
-                  {recentActivity?.slice(0, 8).map((activity) => (
-                    <div key={activity.id} className="relative flex gap-3 group items-start">
-                      <div className="relative z-10 flex-shrink-0 w-2.5 h-2.5 mt-1.5 rounded-full bg-mono-muted"></div>
+                <div className="absolute top-2 bottom-2 left-[3px] w-px bg-mono-border"></div>
+                <div className="space-y-6">
+                  {recentActivity?.slice(0, 6).map((activity, i) => (
+                    <div key={activity.id} className="relative flex gap-4 items-start">
+                      <div className={`relative z-10 flex-shrink-0 w-2 h-2 mt-1.5 rounded-full ${i === 0 ? 'bg-mono-text' : 'bg-mono-muted'}`}></div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-baseline gap-2 truncate">
-                            <span className="font-medium text-sm text-mono-text capitalize truncate">
-                              {activity.action.replace(/_/g, ' ').toLowerCase()}
-                            </span>
-                            <span className="text-xs text-mono-muted truncate">
-                              {activity.request_service_name}
-                            </span>
-                          </div>
-                          <time 
-                            className="text-xs text-mono-muted flex-shrink-0 tabular-nums" 
-                            title={new Date(activity.created_at).toLocaleString()}
-                          >
+                        <div className="flex flex-col gap-0.5">
+                          <span className={`font-semibold text-[14px] ${i === 0 ? 'text-mono-text' : 'text-mono-text/80'} capitalize truncate`}>
+                            {activity.action.replace(/_/g, ' ').toLowerCase()}
+                          </span>
+                          <span className="text-[13px] text-mono-muted truncate">
+                            {activity.request_service_name} #{activity.request_id.substring(0, 8)}
+                          </span>
+                          <time className="text-[12px] text-mono-muted mt-1 tabular-nums font-medium">
                             {formatRelativeTime(activity.created_at)}
                           </time>
                         </div>
                         {activity.note && (
-                          <p className="text-xs text-mono-muted mt-0.5 truncate">
+                          <p className="text-[13px] text-mono-muted mt-2 p-3 bg-mono-surface rounded-lg border border-mono-border truncate">
                             {activity.note}
                           </p>
                         )}
@@ -346,7 +381,7 @@ export function EmployeeDashboard() {
                 </div>
               </div>
             )}
-          </div>
+          </Card>
         </div>
       </div>
     </div>

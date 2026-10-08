@@ -222,7 +222,7 @@ export function Profile() {
  <FileText size={20} className="text-mono-text" />
  <h3 className="font-bold text-mono-text text-base">Linked Information</h3>
  </div>
- <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-mono-border text-xs font-bold text-mono-text hover:bg-mono-surface transition-colors bg-mono-bg">
+ <button onClick={() => setIsEditModalOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-mono-border text-xs font-bold text-mono-text hover:bg-mono-surface transition-colors bg-mono-bg">
  <Edit2 size={12} /> Edit
  </button>
  </div>
@@ -236,7 +236,7 @@ export function Profile() {
  <tr className="hover:bg-mono-surface/30 transition-colors">
  <td className="py-4 pl-4 font-medium text-mono-muted">Mobile Number</td>
  <td className="py-4 pr-4 font-bold text-mono-text flex items-center justify-between gap-2">
- <span><span className="text-mono-muted font-medium italic">Not provided</span></span>
+ <span>{user?.phone || <span className="text-mono-muted font-medium italic">Not provided</span>}</span>
  </td>
  </tr>
  <tr className="hover:bg-mono-surface/30 transition-colors">
