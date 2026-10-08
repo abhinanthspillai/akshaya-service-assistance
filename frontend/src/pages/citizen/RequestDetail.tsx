@@ -431,7 +431,7 @@ export function RequestDetail() {
  </div>
  )}
 
- {request.status === 'DRAFT' && (
+ {canUploadDocuments && (
  <div className="p-8">
  <section className="mb-8">
  <h2 className="text-lg font-semibold text-indigo-950 mb-4 flex items-center gap-2">
