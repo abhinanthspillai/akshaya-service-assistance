@@ -110,17 +110,23 @@ export function Dashboard() {
   return (
   <div className="space-y-6 pb-12">
   {/* Header Area */}
-  <div className="flex items-center gap-4 mb-8">
-    <Avatar photoUrl={user?.photo_url} name={user?.full_name} className="w-16 h-16 text-2xl" />
-    <PageHeader 
-      title={`Welcome back, ${user?.full_name || 'Citizen'}`}
-      subtitle="Here's a quick overview of your requests."
-      className="mb-0"
-    >
+  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div className="flex items-center gap-4">
+      <Avatar photoUrl={user?.photo_url} name={user?.full_name} className="w-12 h-12 text-xl shrink-0" />
+      <div>
+        <h1 className="text-2xl font-bold text-mono-text tracking-tight leading-tight">
+          Welcome back, {user?.full_name || 'Citizen'}
+        </h1>
+        <p className="text-[15px] font-medium text-mono-muted mt-0.5">
+          Here's a quick overview of your requests.
+        </p>
+      </div>
+    </div>
+    <div className="shrink-0">
       <Button onClick={() => navigate('/services')} icon={<Plus size={18} strokeWidth={2.5} />}>
         New Request
       </Button>
-    </PageHeader>
+    </div>
   </div>
 
  {/* Primary Stats Grid */}

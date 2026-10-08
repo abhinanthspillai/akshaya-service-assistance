@@ -143,21 +143,27 @@ export function EmployeeDashboard() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Avatar photoUrl={user?.photo_url} name={user?.full_name || 'Employee'} className="w-16 h-16 text-2xl" />
+          <Avatar photoUrl={user?.photo_url} name={user?.full_name || 'Employee'} className="w-12 h-12 text-xl shrink-0" />
           <div>
-            <h1 className="text-3xl font-bold text-mono-text tracking-tight">Akshaya Centre Dashboard</h1>
-            <p className="text-mono-muted mt-1">Welcome back, {user?.full_name || 'Employee'}</p>
+            <h1 className="text-2xl font-bold text-mono-text tracking-tight leading-tight">
+              Welcome back, {user?.full_name || 'Employee'}
+            </h1>
+            <p className="text-[15px] font-medium text-mono-muted mt-0.5">
+              Akshaya Centre Dashboard
+            </p>
           </div>
         </div>
-        <button
-          onClick={() => fetchDashboard(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-mono-border rounded-lg hover:bg-mono-accent/5 transition-all text-mono-muted hover:text-mono-text font-medium group shadow-sm"
-        >
-          <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'} />
-          Refresh
-        </button>
+        <div className="shrink-0">
+          <button
+            onClick={() => fetchDashboard(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-mono-border rounded-lg hover:bg-mono-accent/5 transition-all text-mono-muted hover:text-mono-text font-medium group shadow-sm"
+          >
+            <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
