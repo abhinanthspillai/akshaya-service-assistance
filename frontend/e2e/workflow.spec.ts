@@ -19,9 +19,8 @@ test.describe.serial('Akshaya Service Assistance Full E2E Workflow', () => {
   test('Full E2E Flow', async ({ page: citizenPage, browser }) => {
     test.setTimeout(120000); // Increase timeout to 2 minutes for full E2E flow
 
-  // We need a second context for employee (to simulate them being on different machines/sessions)
-  const employeeContext = await browser.newContext();
-  const employeePage = await employeeContext.newPage();
+  let employeeContext: any;
+  let employeePage: any;
 
   await test.step('1. Citizen Registration and Login', async () => {
     // Navigate to register
@@ -108,6 +107,8 @@ test.describe.serial('Akshaya Service Assistance Full E2E Workflow', () => {
   });
 
   await test.step('3. Employee processes the request', async () => {
+    employeeContext = await browser.newContext();
+    employeePage = await employeeContext.newPage();
     // Login as employee in separate context
     await employeePage.goto('/login');
     const loginForm = employeePage.locator('form:visible').filter({ hasText: 'Forgot Password?' }).first();
