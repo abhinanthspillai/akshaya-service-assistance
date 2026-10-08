@@ -11,7 +11,7 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
-    video: 'on',
+    video: 'off',
     permissions: ['geolocation'],
     geolocation: { latitude: 9.9312, longitude: 76.2673 },
   },
