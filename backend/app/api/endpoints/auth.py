@@ -101,6 +101,7 @@ def get_auth_me(current_user: CurrentUser, session: SessionDep) -> UserAuthMe:
         if profile:
             response.full_name = profile.full_name
             response.phone = profile.phone
+            response.address_text = profile.address_text
     elif current_user.role == "centre_employee":
         emp_profile = session.scalar(
             select(EmployeeProfile).where(EmployeeProfile.user_id == current_user.id)

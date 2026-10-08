@@ -17,6 +17,8 @@ export interface User {
   email: string;
   role: string;
   full_name?: string;
+  phone?: string;
+  address_text?: string;
   centre_id?: string;
   approval_status?: string;
   photo_url?: string;

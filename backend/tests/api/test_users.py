@@ -98,3 +98,29 @@ def test_delete_photo(client: TestClient) -> None:
     
     me_response2 = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert me_response2.json()["photo_url"] is None
+
+def test_update_profile(client: TestClient) -> None:
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "update@example.com", "password": "securepassword", "full_name": "Old Name"},
+    )
+    res = client.post(
+        "/api/v1/auth/login", data={"username": "update@example.com", "password": "securepassword"}
+    )
+    token = res.json()["access_token"]
+    
+    update_res = client.patch(
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"full_name": "New Name", "phone": "1234567890", "address_text": "123 Test St"}
+    )
+    assert update_res.status_code == 200
+    data = update_res.json()
+    assert data["full_name"] == "New Name"
+    assert data["phone"] == "1234567890"
+    assert data["address_text"] == "123 Test St"
+    
+    me_res = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me_res.json()["full_name"] == "New Name"
+    assert me_res.json()["phone"] == "1234567890"
+    assert me_res.json()["address_text"] == "123 Test St"

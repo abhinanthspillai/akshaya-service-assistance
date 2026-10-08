@@ -94,3 +94,36 @@ def delete_photo(
     current_user.profile_photo = None
     session.add(current_user)
     session.commit()
+
+from app.schemas.user import UserUpdate, UserAuthMe
+from app.models.profile import CitizenProfile, EmployeeProfile
+from sqlalchemy import select
+
+@router.patch("/me", response_model=UserAuthMe)
+def update_profile(
+    user_in: UserUpdate,
+    current_user: CurrentUser,
+    session: SessionDep,
+):
+    if current_user.role == "citizen":
+        profile = session.scalar(select(CitizenProfile).where(CitizenProfile.user_id == current_user.id))
+        if profile:
+            if user_in.full_name is not None:
+                profile.full_name = user_in.full_name
+            if user_in.phone is not None:
+                profile.phone = user_in.phone
+            if user_in.address_text is not None:
+                profile.address_text = user_in.address_text
+            session.add(profile)
+    elif current_user.role == "centre_employee":
+        profile = session.scalar(select(EmployeeProfile).where(EmployeeProfile.user_id == current_user.id))
+        if profile:
+            if user_in.full_name is not None:
+                profile.full_name = user_in.full_name
+            session.add(profile)
+            
+    session.commit()
+    
+    # Reload and return UserAuthMe structure by just querying auth/me basically
+    from app.api.endpoints.auth import get_auth_me
+    return get_auth_me(current_user, session)

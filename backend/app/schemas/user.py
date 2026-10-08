@@ -24,6 +24,11 @@ class UserRegister(BaseModel):
         return v
 
 
+class UserUpdate(BaseModel):
+    full_name: str | None = Field(None, min_length=2, max_length=160)
+    phone: str | None = Field(None, max_length=32)
+    address_text: str | None = None
+
 class UserRead(BaseModel):
     id: UUID
     email: str
@@ -36,6 +41,7 @@ class UserRead(BaseModel):
 class UserAuthMe(UserRead):
     full_name: str | None = None
     phone: str | None = None
+    address_text: str | None = None
     centre_id: UUID | None = None
     approval_status: str | None = None
     photo_url: str | None = None

@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { User, MapPin, ShieldCheck, Lock, Bell, Globe, FileText, Trash2, Edit2, ChevronRight, Loader2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { Avatar } from '../../components/ui/Avatar';
+import { EditProfileModal } from '../../components/profile/EditProfileModal';
 
 
 
@@ -10,6 +11,7 @@ export function Profile() {
   const { user, refreshUser } = useAuth();
   const [photoError, setPhotoError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -59,6 +61,7 @@ export function Profile() {
  const role = user?.role.replace('_', ' ') || 'Citizen';
 
  return (
+ <>
  <div className="max-w-[1400px] mx-auto pb-12">
  {/* Header */}
  <div className="mb-8 border-b border-mono-border pb-6">
@@ -94,7 +97,7 @@ export function Profile() {
  </div>
  
  <div className="absolute top-6 right-6 md:static">
- <button className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-mono-border bg-mono-bg text-sm font-medium text-mono-text hover:bg-mono-surface transition-colors shadow-sm">
+ <button onClick={() => setIsEditModalOpen(true)} className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-mono-border bg-mono-bg text-sm font-medium text-mono-text hover:bg-mono-surface transition-colors shadow-sm">
  <Edit2 size={16} /> Edit Profile
  </button>
  </div>
@@ -110,7 +113,7 @@ export function Profile() {
  <User size={20} className="text-mono-text" />
  <h3 className="font-bold text-mono-text text-base">Personal Information</h3>
  </div>
- <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-mono-border text-xs font-bold text-mono-text hover:bg-mono-surface transition-colors bg-mono-bg">
+ <button onClick={() => setIsEditModalOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-mono-border text-xs font-bold text-mono-text hover:bg-mono-surface transition-colors bg-mono-bg">
  <Edit2 size={12} /> Edit
  </button>
  </div>
@@ -122,16 +125,8 @@ export function Profile() {
  <td className="py-4 pr-4 font-bold text-mono-text">{fullName}</td>
  </tr>
  <tr className="hover:bg-mono-surface/30 transition-colors">
- <td className="py-4 pl-4 font-medium text-mono-muted">Date of Birth</td>
- <td className="py-4 pr-4 font-bold text-mono-text"><span className="text-mono-muted font-medium italic">Not provided</span></td>
- </tr>
- <tr className="hover:bg-mono-surface/30 transition-colors">
- <td className="py-4 pl-4 font-medium text-mono-muted">Gender</td>
- <td className="py-4 pr-4 font-bold text-mono-text"><span className="text-mono-muted font-medium italic">Not provided</span></td>
- </tr>
- <tr className="hover:bg-mono-surface/30 transition-colors">
  <td className="py-4 pl-4 font-medium text-mono-muted">Phone Number</td>
- <td className="py-4 pr-4 font-bold text-mono-text"><span className="text-mono-muted font-medium italic">Not provided</span></td>
+ <td className="py-4 pr-4 font-bold text-mono-text">{user?.phone || <span className="text-mono-muted font-medium italic">Not provided</span>}</td>
  </tr>
  <tr className="hover:bg-mono-surface/30 transition-colors">
  <td className="py-4 pl-4 font-medium text-mono-muted">Email Address</td>
@@ -149,35 +144,21 @@ export function Profile() {
  <MapPin size={20} className="text-mono-text" />
  <h3 className="font-bold text-mono-text text-base">Address Information</h3>
  </div>
- <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-mono-border text-xs font-bold text-mono-text hover:bg-mono-surface transition-colors bg-mono-bg">
+ <button onClick={() => setIsEditModalOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-mono-border text-xs font-bold text-mono-text hover:bg-mono-surface transition-colors bg-mono-bg">
  <Edit2 size={12} /> Edit
  </button>
  </div>
- <div className="p-2 flex-1">
- <table className="w-full text-sm">
- <tbody className="divide-y divide-mono-border/50">
- <tr className="hover:bg-mono-surface/30 transition-colors">
- <td className="py-4 pl-4 font-medium text-mono-muted w-1/3">Address Line 1</td>
- <td className="py-4 pr-4 font-bold text-mono-text"><span className="text-mono-muted font-medium italic">Not provided</span></td>
- </tr>
- <tr className="hover:bg-mono-surface/30 transition-colors">
- <td className="py-4 pl-4 font-medium text-mono-muted">Address Line 2</td>
- <td className="py-4 pr-4 font-bold text-mono-text"><span className="text-mono-muted font-medium italic">Not provided</span></td>
- </tr>
- <tr className="hover:bg-mono-surface/30 transition-colors">
- <td className="py-4 pl-4 font-medium text-mono-muted">City</td>
- <td className="py-4 pr-4 font-bold text-mono-text"><span className="text-mono-muted font-medium italic">Not provided</span></td>
- </tr>
- <tr className="hover:bg-mono-surface/30 transition-colors">
- <td className="py-4 pl-4 font-medium text-mono-muted">State</td>
- <td className="py-4 pr-4 font-bold text-mono-text"><span className="text-mono-muted font-medium italic">Not provided</span></td>
- </tr>
- <tr className="hover:bg-mono-surface/30 transition-colors">
- <td className="py-4 pl-4 font-medium text-mono-muted">PIN Code</td>
- <td className="py-4 pr-4 font-bold text-mono-text"><span className="text-mono-muted font-medium italic">Not provided</span></td>
- </tr>
- </tbody>
- </table>
+ <div className="p-6 flex-1">
+ {user?.address_text ? (
+   <p className="text-sm font-medium text-mono-text whitespace-pre-line leading-relaxed">
+     {user.address_text}
+   </p>
+ ) : (
+   <div className="flex flex-col items-center justify-center h-full py-8 text-mono-muted">
+     <MapPin size={32} className="mb-3 opacity-20" />
+     <p className="text-sm font-medium">No address provided</p>
+   </div>
+ )}
  </div>
  </div>
 
@@ -289,5 +270,8 @@ export function Profile() {
 
  </div>
  </div>
+ 
+ <EditProfileModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} />
+ </>
  );
 }
