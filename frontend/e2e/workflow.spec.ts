@@ -16,12 +16,16 @@ test.describe.serial('Akshaya Service Assistance Full E2E Workflow', () => {
     execSync('.venv\\\\Scripts\\\\python clear_assignments.py', { cwd: backendDir, stdio: 'inherit' });
   });
 
-  test('Full E2E Flow', async ({ browser }) => {
+  test('Full E2E Flow', async ({ browser }, testInfo) => {
     test.setTimeout(120000); // Increase timeout to 2 minutes for full E2E flow
 
   // We need two contexts: one for citizen, one for employee (to simulate them being on different machines/sessions)
-  const citizenContext = await browser.newContext();
-  const employeeContext = await browser.newContext();
+  const citizenContext = await browser.newContext({
+    recordVideo: { dir: testInfo.outputPath('videos') }
+  });
+  const employeeContext = await browser.newContext({
+    recordVideo: { dir: testInfo.outputPath('videos') }
+  });
 
   const citizenPage = await citizenContext.newPage();
   const employeePage = await employeeContext.newPage();
@@ -193,5 +197,18 @@ test.describe.serial('Akshaya Service Assistance Full E2E Workflow', () => {
     // Assert completion
     await expect(employeePage.locator('text=COMPLETED').first()).toBeVisible();
   });
+
+  // Attach videos to the report
+  await citizenContext.close();
+  await employeeContext.close();
+  
+  const citizenVideo = await citizenPage.video()?.path();
+  if (citizenVideo) {
+    await testInfo.attach('Citizen Video', { path: citizenVideo, contentType: 'video/webm' });
+  }
+  const employeeVideo = await employeePage.video()?.path();
+  if (employeeVideo) {
+    await testInfo.attach('Employee Video', { path: employeeVideo, contentType: 'video/webm' });
+  }
 });
 });
