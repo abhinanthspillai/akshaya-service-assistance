@@ -250,31 +250,31 @@ export function EmployeeDashboard() {
                 <p className="font-medium text-mono-text">No recent activity</p>
               </div>
             ) : (
-              <div className="relative p-6 pt-4">
-                <div className="absolute top-4 bottom-0 left-[35px] w-px bg-mono-border"></div>
-                <div className="space-y-6">
+              <div className="relative p-4">
+                <div className="absolute top-6 bottom-4 left-[21px] w-px bg-mono-border"></div>
+                <div className="space-y-4">
                   {dashboard.recent_activity.slice(0, 8).map((activity) => (
-                    <div key={activity.id} className="relative flex gap-4 group">
-                      <div className="relative z-10 flex-shrink-0 w-6 h-6 mt-0.5 rounded-full border-2 border-white bg-indigo-100 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
-                      </div>
+                    <div key={activity.id} className="relative flex gap-3 group items-start">
+                      <div className="relative z-10 flex-shrink-0 w-2.5 h-2.5 mt-1.5 rounded-full bg-mono-muted"></div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 mb-0.5">
-                          <span className="font-bold text-sm text-mono-text truncate capitalize">
-                            {activity.action.replace(/_/g, ' ')}
-                          </span>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-baseline gap-2 truncate">
+                            <span className="font-medium text-sm text-mono-text capitalize truncate">
+                              {activity.action.replace(/_/g, ' ').toLowerCase()}
+                            </span>
+                            <span className="text-xs text-mono-muted truncate">
+                              {activity.request_service_name}
+                            </span>
+                          </div>
                           <time 
-                            className="text-xs text-mono-muted flex-shrink-0" 
+                            className="text-xs text-mono-muted flex-shrink-0 tabular-nums" 
                             title={new Date(activity.created_at).toLocaleString()}
                           >
                             {formatRelativeTime(activity.created_at)}
                           </time>
                         </div>
-                        <p className="text-xs text-mono-text font-medium truncate mb-0.5">
-                          {activity.request_service_name}
-                        </p>
                         {activity.note && (
-                          <p className="text-xs text-mono-muted truncate">
+                          <p className="text-xs text-mono-muted mt-0.5 truncate">
                             {activity.note}
                           </p>
                         )}
