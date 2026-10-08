@@ -2120,3 +2120,143 @@ def delete_request(
             detail="Only DRAFT, COMPLETED, or CANCELLED requests can be deleted/archived"
         )
 
+
+
+@router.post("/{request_id}/accept-and-start-review", response_model=ServiceRequestResponse)
+def accept_and_start_review_request(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+) -> Any:
+    from datetime import datetime
+    from sqlalchemy import func
+    from app.models.profile import EmployeeProfile
+
+    employee = session.get(EmployeeProfile, current_user.id)
+    if not employee or not employee.is_available:
+        raise HTTPException(status_code=403, detail="Employee profile unavailable")
+    service_request = session.scalar(
+        select(ServiceRequest)
+        .where(
+            ServiceRequest.id == request_id,
+            ServiceRequest.selected_centre_id == employee.centre_id,
+        )
+        .with_for_update()
+    )
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found in your centre")
+    if service_request.status != "WAITING_FOR_CENTRE":
+        raise HTTPException(status_code=409, detail="Request must be in WAITING_FOR_CENTRE state")
+
+    active_count = (
+        session.scalar(
+            select(func.count())
+            .select_from(RequestAssignment)
+            .where(
+                RequestAssignment.employee_id == current_user.id,
+                RequestAssignment.is_active.is_(True),
+            )
+        )
+        or 0
+    )
+    if active_count >= employee.max_active_requests:
+        raise HTTPException(status_code=409, detail="Employee at maximum capacity")
+
+    now = datetime.now(tz=UTC)
+    existing_assignments = session.scalars(
+        select(RequestAssignment).where(
+            RequestAssignment.request_id == request_id,
+            RequestAssignment.is_active.is_(True),
+        )
+    ).all()
+    for existing in existing_assignments:
+        existing.is_active = False
+        existing.revoked_at = now
+        session.add(existing)
+
+    assignment = RequestAssignment(
+        request_id=request_id, employee_id=current_user.id, is_active=True, assigned_at=now
+    )
+    session.add(assignment)
+
+    _perform_transition(
+        session, service_request, current_user, "ACCEPTED", RequestAction.ACCEPT,
+        notification_event="request_accepted",
+        notification_title="Request accepted",
+        notification_body="A centre employee accepted your request."
+    )
+    session.flush()
+
+    _perform_transition(session, service_request, current_user, "UNDER_REVIEW", RequestAction.START_REVIEW)
+    session.commit()
+    session.refresh(service_request)
+    return service_request
+
+@router.post("/{request_id}/documents/approve-all", response_model=ServiceRequestResponse)
+def approve_all_request_documents(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+) -> Any:
+    from datetime import datetime
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    _verify_active_assignment(current_user, service_request, session)
+    if service_request.status != "UNDER_REVIEW":
+        raise HTTPException(status_code=409, detail="Request must be in UNDER_REVIEW state")
+
+    documents = session.scalars(
+        select(RequestDocument).where(
+            RequestDocument.request_id == request_id,
+            RequestDocument.is_current.is_(True),
+            RequestDocument.status.not_in(["VERIFIED", "REUPLOAD_REQUIRED", "REJECTED"])
+        )
+    ).all()
+
+    now = datetime.now(tz=UTC)
+    for document in documents:
+        review = RequestDocumentReview(
+            request_id=request_id,
+            document_id=document.id,
+            requirement_id=document.requirement_id,
+            reviewer_id=current_user.id,
+            decision="APPROVED",
+            reason=None,
+        )
+        session.add(review)
+        document.status = "VERIFIED"
+        document.verified_at = now
+        document.verified_by_id = current_user.id
+        session.add(document)
+
+    session.commit()
+    session.refresh(service_request)
+    return service_request
+
+
+@router.post("/{request_id}/mark-ready-and-start-processing", response_model=ServiceRequestResponse)
+def mark_ready_and_start_processing_request(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+) -> Any:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    _verify_active_assignment(current_user, service_request, session)
+    if service_request.status != "UNDER_REVIEW":
+        raise HTTPException(status_code=409, detail="Request must be in UNDER_REVIEW state")
+    _verify_ready_for_processing_preconditions(session, service_request)
+
+    _perform_transition(session, service_request, current_user, "READY_FOR_PROCESSING", RequestAction.MARK_READY)
+    session.flush()
+
+    _perform_transition(session, service_request, current_user, "PROCESSING", RequestAction.START_PROCESSING)
+    session.commit()
+    session.refresh(service_request)
+    return service_request

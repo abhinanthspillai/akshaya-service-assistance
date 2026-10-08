@@ -13,7 +13,7 @@ import {
   History,
   FileCheck
 } from 'lucide-react';
-import { formatStatus } from '../../utils/format';
+import { formatStatus, formatRelativeTime } from '../../utils/format';
 import { useAuth } from '../../contexts/AuthContext';
 import { Avatar } from '../../components/ui/Avatar';
 
@@ -191,8 +191,8 @@ export function EmployeeDashboard() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white rounded-2xl border border-mono-border shadow-sm flex flex-col overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[500px]">
+        <div className="bg-white rounded-2xl border border-mono-border shadow-sm flex flex-col overflow-hidden h-full">
           <div className="p-6 border-b border-mono-border flex justify-between items-center bg-mono-bg/30">
             <h2 className="text-lg font-bold text-mono-text flex items-center gap-2">
               <AlertCircle size={20} className="text-amber-500" />
@@ -236,41 +236,52 @@ export function EmployeeDashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-mono-border shadow-sm flex flex-col overflow-hidden">
+        <div className="bg-white rounded-2xl border border-mono-border shadow-sm flex flex-col overflow-hidden h-full">
           <div className="p-6 border-b border-mono-border bg-mono-bg/30">
             <h2 className="text-lg font-bold text-mono-text flex items-center gap-2">
               <History size={20} className="text-indigo-500" />
               Recent Activity
             </h2>
           </div>
-          <div className="flex-1 overflow-auto p-4">
+          <div className="flex-1 overflow-auto p-0">
             {dashboard.recent_activity.length === 0 ? (
               <div className="text-center py-12 text-mono-muted">
-                <p>No recent activity recorded.</p>
+                <History size={48} className="mx-auto mb-4 opacity-20" />
+                <p className="font-medium text-mono-text">No recent activity</p>
               </div>
             ) : (
-              <div className="relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-mono-border before:to-transparent">
-                {dashboard.recent_activity.map((activity, i) => (
-                  <div key={activity.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active mb-6 last:mb-0">
-                    <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-white bg-indigo-50 text-indigo-600 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
-                      <ArrowUpRight size={16} />
-                    </div>
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-white p-4 rounded-xl border border-mono-border shadow-sm group-hover:shadow-md transition-shadow">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-mono-text capitalize">{activity.action.replace(/_/g, ' ')}</span>
-                        <time className="text-xs font-mono text-mono-muted">
-                          {new Date(activity.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </time>
+              <div className="relative p-6 pt-4">
+                <div className="absolute top-4 bottom-0 left-[35px] w-px bg-mono-border"></div>
+                <div className="space-y-6">
+                  {dashboard.recent_activity.slice(0, 8).map((activity) => (
+                    <div key={activity.id} className="relative flex gap-4 group">
+                      <div className="relative z-10 flex-shrink-0 w-6 h-6 mt-0.5 rounded-full border-2 border-white bg-indigo-100 flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
                       </div>
-                      <p className="text-sm text-mono-muted line-clamp-1 mb-2">{activity.request_service_name}</p>
-                      {activity.note && (
-                        <div className="text-sm bg-mono-bg p-2 rounded border border-mono-border/50 text-mono-text/80 italic">
-                          "{activity.note}"
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-0.5">
+                          <span className="font-bold text-sm text-mono-text truncate capitalize">
+                            {activity.action.replace(/_/g, ' ')}
+                          </span>
+                          <time 
+                            className="text-xs text-mono-muted flex-shrink-0" 
+                            title={new Date(activity.created_at).toLocaleString()}
+                          >
+                            {formatRelativeTime(activity.created_at)}
+                          </time>
                         </div>
-                      )}
+                        <p className="text-xs text-mono-text font-medium truncate mb-0.5">
+                          {activity.request_service_name}
+                        </p>
+                        {activity.note && (
+                          <p className="text-xs text-mono-muted truncate">
+                            {activity.note}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
           </div>
