@@ -20,7 +20,7 @@ from app.models.enums import RequestAction
 from app.models.centre import AkshayaCentre
 from app.models.document import DOCUMENT_REVIEW_DECISIONS, RequestDocument, RequestDocumentReview
 from app.models.interaction import RequestInteraction
-from app.models.message import RequestMessage
+from app.models.message import Conversation, RequestMessage
 from app.models.notification import Notification
 from app.models.user import User
 from app.models.profile import EmployeeProfile
@@ -1182,13 +1182,23 @@ def create_request_message(
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
         raise HTTPException(status_code=404, detail="Request not found")
-    _verify_message_access(current_user, service_request, session)
+    _verify_message_access(current_user, service_request, session, for_sending=True)
+    content = body.body.strip()
+    if not content:
+        raise HTTPException(status_code=422, detail="Message cannot be empty")
+    conv = session.scalar(select(Conversation).where(Conversation.request_id == request_id))
+    now = datetime.now(tz=UTC)
     message = RequestMessage(
         request_id=request_id,
+        conversation_id=conv.id if conv else None,
         sender_id=current_user.id,
-        body=body.body,
+        body=content,
+        created_at=now,
     )
     session.add(message)
+    if conv:
+        conv.updated_at = now
+        session.add(conv)
     session.commit()
     session.refresh(message)
     return message
@@ -1435,6 +1445,24 @@ def reassign_request(
         body=f"Request {request_id} was reassigned to you.",
     )
 
+    conv = session.scalar(
+        select(Conversation).where(Conversation.request_id == request_id)
+    )
+    if conv:
+        conv.staff_id = body.employee_id
+        session.add(conv)
+        # Add system message: "Chat handed over to <staff name>"
+        staff_name = target_employee.full_name or "new staff"
+        sys_msg = RequestMessage(
+            request_id=request_id,
+            conversation_id=conv.id,
+            sender_id=body.employee_id,
+            body=f"Chat handed over to {staff_name}",
+            is_system=True,
+            created_at=now,
+        )
+        session.add(sys_msg)
+
     session.add(service_request)
     session.commit()
     session.refresh(service_request)
@@ -1624,6 +1652,20 @@ def accept_request(
     )
     session.add(assignment)
 
+    existing_conv = session.scalar(
+        select(Conversation).where(Conversation.request_id == request_id)
+    )
+    if not existing_conv:
+        conv = Conversation(
+            request_id=request_id,
+            citizen_id=service_request.citizen_id,
+            staff_id=current_user.id,
+        )
+        session.add(conv)
+    else:
+        existing_conv.staff_id = current_user.id
+        session.add(existing_conv)
+
     _perform_transition(
         session, service_request, current_user, "ACCEPTED", RequestAction.ACCEPT,
         notification_event="request_accepted",
@@ -1736,7 +1778,11 @@ def _verify_active_assignment(user: Any, service_request: ServiceRequest, sessio
         raise HTTPException(status_code=403, detail="Not authorized")
 
 
-def _verify_message_access(user: Any, service_request: ServiceRequest, session: Any) -> None:
+def _verify_message_access(user: Any, service_request: ServiceRequest, session: Any, for_sending: bool = False) -> None:
+    if service_request.status in {"DRAFT", "SUBMITTED", "WAITING_FOR_CENTRE"}:
+        raise HTTPException(status_code=400, detail="Chat is not available before the request is accepted by a centre employee")
+    if for_sending and service_request.status in {"COMPLETED", "CLOSED", "CANCELLED", "UNABLE_TO_PROCEED"}:
+        raise HTTPException(status_code=409, detail=f"This thread is read-only because the request is in '{service_request.status}' state")
     if user.role == "citizen":
         if service_request.citizen_id != user.id:
             raise HTTPException(status_code=403, detail="Not authorized")
