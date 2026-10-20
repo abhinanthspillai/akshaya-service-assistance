@@ -1,6 +1,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 
 import { Avatar } from '../ui/Avatar';
+import { ChatSidebar } from './ChatSidebar';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, FileText, LogOut, FileSearch, Bell, LifeBuoy, Menu, X, Search } from 'lucide-react';
@@ -192,6 +193,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
  </main>
  </div>
  </div>
+ {(user?.role === 'citizen' || user?.role === 'centre_employee') && (
+   <ChatSidebar currentUserId={user.id} />
+ )}
  </div>
  );
 }

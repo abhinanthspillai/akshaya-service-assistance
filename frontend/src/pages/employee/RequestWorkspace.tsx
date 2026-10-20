@@ -703,6 +703,20 @@ export function RequestWorkspace() {
                 Mark completed
               </button>
             )}
+            {request.status !== 'WAITING_FOR_CENTRE' && (
+              <button
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent('openChatThread', { detail: { requestId: request.id } })
+                  );
+                }}
+                className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5"
+                title="Open Chat with Citizen"
+              >
+                <MessageSquare size={14} className="text-slate-600" />
+                Message Citizen
+              </button>
+            )}
           </div>
         </div>
 

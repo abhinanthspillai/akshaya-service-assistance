@@ -382,6 +382,20 @@ export function RequestDetail() {
  </span>
  <span className="text-sm text-mono-muted">Type {request.service_type_snapshot}</span>
  </div>
+ <div className="flex items-center gap-2">
+ {!['DRAFT', 'SUBMITTED', 'WAITING_FOR_CENTRE'].includes(request.status) && (
+ <button
+ onClick={() => {
+ window.dispatchEvent(
+ new CustomEvent('openChatThread', { detail: { requestId: request.id } })
+ );
+ }}
+ className="text-sm flex items-center gap-1.5 text-mono-text bg-white border border-mono-border hover:bg-mono-surface font-medium px-3.5 py-1.5 rounded-[16px] transition-colors shadow-xs"
+ >
+ <MessageSquare size={16} />
+ Message
+ </button>
+ )}
  {canCancel && (
  <button
  onClick={handleCancelRequest}
@@ -400,6 +414,7 @@ export function RequestDetail() {
  <Trash2 size={16} /> {request.status === 'DRAFT' ? 'Delete' : 'Archive'}
  </button>
  )}
+ </div>
  </div>
  <h1 className="text-2xl font-bold text-indigo-950 mb-2">{request.service_name_snapshot}</h1>
  <div className="text-mono-muted text-sm">

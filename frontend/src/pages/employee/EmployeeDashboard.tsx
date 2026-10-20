@@ -155,7 +155,7 @@ export function EmployeeDashboard() {
         <div className="shrink-0">
           <Button 
             onClick={() => fetchDashboard(true)} 
-            variant="outline"
+            variant="secondary"
             icon={<RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />}
           >
             Refresh
