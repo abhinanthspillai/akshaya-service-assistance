@@ -79,6 +79,9 @@ class CentreAdministrator(Base):
         UUID(as_uuid=True), ForeignKey("akshaya_centres.id"), index=True, nullable=False
     )
     full_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    approval_status: Mapped[str] = mapped_column(
+        String(32), default="APPROVED", nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.now(), nullable=False
     )
@@ -88,4 +91,15 @@ class CentreAdministrator(Base):
 
     __table_args__ = (
         UniqueConstraint("user_id", "centre_id", name="uq_centre_administrators_user_centre"),
+        CheckConstraint(
+            "approval_status IN ('PENDING_APPROVAL', 'APPROVED', 'REJECTED')",
+            name="centre_admin_approval_status_check",
+        ),
+        Index(
+            "uq_centre_admin_active_or_pending",
+            "centre_id",
+            unique=True,
+            postgresql_where="approval_status IN ('APPROVED', 'PENDING_APPROVAL')",
+        ),
     )
+

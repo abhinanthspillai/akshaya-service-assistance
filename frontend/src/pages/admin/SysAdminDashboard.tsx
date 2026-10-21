@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Shield, LifeBuoy, FileText, Users } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Avatar } from '../../components/ui/Avatar';
+import { AccountRequestsSection } from '../../components/admin/AccountRequestsSection';
 
 export function SysAdminDashboard() {
  const navigate = useNavigate();
@@ -22,7 +23,10 @@ export function SysAdminDashboard() {
  </span>
  </div>
 
+ <AccountRequestsSection title="Account Requests (Staff & Managers)" />
+
  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
  
  <button
  onClick={() => navigate('/admin/audit')}

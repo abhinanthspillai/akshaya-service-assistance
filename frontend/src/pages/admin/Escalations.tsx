@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 import { Loader2, AlertTriangle, UserCheck } from 'lucide-react';
+import { AccountRequestsSection } from '../../components/admin/AccountRequestsSection';
+
 
 interface Escalation {
  id: string;
@@ -116,6 +118,7 @@ export function Escalations() {
 
  return (
  <div className="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+  <AccountRequestsSection title="Centre Staff Account Requests" />
  <div className="flex items-center justify-between mb-8">
  <div>
  <h1 className="text-3xl font-bold text-mono-text flex items-center gap-2">

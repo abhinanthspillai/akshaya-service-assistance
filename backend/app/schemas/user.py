@@ -18,10 +18,11 @@ class UserRegister(BaseModel):
     @field_validator("role")
     @classmethod
     def validate_role(cls, v: str) -> str:
-        allowed = ("citizen", "centre_employee")
+        allowed = ("citizen", "centre_employee", "centre_administrator")
         if v not in allowed:
             raise ValueError(f"Role must be one of {allowed}, got '{v}'")
         return v
+
 
 
 class UserUpdate(BaseModel):

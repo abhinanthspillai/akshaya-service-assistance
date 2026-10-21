@@ -11,12 +11,15 @@ from app.models.centre import AkshayaCentre
 from app.models.profile import CentreAdministrator, EmployeeProfile
 from app.models.user import User
 from app.schemas.staff import (
+    AccountRejectRequest,
+    AccountRequestResponse,
     CentreAdminResponse,
     EmployeeResponse,
     StaffCreate,
     StaffStatusUpdate,
     UserStaffResponse,
 )
+
 
 router = APIRouter()
 
@@ -167,3 +170,244 @@ def update_user_status(
     session.commit()
     session.refresh(target_user)
     return target_user
+
+
+@router.get("/account-requests", response_model=list[AccountRequestResponse])
+def list_account_requests(
+    *,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    results: list[AccountRequestResponse] = []
+
+    if current_user.role == "system_administrator":
+        # 1. Staff requests (all centres)
+        emp_reqs = session.execute(
+            select(EmployeeProfile, User, AkshayaCentre)
+            .join(User, EmployeeProfile.user_id == User.id)
+            .join(AkshayaCentre, EmployeeProfile.centre_id == AkshayaCentre.id)
+            .where(EmployeeProfile.approval_status == "PENDING_APPROVAL")
+            .order_by(EmployeeProfile.created_at.asc())
+        ).all()
+        for emp, user, centre in emp_reqs:
+            results.append(
+                AccountRequestResponse(
+                    id=emp.user_id,
+                    user_id=user.id,
+                    full_name=emp.full_name,
+                    email=user.email,
+                    role="centre_employee",
+                    centre_id=centre.id,
+                    centre_name=centre.name,
+                    centre_code=centre.code,
+                    approval_status=emp.approval_status,
+                    created_at=emp.created_at,
+                )
+            )
+
+        # 2. Manager requests (System Admin only)
+        mgr_reqs = session.execute(
+            select(CentreAdministrator, User, AkshayaCentre)
+            .join(User, CentreAdministrator.user_id == User.id)
+            .join(AkshayaCentre, CentreAdministrator.centre_id == AkshayaCentre.id)
+            .where(CentreAdministrator.approval_status == "PENDING_APPROVAL")
+            .order_by(CentreAdministrator.created_at.asc())
+        ).all()
+        for mgr, user, centre in mgr_reqs:
+            results.append(
+                AccountRequestResponse(
+                    id=mgr.user_id,
+                    user_id=user.id,
+                    full_name=mgr.full_name,
+                    email=user.email,
+                    role="centre_administrator",
+                    centre_id=centre.id,
+                    centre_name=centre.name,
+                    centre_code=centre.code,
+                    approval_status=mgr.approval_status,
+                    created_at=mgr.created_at,
+                )
+            )
+
+    elif current_user.role == "centre_administrator":
+        admin_prof = session.get(CentreAdministrator, current_user.id)
+        if not admin_prof or admin_prof.approval_status != "APPROVED":
+            raise HTTPException(status_code=403, detail="Not an active centre administrator")
+
+        # Staff requests for THIS centre only (Managers never see or approve manager requests)
+        emp_reqs = session.execute(
+            select(EmployeeProfile, User, AkshayaCentre)
+            .join(User, EmployeeProfile.user_id == User.id)
+            .join(AkshayaCentre, EmployeeProfile.centre_id == AkshayaCentre.id)
+            .where(
+                EmployeeProfile.approval_status == "PENDING_APPROVAL",
+                EmployeeProfile.centre_id == admin_prof.centre_id,
+            )
+            .order_by(EmployeeProfile.created_at.asc())
+        ).all()
+        for emp, user, centre in emp_reqs:
+            results.append(
+                AccountRequestResponse(
+                    id=emp.user_id,
+                    user_id=user.id,
+                    full_name=emp.full_name,
+                    email=user.email,
+                    role="centre_employee",
+                    centre_id=centre.id,
+                    centre_name=centre.name,
+                    centre_code=centre.code,
+                    approval_status=emp.approval_status,
+                    created_at=emp.created_at,
+                )
+            )
+    else:
+        raise HTTPException(status_code=403, detail="Not authorized to view account requests")
+
+    return results
+
+
+@router.post("/account-requests/{target_user_id}/approve", status_code=200)
+def approve_account_request(
+    *,
+    session: SessionDep,
+    target_user_id: UUID,
+    current_user: CurrentUser,
+) -> Any:
+    target_user = session.get(User, target_user_id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if target_user.role == "centre_employee":
+        emp_profile = session.get(EmployeeProfile, target_user_id)
+        if not emp_profile:
+            raise HTTPException(status_code=404, detail="Employee profile not found")
+        if emp_profile.approval_status != "PENDING_APPROVAL":
+            raise HTTPException(status_code=409, detail=f"Request already processed ({emp_profile.approval_status})")
+
+        # Check authorization
+        if current_user.role == "system_administrator":
+            pass
+        elif current_user.role == "centre_administrator":
+            admin_prof = session.get(CentreAdministrator, current_user.id)
+            if not admin_prof or admin_prof.centre_id != emp_profile.centre_id:
+                raise HTTPException(status_code=403, detail="Not authorized for this centre")
+        else:
+            raise HTTPException(status_code=403, detail="Not enough permissions")
+
+        emp_profile.approval_status = "APPROVED"
+        session.add(emp_profile)
+        log_audit(
+            session,
+            actor_id=current_user.id,
+            action="approve_employee_account",
+            target_resource_type="User",
+            target_resource_id=target_user_id,
+            details={"email": target_user.email, "centre_id": str(emp_profile.centre_id)},
+        )
+
+    elif target_user.role == "centre_administrator":
+        # Only System Admin can approve a Centre Administrator
+        if current_user.role != "system_administrator":
+            raise HTTPException(status_code=403, detail="Only System Admin can approve Centre Manager accounts")
+
+        admin_profile = session.get(CentreAdministrator, target_user_id)
+        if not admin_profile:
+            raise HTTPException(status_code=404, detail="Centre administrator profile not found")
+        if admin_profile.approval_status != "PENDING_APPROVAL":
+            raise HTTPException(status_code=409, detail=f"Request already processed ({admin_profile.approval_status})")
+
+        # Verify no other manager was approved in the meantime
+        other_active = session.scalar(
+            select(CentreAdministrator).where(
+                CentreAdministrator.centre_id == admin_profile.centre_id,
+                CentreAdministrator.user_id != target_user_id,
+                CentreAdministrator.approval_status == "APPROVED",
+            )
+        )
+        if other_active:
+            raise HTTPException(status_code=409, detail="A manager has already been approved for this centre")
+
+        admin_profile.approval_status = "APPROVED"
+        session.add(admin_profile)
+        log_audit(
+            session,
+            actor_id=current_user.id,
+            action="approve_centre_admin_account",
+            target_resource_type="User",
+            target_resource_id=target_user_id,
+            details={"email": target_user.email, "centre_id": str(admin_profile.centre_id)},
+        )
+    else:
+        raise HTTPException(status_code=400, detail="User is not a staff or manager account")
+
+    session.commit()
+    return {"message": "Account approved successfully"}
+
+
+@router.post("/account-requests/{target_user_id}/reject", status_code=200)
+def reject_account_request(
+    *,
+    session: SessionDep,
+    target_user_id: UUID,
+    reject_in: AccountRejectRequest | None = None,
+    current_user: CurrentUser,
+) -> Any:
+    target_user = session.get(User, target_user_id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    reason = reject_in.reason if reject_in else None
+
+    if target_user.role == "centre_employee":
+        emp_profile = session.get(EmployeeProfile, target_user_id)
+        if not emp_profile:
+            raise HTTPException(status_code=404, detail="Employee profile not found")
+        if emp_profile.approval_status != "PENDING_APPROVAL":
+            raise HTTPException(status_code=409, detail=f"Request already processed ({emp_profile.approval_status})")
+
+        if current_user.role == "system_administrator":
+            pass
+        elif current_user.role == "centre_administrator":
+            admin_prof = session.get(CentreAdministrator, current_user.id)
+            if not admin_prof or admin_prof.centre_id != emp_profile.centre_id:
+                raise HTTPException(status_code=403, detail="Not authorized for this centre")
+        else:
+            raise HTTPException(status_code=403, detail="Not enough permissions")
+
+        emp_profile.approval_status = "REJECTED"
+        session.add(emp_profile)
+        log_audit(
+            session,
+            actor_id=current_user.id,
+            action="reject_employee_account",
+            target_resource_type="User",
+            target_resource_id=target_user_id,
+            details={"email": target_user.email, "reason": reason},
+        )
+
+    elif target_user.role == "centre_administrator":
+        if current_user.role != "system_administrator":
+            raise HTTPException(status_code=403, detail="Only System Admin can reject Centre Manager accounts")
+
+        admin_profile = session.get(CentreAdministrator, target_user_id)
+        if not admin_profile:
+            raise HTTPException(status_code=404, detail="Centre administrator profile not found")
+        if admin_profile.approval_status != "PENDING_APPROVAL":
+            raise HTTPException(status_code=409, detail=f"Request already processed ({admin_profile.approval_status})")
+
+        admin_profile.approval_status = "REJECTED"
+        session.add(admin_profile)
+        log_audit(
+            session,
+            actor_id=current_user.id,
+            action="reject_centre_admin_account",
+            target_resource_type="User",
+            target_resource_id=target_user_id,
+            details={"email": target_user.email, "reason": reason},
+        )
+    else:
+        raise HTTPException(status_code=400, detail="User is not a staff or manager account")
+
+    session.commit()
+    return {"message": "Account request rejected successfully"}
+

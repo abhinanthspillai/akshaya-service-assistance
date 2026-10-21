@@ -12,7 +12,7 @@ interface CentreOption {
 }
 
 export function RegisterForm() {
-  const [role, setRole] = useState<'citizen' | 'centre_employee'>('citizen');
+  const [role, setRole] = useState<'citizen' | 'centre_employee' | 'centre_administrator'>('citizen');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,7 +27,7 @@ export function RegisterForm() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (role === 'centre_employee' && centres.length === 0) {
+    if ((role === 'centre_employee' || role === 'centre_administrator') && centres.length === 0) {
       setLoadingCentres(true);
       api
         .get('/centres/?active=true')
@@ -60,7 +60,7 @@ export function RegisterForm() {
       return;
     }
 
-    if (role === 'centre_employee' && !centreId) {
+    if ((role === 'centre_employee' || role === 'centre_administrator') && !centreId) {
       setError('Please select your Akshaya Centre');
       return;
     }
@@ -81,7 +81,7 @@ export function RegisterForm() {
         role,
       };
 
-      if (role === 'centre_employee') {
+      if (role === 'centre_employee' || role === 'centre_administrator') {
         payload.centre_id = centreId;
       }
 
@@ -116,25 +116,25 @@ export function RegisterForm() {
       <div className="mb-5 shrink-0">
         <h2 className="text-2xl sm:text-3xl font-bold text-ink-900 mb-1.5 text-center md:text-left">Create account</h2>
         <p className="text-ink-500 text-sm text-center md:text-left">
-          Access citizen services or staff request operations.
+          Access citizen services or centre management operations.
         </p>
       </div>
 
       {/* Role Selection Toggle */}
-      <div className="grid grid-cols-2 gap-1.5 p-1 bg-ink-50 rounded-2xl mb-5 border border-ink-100 shrink-0">
+      <div className="grid grid-cols-3 gap-1 p-1 bg-ink-50 rounded-2xl mb-5 border border-ink-100 shrink-0">
         <button
           type="button"
           onClick={() => {
             setRole('citizen');
             setError('');
           }}
-          className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold transition-all ${
+          className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold transition-all ${
             role === 'citizen'
               ? 'bg-white text-ink-900 shadow-sm'
               : 'text-ink-500 hover:text-ink-900'
           }`}
         >
-          <UserIcon size={14} />
+          <UserIcon size={13} />
           Citizen
         </button>
         <button
@@ -143,14 +143,29 @@ export function RegisterForm() {
             setRole('centre_employee');
             setError('');
           }}
-          className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold transition-all ${
+          className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold transition-all ${
             role === 'centre_employee'
               ? 'bg-white text-ink-900 shadow-sm'
               : 'text-ink-500 hover:text-ink-900'
           }`}
         >
-          <Building2 size={14} />
+          <Building2 size={13} />
           Centre Staff
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setRole('centre_administrator');
+            setError('');
+          }}
+          className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold transition-all ${
+            role === 'centre_administrator'
+              ? 'bg-white text-ink-900 shadow-sm'
+              : 'text-ink-500 hover:text-ink-900'
+          }`}
+        >
+          <ShieldAlert size={13} />
+          Centre Manager
         </button>
       </div>
 
@@ -158,10 +173,20 @@ export function RegisterForm() {
         <div className="mb-4 p-3 bg-amber-50/80 border border-amber-200/70 rounded-2xl flex items-start gap-2.5 text-xs text-amber-900 leading-relaxed">
           <ShieldAlert size={16} className="text-amber-600 shrink-0 mt-0.5" />
           <span>
-            <strong>Employee Notice:</strong> Account requires Akshaya Centre approval before queue access is granted.
+            <strong>Employee Notice:</strong> Account requires Akshaya Centre approval before login is permitted.
           </span>
         </div>
       )}
+
+      {role === 'centre_administrator' && (
+        <div className="mb-4 p-3 bg-blue-50/80 border border-blue-200/70 rounded-2xl flex items-start gap-2.5 text-xs text-blue-900 leading-relaxed">
+          <ShieldAlert size={16} className="text-blue-600 shrink-0 mt-0.5" />
+          <span>
+            <strong>Manager Notice:</strong> Account requires System Administrator verification before login. Each centre can only have one manager.
+          </span>
+        </div>
+      )}
+
 
       {error && (
         <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-2xl border border-red-100 text-sm">
@@ -194,10 +219,11 @@ export function RegisterForm() {
           />
         </div>
 
-        {role === 'centre_employee' && (
+        {(role === 'centre_employee' || role === 'centre_administrator') && (
           <div>
             <label className="block text-sm font-semibold text-ink-900 mb-1.5">
               Assigned Akshaya Centre
+
             </label>
             {loadingCentres ? (
               <div className="flex items-center gap-2 px-4 py-3 bg-ink-50/50 rounded-2xl border border-ink-100 text-sm text-ink-400">
