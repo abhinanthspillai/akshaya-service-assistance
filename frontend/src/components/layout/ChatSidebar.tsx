@@ -260,7 +260,7 @@ export function ChatSidebar({ currentUserId }: ChatSidebarProps) {
 
   return (
     <>
-      {/* Floating launcher icon button (bottom-left) */}
+      {/* Floating launcher icon button (bottom-right) */}
       <button
         onClick={() => setIsOpen(true)}
         aria-label="Open Chat"
@@ -268,7 +268,7 @@ export function ChatSidebar({ currentUserId }: ChatSidebarProps) {
         className={clsx(
           'fixed z-40 flex items-center justify-center rounded-full shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-mono-border',
           'bg-mono-text text-mono-bg hover:bg-black',
-          'bottom-6 left-6 md:left-[17rem] w-14 h-14',
+          'bottom-6 right-6 w-14 h-14',
           isOpen && 'pointer-events-none opacity-0 scale-90'
         )}
       >
@@ -291,7 +291,7 @@ export function ChatSidebar({ currentUserId }: ChatSidebarProps) {
         />
       )}
 
-      {/* Slide-in Chat Panel */}
+      {/* Slide-in Chat Panel (right side) */}
       <aside
         ref={panelRef}
         tabIndex={-1}
@@ -299,9 +299,9 @@ export function ChatSidebar({ currentUserId }: ChatSidebarProps) {
         aria-label="Service Request Chat"
         aria-modal="true"
         className={clsx(
-          'fixed inset-y-0 left-0 z-50 flex flex-col bg-mono-bg border-r border-mono-border shadow-2xl transition-transform duration-300 ease-in-out outline-none',
+          'fixed inset-y-0 right-0 z-50 flex flex-col bg-mono-bg border-l border-mono-border shadow-2xl transition-transform duration-300 ease-in-out outline-none',
           'w-full md:w-[380px]',
-          isOpen ? 'translate-x-0' : '-translate-x-full'
+          isOpen ? 'translate-x-0' : 'translate-x-full'
         )}
       >
         {/* Panel Header */}
