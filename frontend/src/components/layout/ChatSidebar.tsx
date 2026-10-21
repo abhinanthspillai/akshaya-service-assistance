@@ -330,7 +330,7 @@ export function ChatSidebar({ currentUserId }: ChatSidebarProps) {
                       const targetRoute =
                         activeConversation.other_party_role === 'Staff'
                           ? `/requests/${activeConversation.request_id}`
-                          : `/requests/${activeConversation.request_id}/workspace`;
+                          : `/employee/requests/${activeConversation.request_id}`;
                       navigate(targetRoute);
                     }}
                     className="hover:underline text-mono-text font-medium"
