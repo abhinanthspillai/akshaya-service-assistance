@@ -47,7 +47,11 @@ from app.schemas.interaction import (
 )
 from app.schemas.message import RequestMessageCreate, RequestMessageResponse
 from app.schemas.output import CompletedOutputCreate, CompletedOutputResponse
-from app.schemas.payment import RequestPaymentResponse
+from app.schemas.payment import (
+    RazorpayOrderResponse,
+    RazorpayVerifyRequest,
+    RequestPaymentResponse,
+)
 from app.schemas.request import (
     DashboardStatsResponse,
     DashboardResponse,
@@ -1499,7 +1503,6 @@ def request_payment(
     session: SessionDep,
     current_user: CurrentUserEmployee,
 ) -> Any:
-
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -1518,23 +1521,200 @@ def request_payment(
     if existing:
         return existing
 
+    settings = get_settings()
+    provider = "razorpay" if settings.razorpay_key_id and settings.razorpay_key_id != "rzp_test_placeholder" else "mock"
+    provider_ref = f"{provider}-{uuid4().hex}"
+
     payment = RequestPayment(
         request_id=request_id,
         amount=service_request.fee_snapshot,
         currency="INR",
         status="PENDING",
-        provider="mock",
-        provider_reference="mock-" + uuid4().hex,
-        components_json='{"mode":"development_mock"}',
+        provider=provider,
+        provider_reference=provider_ref,
+        components_json='{"mode":"demo_test"}',
     )
     session.add(payment)
     _perform_transition(
         session, service_request, current_user, "PAYMENT_PENDING", RequestAction.PAYMENT_REQUESTED,
-        note="Development mock payment requested",
+        note=f"{provider.capitalize()} payment requested (Amount: INR {service_request.fee_snapshot})",
         notification_event="payment_pending",
         notification_title="Payment pending",
-        notification_body="A development mock payment is ready for this request."
+        notification_body=f"Payment of INR {service_request.fee_snapshot} is required for this request."
     )
+    session.commit()
+    session.refresh(payment)
+    return payment
+
+
+@router.post("/{request_id}/payments/{payment_id}/razorpay-order", response_model=RazorpayOrderResponse)
+def create_razorpay_order(
+    request_id: UUID,
+    payment_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserCitizen,
+) -> Any:
+    """Create a Razorpay order for the pending payment using server-side catalog amount."""
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if service_request.citizen_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if service_request.status != "PAYMENT_PENDING":
+        raise HTTPException(status_code=409, detail="Request is not in PAYMENT_PENDING state")
+
+    payment = session.scalar(
+        select(RequestPayment).where(
+            RequestPayment.id == payment_id,
+            RequestPayment.request_id == request_id,
+        )
+    )
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment record not found")
+    if payment.status != "PENDING":
+        raise HTTPException(status_code=409, detail=f"Payment is already {payment.status}")
+
+    settings = get_settings()
+    amount_in_paise = int(round(float(payment.amount) * 100))
+
+    order_id = f"order_{uuid4().hex[:14]}"
+    # If valid razorpay keys are configured, invoke official client
+    if (
+        settings.razorpay_key_id
+        and settings.razorpay_key_secret
+        and settings.razorpay_key_id != "rzp_test_placeholder"
+    ):
+        try:
+            import razorpay
+            client = razorpay.Client(auth=(settings.razorpay_key_id, settings.razorpay_key_secret))
+            rzp_order = client.order.create({
+                "amount": amount_in_paise,
+                "currency": payment.currency,
+                "receipt": f"rcpt_{payment.id.hex[:12]}",
+                "notes": {
+                    "request_id": str(request_id),
+                    "payment_id": str(payment.id),
+                    "service_name": service_request.service_name_snapshot,
+                },
+            })
+            order_id = rzp_order["id"]
+        except Exception as e:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Failed to initiate order with Razorpay: {str(e)}",
+            )
+
+    # Save provider reference as order_id
+    payment.provider = "razorpay"
+    payment.provider_reference = order_id
+    session.add(payment)
+    session.commit()
+
+    return RazorpayOrderResponse(
+        order_id=order_id,
+        amount=amount_in_paise,
+        currency=payment.currency,
+        key_id=settings.razorpay_key_id,
+        payment_id=payment.id,
+        service_name=service_request.service_name_snapshot,
+        request_id=request_id,
+    )
+
+
+@router.post("/{request_id}/payments/{payment_id}/razorpay-verify", response_model=RequestPaymentResponse)
+def verify_razorpay_payment(
+    request_id: UUID,
+    payment_id: UUID,
+    payload: RazorpayVerifyRequest,
+    session: SessionDep,
+    current_user: CurrentUserCitizen,
+) -> Any:
+    """Verify Razorpay payment signature and transition request idempotently to PROCESSING."""
+    import hmac
+    import hashlib
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if service_request.citizen_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    payment = session.scalar(
+        select(RequestPayment).where(
+            RequestPayment.id == payment_id,
+            RequestPayment.request_id == request_id,
+        )
+    )
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment record not found")
+
+    # Idempotent response if already confirmed
+    if payment.status == "CONFIRMED":
+        return payment
+    if payment.status != "PENDING":
+        raise HTTPException(status_code=409, detail=f"Payment is already {payment.status}")
+
+    settings = get_settings()
+
+    # Signature verification
+    is_valid_sig = False
+    if (
+        settings.razorpay_key_secret
+        and settings.razorpay_key_secret != "placeholder_secret"
+    ):
+        try:
+            import razorpay
+            client = razorpay.Client(auth=(settings.razorpay_key_id, settings.razorpay_key_secret))
+            client.utility.verify_payment_signature({
+                "razorpay_order_id": payload.razorpay_order_id,
+                "razorpay_payment_id": payload.razorpay_payment_id,
+                "razorpay_signature": payload.razorpay_signature,
+            })
+            is_valid_sig = True
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid Razorpay payment signature")
+    else:
+        # Development / test verification check
+        message = f"{payload.razorpay_order_id}|{payload.razorpay_payment_id}".encode("utf-8")
+        expected_sig = hmac.new(
+            settings.razorpay_key_secret.encode("utf-8"),
+            message,
+            hashlib.sha256,
+        ).hexdigest()
+        # Accept either exact matching hmac signature or test signature
+        if (
+            payload.razorpay_signature == expected_sig
+            or payload.razorpay_signature.startswith("test_sig_")
+            or payload.razorpay_signature == "mock_signature_valid"
+        ):
+            is_valid_sig = True
+        else:
+            raise HTTPException(status_code=400, detail="Invalid payment signature")
+
+    now = datetime.now(tz=UTC)
+    payment.status = "CONFIRMED"
+    payment.confirmed_at = now
+    payment.provider = "razorpay"
+    payment.provider_reference = payload.razorpay_payment_id
+    payment.components_json = (
+        f'{{"order_id":"{payload.razorpay_order_id}", "payment_id":"{payload.razorpay_payment_id}"}}'
+    )
+    session.add(payment)
+
+    # Transition request to PROCESSING idempotently
+    if service_request.status == "PAYMENT_PENDING":
+        _perform_transition(
+            session,
+            service_request,
+            current_user,
+            "PROCESSING",
+            RequestAction.PAYMENT_CONFIRMED,
+            note=f"Razorpay payment confirmed (ID: {payload.razorpay_payment_id})",
+            notification_event="payment_confirmed",
+            notification_title="Payment confirmed",
+            notification_body=f"Your payment of INR {payment.amount} has been received successfully.",
+        )
+
     session.commit()
     session.refresh(payment)
     return payment

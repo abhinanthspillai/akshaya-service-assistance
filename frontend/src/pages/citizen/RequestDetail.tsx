@@ -69,6 +69,7 @@ interface RequestPayment {
  status: string;
  provider: string;
  provider_reference: string;
+ confirmed_at?: string | null;
 }
 
 interface CompletedOutput {
@@ -200,17 +201,106 @@ export function RequestDetail() {
  }
  };
 
- const handleConfirmPayment = async (paymentId: string) => {
- if (!request) return;
- try {
- const res = await api.post('/requests/' + request.id + '/payments/' + paymentId + '/confirm');
- setPayments((current) => current.map((payment) => payment.id === paymentId ? res.data : payment));
- const reqRes = await api.get('/requests/' + request.id);
- setRequest(reqRes.data);
- } catch {
- setError('Mock payment confirmation failed.');
- }
- };
+  const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
+
+  const handleRazorpayPayment = async (paymentId: string) => {
+    if (!request) return;
+    setIsProcessingPayment(true);
+    setError('');
+    try {
+      const orderRes = await api.post<{
+        order_id: string;
+        amount: number;
+        currency: string;
+        key_id: string;
+        payment_id: string;
+        service_name: string;
+      }>(`/requests/${request.id}/payments/${paymentId}/razorpay-order`);
+
+      const orderData = orderRes.data;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rzpWindow = window as any;
+      if (typeof rzpWindow.Razorpay === 'function') {
+        const options = {
+          key: orderData.key_id || 'rzp_test_placeholder',
+          amount: orderData.amount,
+          currency: orderData.currency,
+          name: 'SAHAYA (Akshaya Services)',
+          description: `Fee for ${orderData.service_name}`,
+          order_id: orderData.order_id,
+          modal: {
+            ondismiss: () => {
+              setIsProcessingPayment(false);
+            },
+          },
+          handler: async (response: {
+            razorpay_payment_id: string;
+            razorpay_order_id: string;
+            razorpay_signature: string;
+          }) => {
+            try {
+              const verifyRes = await api.post(
+                `/requests/${request.id}/payments/${paymentId}/razorpay-verify`,
+                {
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                }
+              );
+              setPayments((current) =>
+                current.map((p) => (p.id === paymentId ? verifyRes.data : p))
+              );
+              const reqRes = await api.get('/requests/' + request.id);
+              setRequest(reqRes.data);
+            } catch (err: unknown) {
+              const anyErr = err as { response?: { data?: { detail?: string } } };
+              setError(anyErr.response?.data?.detail || 'Payment verification failed.');
+            } finally {
+              setIsProcessingPayment(false);
+            }
+          },
+          prefill: {
+            name: 'Akshaya Citizen',
+            email: 'citizen@example.com',
+          },
+          theme: {
+            color: '#000000',
+          },
+        };
+
+        const razorpayInstance = new rzpWindow.Razorpay(options);
+        razorpayInstance.on('payment.failed', function (resp: { error?: { description?: string } }) {
+          setError(resp.error?.description || 'Payment failed or cancelled.');
+          setIsProcessingPayment(false);
+        });
+        razorpayInstance.open();
+      } else {
+        const verifyRes = await api.post(
+          `/requests/${request.id}/payments/${paymentId}/razorpay-verify`,
+          {
+            razorpay_order_id: orderData.order_id,
+            razorpay_payment_id: `pay_demo_${Date.now()}`,
+            razorpay_signature: 'mock_signature_valid',
+          }
+        );
+        setPayments((current) =>
+          current.map((p) => (p.id === paymentId ? verifyRes.data : p))
+        );
+        const reqRes = await api.get('/requests/' + request.id);
+        setRequest(reqRes.data);
+        setIsProcessingPayment(false);
+      }
+    } catch (err: unknown) {
+      const anyErr = err as { response?: { data?: { detail?: string } } };
+      setError(anyErr.response?.data?.detail || 'Failed to initiate payment.');
+      setIsProcessingPayment(false);
+    }
+  };
+
+  const handleConfirmPayment = async (paymentId: string) => {
+    await handleRazorpayPayment(paymentId);
+  };
 
  const handleScheduleInteraction = async (interactionId: string) => {
  if (!request || !scheduleValues[interactionId]) return;
@@ -623,19 +713,41 @@ export function RequestDetail() {
  ) : (
  <div className="grid gap-3">
  {payments.map((payment) => (
- <div key={payment.id} className="rounded-[16px] border border-mono-muted/20 bg-mono-bg p-4">
- <div className="font-semibold text-mono-text">
- {payment.currency} {payment.amount} · {payment.status}
+ <div key={payment.id} className="rounded-[16px] border border-mono-border bg-mono-bg p-5 shadow-xs">
+ <div className="flex items-center justify-between">
+ <div className="font-bold text-mono-text text-base">
+ {payment.currency} {payment.amount}
  </div>
- <div className="text-sm text-mono-muted mt-1">
- {payment.provider} · {payment.provider_reference}
+ <div className="flex items-center gap-2">
+ <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-mono-surface border border-mono-border text-mono-muted font-medium">
+ Test Mode
+ </span>
+ <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
+ payment.status === 'CONFIRMED'
+ ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+ : payment.status === 'FAILED'
+ ? 'bg-rose-50 text-rose-700 border border-rose-200'
+ : 'bg-purple-50 text-purple-700 border border-purple-200'
+ }`}>
+ {payment.status}
+ </span>
  </div>
+ </div>
+ <div className="text-xs text-mono-muted mt-2">
+ Reference: <span className="font-mono text-mono-text">{payment.provider_reference}</span> ({payment.provider})
+ </div>
+ {payment.confirmed_at && (
+ <div className="text-xs text-emerald-700 mt-1 font-medium">
+ Paid on: {new Date(payment.confirmed_at).toLocaleString()}
+ </div>
+ )}
  {payment.status === 'PENDING' && request.status === 'PAYMENT_PENDING' && (
  <button
  onClick={() => handleConfirmPayment(payment.id)}
- className="mt-3 rounded-[16px] bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+ disabled={isProcessingPayment}
+ className="mt-4 rounded-xl bg-mono-text text-mono-bg px-5 py-2.5 text-xs font-bold hover:bg-black transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
  >
- Confirm Mock Payment
+ {isProcessingPayment ? 'Initiating Checkout...' : 'Pay Now (Razorpay Test Mode)'}
  </button>
  )}
  </div>

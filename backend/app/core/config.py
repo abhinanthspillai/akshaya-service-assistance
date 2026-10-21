@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     file_storage_path: str = "./storage"
     max_upload_size_bytes: int = 10 * 1024 * 1024
+    razorpay_key_id: str = "rzp_test_placeholder"
+    razorpay_key_secret: str = "placeholder_secret"
 
 
 @lru_cache

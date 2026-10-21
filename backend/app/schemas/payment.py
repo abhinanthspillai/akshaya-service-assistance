@@ -20,3 +20,19 @@ class RequestPaymentResponse(BaseModel):
     cancelled_at: datetime | None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class RazorpayOrderResponse(BaseModel):
+    order_id: str
+    amount: int  # in paise
+    currency: str
+    key_id: str
+    payment_id: UUID
+    service_name: str
+    request_id: UUID
+
+
+class RazorpayVerifyRequest(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
