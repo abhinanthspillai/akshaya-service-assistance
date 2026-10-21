@@ -21,7 +21,9 @@ import { SupportAdmin } from './pages/admin/SupportAdmin';
 import { AuditLogs } from './pages/admin/AuditLogs';
 import { SysAdminDashboard } from './pages/admin/SysAdminDashboard';
 import { PendingApproval } from './pages/auth/PendingApproval';
+import { LandingPage } from './pages/LandingPage';
 import { Loader2 } from 'lucide-react';
+
 
 type UserRole = 'citizen' | 'centre_employee' | 'centre_administrator' | 'system_administrator';
 
@@ -67,26 +69,27 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode,
 }
 
 function RootRedirect() {
- const { user, isLoading } = useAuth();
- 
- if (isLoading) {
- return (
- <div className="h-screen w-screen flex items-center justify-center bg-mono-50">
- <Loader2 className="animate-spin text-mono-text" size={40} />
- </div>
- );
- }
+  const { user, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-mono-50">
+        <Loader2 className="animate-spin text-mono-text" size={40} />
+      </div>
+    );
+  }
 
- if (!user) {
- return <Navigate to="/login" replace />;
- }
+  if (!user) {
+    return <LandingPage />;
+  }
 
- if (user.role === 'centre_employee' && user.approval_status === 'PENDING_APPROVAL') {
- return <PendingApproval />;
- }
+  if (user.role === 'centre_employee' && user.approval_status === 'PENDING_APPROVAL') {
+    return <PendingApproval />;
+  }
 
- return <Navigate to={getRoleLandingPage(user.role)} replace />;
+  return <Navigate to={getRoleLandingPage(user.role)} replace />;
 }
+
 
 function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
  const { user, isLoading } = useAuth();

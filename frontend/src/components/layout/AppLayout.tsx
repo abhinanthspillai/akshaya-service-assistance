@@ -31,8 +31,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
  const handleLogout = () => {
  logout();
- navigate('/login');
+ navigate('/');
  };
+
 
  let navItems: Array<{ name: string; path: string; icon: React.ElementType }> = [];
  if (user?.role === 'citizen') {
