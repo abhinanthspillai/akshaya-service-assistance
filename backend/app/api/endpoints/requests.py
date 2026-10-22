@@ -23,6 +23,7 @@ from app.models.interaction import RequestInteraction
 from app.models.message import Conversation, RequestMessage
 from app.models.notification import Notification
 from app.models.output import CompletedOutput
+from app.models.otp import OtpRequest
 from app.models.payment import RequestPayment
 from app.models.profile import EmployeeProfile
 from app.models.request import ServiceRequest
@@ -47,6 +48,13 @@ from app.schemas.interaction import (
 )
 from app.schemas.message import RequestMessageCreate, RequestMessageResponse
 from app.schemas.output import CompletedOutputCreate, CompletedOutputResponse
+from app.schemas.otp import (
+    OtpCreateResponse,
+    OtpResolveRequest,
+    OtpStateResponse,
+    OtpSubmitRequest,
+    PendingCitizenOtpResponse,
+)
 from app.schemas.payment import (
     RazorpayOrderResponse,
     RazorpayVerifyRequest,
@@ -2712,3 +2720,331 @@ def mark_ready_and_start_processing_request(
     session.commit()
     session.refresh(service_request)
     return service_request
+
+
+def _verify_otp_staff_access(user: Any, service_request: ServiceRequest, session: Any) -> None:
+    if user.role == "centre_employee":
+        _verify_active_assignment(user, service_request, session)
+        return
+    if user.role == "centre_administrator":
+        from app.models.profile import CentreAdministrator
+
+        admin = session.get(CentreAdministrator, user.id)
+        if not admin or admin.centre_id != service_request.selected_centre_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        return
+    raise HTTPException(status_code=403, detail="Not authorized")
+
+
+def _sync_otp_expiry(otp: OtpRequest, session: Any, now: datetime) -> bool:
+    if otp.status in {"PENDING", "SUBMITTED"} and otp.expires_at <= now:
+        otp.status = "EXPIRED"
+        otp.code = None
+        otp.resolved_at = now
+        session.add(otp)
+        history = RequestHistory(
+            request_id=otp.request_id,
+            actor_id=None,
+            action=RequestAction.OTP_EXPIRED.value,
+            from_status=None,
+            to_status=None,
+            note="OTP expired without resolution.",
+        )
+        session.add(history)
+        return True
+    return False
+
+
+@router.post("/{request_id}/otp/request", response_model=OtpCreateResponse)
+def request_otp(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    from datetime import timedelta
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    _verify_otp_staff_access(current_user, service_request, session)
+
+    if service_request.status != "PROCESSING":
+        raise HTTPException(status_code=409, detail="OTP can only be requested while in Processing")
+
+    now = datetime.now(tz=UTC)
+
+    # Check failure cap (3 FAILED outcomes blocks further OTP requests)
+    failed_count = (
+        session.scalar(
+            select(func.count())
+            .select_from(OtpRequest)
+            .where(OtpRequest.request_id == request_id, OtpRequest.status == "FAILED")
+        )
+        or 0
+    )
+    if failed_count >= 3:
+        raise HTTPException(
+            status_code=409,
+            detail="Maximum OTP verification attempts (3) exceeded for this request. Please contact your Centre Manager.",
+        )
+
+    # Check active OTP requests
+    active_otps = session.scalars(
+        select(OtpRequest)
+        .where(
+            OtpRequest.request_id == request_id,
+            OtpRequest.status.in_(["PENDING", "SUBMITTED"]),
+        )
+        .with_for_update()
+    ).all()
+
+    any_expired = False
+    for active in active_otps:
+        if _sync_otp_expiry(active, session, now):
+            any_expired = True
+
+    if any_expired:
+        session.commit()
+
+    still_active = session.scalar(
+        select(OtpRequest).where(
+            OtpRequest.request_id == request_id,
+            OtpRequest.status.in_(["PENDING", "SUBMITTED"]),
+        )
+    )
+    if still_active:
+        raise HTTPException(
+            status_code=409,
+            detail="An OTP request is already pending or submitted for this request.",
+        )
+
+    expires_at = now + timedelta(minutes=5)
+    new_otp = OtpRequest(
+        request_id=request_id,
+        requested_by=current_user.id,
+        status="PENDING",
+        code=None,
+        expires_at=expires_at,
+    )
+    session.add(new_otp)
+
+    short_id = str(request_id)[:8]
+    _safe_add_notification(
+        session,
+        user_id=service_request.citizen_id,
+        request_id=request_id,
+        event_type="otp_requested",
+        title="OTP Requested",
+        body=f"OTP requested for your request #{short_id}. Please enter it now.",
+    )
+
+    history = RequestHistory(
+        request_id=request_id,
+        actor_id=current_user.id,
+        action=RequestAction.OTP_REQUESTED.value,
+        from_status=None,
+        to_status=None,
+        note="Staff requested OTP from citizen.",
+    )
+    session.add(history)
+
+    session.commit()
+    session.refresh(new_otp)
+    return new_otp
+
+
+@router.get("/{request_id}/otp", response_model=OtpStateResponse)
+def get_request_otp(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    is_staff = False
+    if current_user.role == "citizen":
+        if service_request.citizen_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+    elif current_user.role in {"centre_employee", "centre_administrator"}:
+        _verify_otp_staff_access(current_user, service_request, session)
+        is_staff = True
+    else:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    now = datetime.now(tz=UTC)
+
+    # Sync any expired active OTP
+    active_otps = session.scalars(
+        select(OtpRequest)
+        .where(
+            OtpRequest.request_id == request_id,
+            OtpRequest.status.in_(["PENDING", "SUBMITTED"]),
+        )
+    ).all()
+    any_expired = False
+    for active in active_otps:
+        if _sync_otp_expiry(active, session, now):
+            any_expired = True
+    if any_expired:
+        session.commit()
+
+    latest_otp = session.scalar(
+        select(OtpRequest)
+        .where(OtpRequest.request_id == request_id)
+        .order_by(OtpRequest.created_at.desc())
+    )
+    if not latest_otp:
+        raise HTTPException(status_code=404, detail="No OTP requests found for this request")
+
+    failed_count = (
+        session.scalar(
+            select(func.count())
+            .select_from(OtpRequest)
+            .where(OtpRequest.request_id == request_id, OtpRequest.status == "FAILED")
+        )
+        or 0
+    )
+
+    is_awaiting = latest_otp.status in {"PENDING", "SUBMITTED"}
+    code_to_return = latest_otp.code if (is_staff and latest_otp.status == "SUBMITTED") else None
+
+    return OtpStateResponse(
+        id=latest_otp.id,
+        request_id=latest_otp.request_id,
+        status=latest_otp.status,
+        code=code_to_return,
+        expires_at=latest_otp.expires_at,
+        created_at=latest_otp.created_at,
+        submitted_at=latest_otp.submitted_at,
+        resolved_at=latest_otp.resolved_at,
+        is_awaiting_otp=is_awaiting,
+        failed_attempts_count=failed_count,
+        is_blocked=(failed_count >= 3),
+    )
+
+
+@router.post("/{request_id}/otp/submit", response_model=OtpCreateResponse)
+def submit_otp(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserCitizen,
+    body: OtpSubmitRequest,
+) -> Any:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if service_request.citizen_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    now = datetime.now(tz=UTC)
+
+    active_otp = session.scalar(
+        select(OtpRequest)
+        .where(
+            OtpRequest.request_id == request_id,
+            OtpRequest.status == "PENDING",
+        )
+        .with_for_update()
+    )
+    if not active_otp:
+        raise HTTPException(status_code=409, detail="No pending OTP request found")
+
+    if _sync_otp_expiry(active_otp, session, now):
+        session.commit()
+        raise HTTPException(status_code=409, detail="OTP request has expired")
+
+    active_otp.status = "SUBMITTED"
+    active_otp.code = body.code
+    active_otp.submitted_at = now
+    session.add(active_otp)
+
+    # Notify staff member who requested it, or active assigned employee
+    notify_user_id = active_otp.requested_by
+    _safe_add_notification(
+        session,
+        user_id=notify_user_id,
+        request_id=request_id,
+        event_type="otp_submitted",
+        title="OTP Submitted",
+        body="Citizen submitted the OTP.",
+    )
+
+    history = RequestHistory(
+        request_id=request_id,
+        actor_id=current_user.id,
+        action=RequestAction.OTP_SUBMITTED.value,
+        from_status=None,
+        to_status=None,
+        note="Citizen submitted OTP.",
+    )
+    session.add(history)
+
+    session.commit()
+    session.refresh(active_otp)
+    return active_otp
+
+
+@router.post("/{request_id}/otp/resolve", response_model=OtpCreateResponse)
+def resolve_otp(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+    body: OtpResolveRequest,
+) -> Any:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    _verify_otp_staff_access(current_user, service_request, session)
+
+    now = datetime.now(tz=UTC)
+
+    target_otp = session.scalar(
+        select(OtpRequest)
+        .where(
+            OtpRequest.request_id == request_id,
+            OtpRequest.status.in_(["PENDING", "SUBMITTED"]),
+        )
+        .with_for_update()
+    )
+    if not target_otp:
+        raise HTTPException(status_code=409, detail="No active OTP to resolve")
+
+    if _sync_otp_expiry(target_otp, session, now):
+        session.commit()
+        raise HTTPException(status_code=409, detail="OTP request has expired")
+
+    if body.outcome == "used":
+        target_otp.status = "USED"
+        action_val = RequestAction.OTP_USED.value
+        note_text = "Staff marked OTP as used on portal."
+    else:
+        target_otp.status = "FAILED"
+        action_val = RequestAction.OTP_FAILED.value
+        note_text = "Staff marked OTP as failed."
+
+    target_otp.code = None
+    target_otp.resolved_at = now
+    session.add(target_otp)
+
+    history = RequestHistory(
+        request_id=request_id,
+        actor_id=current_user.id,
+        action=action_val,
+        from_status=None,
+        to_status=None,
+        note=note_text,
+    )
+    session.add(history)
+
+    session.commit()
+    session.refresh(target_otp)
+    return target_otp
+

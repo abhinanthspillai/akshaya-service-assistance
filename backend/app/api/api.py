@@ -30,3 +30,12 @@ api_router.include_router(tickets.router, prefix="/tickets", tags=["tickets"])
 api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
 api_router.include_router(profile.router, prefix="/profile", tags=["profile"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
+# Convenience redirect/inclusion for /me/pending-otp as specified in spec
+api_router.add_api_route(
+    "/me/pending-otp",
+    users.get_pending_otp,
+    methods=["GET"],
+    response_model=users.PendingCitizenOtpResponse | None,
+    tags=["users"],
+)
+
