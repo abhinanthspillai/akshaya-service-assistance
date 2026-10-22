@@ -134,50 +134,91 @@ export function RequestDetail() {
  });
  const navigate = useNavigate();
 
- useEffect(() => {
+ const isChatEnabled = !!request && !['DRAFT', 'SUBMITTED', 'WAITING_FOR_CENTRE'].includes(request.status);
+
  const fetchData = async () => {
- try {
- const res = await api.get('/requests/' + (id || ''));
- setRequest(res.data);
- const [serviceRes, documentsRes, reviewsRes, interactionsRes, messagesRes, paymentsRes] = await Promise.all([
- api.get('/services/' + res.data.service_id),
- api.get('/requests/' + res.data.id + '/documents'),
- api.get('/requests/' + res.data.id + '/document-reviews'),
- api.get('/requests/' + res.data.id + '/interactions'),
- api.get('/requests/' + res.data.id + '/messages'),
- api.get('/requests/' + res.data.id + '/payments'),
- ]);
- setRequirements(serviceRes.data.document_requirements || []);
- setDocuments(documentsRes.data || []);
- setReviews(reviewsRes.data || []);
- setInteractions(interactionsRes.data || []);
- setMessages(messagesRes.data || []);
- setPayments(paymentsRes.data || []);
- if (res.data.status === 'DRAFT' || res.data.status === 'CORRECTION_REQUIRED') {
- const validationRes = await api.post('/requests/' + res.data.id + '/pre-validate');
- setPreValidation(validationRes.data);
- }
- if (res.data.status === 'COMPLETED' || res.data.status === 'CLOSED') {
- try {
- // In case there's an endpoint to fetch output, we can do it here, or the api might not have one yet.
- // Actually, I haven't added GET /requests/{id}/output endpoint. Let's just assume we'll add it.
- const outRes = await api.get('/requests/' + res.data.id + '/output');
- setOutput(outRes.data);
- } catch {
- // ignore
- }
- }
- if (res.data.status === 'DRAFT' && res.data.service_id) {
- const centresRes = await api.get('/centres/?active=true');
- setCentres(centresRes.data);
- }
- } catch {
- setError('Failed to load request details.');
- } finally {
- setIsLoading(false);
- }
+   if (!id) return;
+   setIsLoading(true);
+   setError('');
+   let currentReq: ServiceRequest | null = null;
+   try {
+     const res = await api.get('/requests/' + id);
+     currentReq = res.data;
+     setRequest(res.data);
+   } catch {
+     setError('Failed to load request details.');
+     setIsLoading(false);
+     return;
+   }
+
+   if (!currentReq) {
+     setIsLoading(false);
+     return;
+   }
+
+   try {
+     const canChat = !['DRAFT', 'SUBMITTED', 'WAITING_FOR_CENTRE'].includes(currentReq.status);
+     const [serviceRes, documentsRes, reviewsRes, interactionsRes, messagesRes, paymentsRes] = await Promise.allSettled([
+       api.get('/services/' + currentReq.service_id),
+       api.get('/requests/' + currentReq.id + '/documents'),
+       api.get('/requests/' + currentReq.id + '/document-reviews'),
+       api.get('/requests/' + currentReq.id + '/interactions'),
+       canChat ? api.get('/requests/' + currentReq.id + '/messages') : Promise.resolve({ data: [] }),
+       api.get('/requests/' + currentReq.id + '/payments'),
+     ]);
+
+     if (serviceRes.status === 'fulfilled') {
+       setRequirements(serviceRes.value.data.document_requirements || []);
+     }
+     if (documentsRes.status === 'fulfilled') {
+       setDocuments(documentsRes.value.data || []);
+     }
+     if (reviewsRes.status === 'fulfilled') {
+       setReviews(reviewsRes.value.data || []);
+     }
+     if (interactionsRes.status === 'fulfilled') {
+       setInteractions(interactionsRes.value.data || []);
+     }
+     if (messagesRes.status === 'fulfilled') {
+       setMessages(messagesRes.value.data || []);
+     } else {
+       setMessages([]);
+     }
+     if (paymentsRes.status === 'fulfilled') {
+       setPayments(paymentsRes.value.data || []);
+     }
+
+     if (currentReq.status === 'DRAFT' || currentReq.status === 'CORRECTION_REQUIRED') {
+       try {
+         const validationRes = await api.post('/requests/' + currentReq.id + '/pre-validate');
+         setPreValidation(validationRes.data);
+       } catch {
+         // non-critical
+       }
+     }
+     if (currentReq.status === 'COMPLETED' || currentReq.status === 'CLOSED') {
+       try {
+         const outRes = await api.get('/requests/' + currentReq.id + '/output');
+         setOutput(outRes.data);
+       } catch {
+         // ignore
+       }
+     }
+     if (currentReq.status === 'DRAFT' && currentReq.service_id) {
+       try {
+         const centresRes = await api.get('/centres/?active=true');
+         setCentres(centresRes.data);
+       } catch {
+         // ignore
+       }
+     }
+   } finally {
+     setIsLoading(false);
+   }
  };
- if (id) fetchData();
+
+ useEffect(() => {
+   fetchData();
  }, [id]);
 
  const handleSelectCentre = async (centreId: string) => {
@@ -191,7 +232,7 @@ export function RequestDetail() {
  };
 
  const handleSendMessage = async () => {
- if (!request || !newMessage.trim()) return;
+ if (!request || !newMessage.trim() || !isChatEnabled) return;
  try {
  const res = await api.post('/requests/' + request.id + '/messages', { body: newMessage.trim() });
  setMessages((current) => [...current, res.data]);
@@ -200,6 +241,7 @@ export function RequestDetail() {
  setError('Failed to send message.');
  }
  };
+
 
   const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
 
@@ -433,7 +475,15 @@ export function RequestDetail() {
 
  if (error && !request) {
  return (
- <div className="bg-red-600/10 text-red-600 p-4 rounded-[16px] border border-red-600/20">{error}</div>
+ <div className="bg-red-600/10 text-red-600 p-6 rounded-[16px] border border-red-600/20 max-w-lg mx-auto my-12 text-center">
+   <p className="font-semibold mb-4">{error}</p>
+   <button
+     onClick={() => fetchData()}
+     className="bg-mono-text text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-black transition-colors"
+   >
+     Retry
+   </button>
+ </div>
  );
  }
 
@@ -763,34 +813,45 @@ export function RequestDetail() {
  <MessageSquare size={20} className="text-purple-600" />
  Messages
  </h2>
- <div className="space-y-3 mb-4">
- {messages.length === 0 ? (
- <p className="text-sm text-mono-muted">No messages yet.</p>
+ {!isChatEnabled ? (
+   <div className="rounded-[16px] border border-mono-border bg-mono-surface p-6 text-center">
+     <p className="text-sm text-mono-muted font-medium">
+       Chat will be available once a staff member accepts your request.
+     </p>
+   </div>
  ) : (
- messages.map((message) => (
- <div key={message.id} className="rounded-[16px] border border-mono-muted/20 bg-mono-bg p-3">
- <div className="text-sm text-mono-text">{message.body}</div>
- <div className="text-xs text-mono-muted mt-1">{new Date(message.created_at).toLocaleString()}</div>
- </div>
- ))
+   <>
+     <div className="space-y-3 mb-4">
+     {messages.length === 0 ? (
+     <p className="text-sm text-mono-muted">No messages yet.</p>
+     ) : (
+     messages.map((message) => (
+     <div key={message.id} className="rounded-[16px] border border-mono-muted/20 bg-mono-bg p-3">
+     <div className="text-sm text-mono-text">{message.body}</div>
+     <div className="text-xs text-mono-muted mt-1">{new Date(message.created_at).toLocaleString()}</div>
+     </div>
+     ))
+     )}
+     </div>
+     <div className="flex flex-col gap-2 md:flex-row">
+     <input
+     value={newMessage}
+     onChange={(event) => setNewMessage(event.target.value)}
+     className="w-full bg-mono-bg border border-mono-border rounded-[12px] px-4 py-3 text-mono-text focus:outline-none focus:ring-2 focus:ring-ink-900"
+     placeholder="Write a request message"
+     />
+     <button
+     onClick={handleSendMessage}
+     className="rounded-[16px] bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
+     >
+     Send
+     </button>
+     </div>
+   </>
  )}
  </div>
- <div className="flex flex-col gap-2 md:flex-row">
- <input
- value={newMessage}
- onChange={(event) => setNewMessage(event.target.value)}
- className="w-full bg-mono-bg border border-mono-border rounded-[12px] px-4 py-3 text-mono-text focus:outline-none focus:ring-2 focus:ring-ink-900"
- placeholder="Write a request message"
- />
- <button
- onClick={handleSendMessage}
- className="rounded-[16px] bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
- >
- Send
- </button>
- </div>
- </div>
  )}
+
 
  {request.status !== 'DRAFT' && (
  <div className="p-8 border-t border-mono-muted/20">

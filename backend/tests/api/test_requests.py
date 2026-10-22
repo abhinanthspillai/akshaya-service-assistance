@@ -484,3 +484,59 @@ def test_request_payment_from_under_review_transitions_to_payment_pending(
     assert conf_res.status_code == 200
     check2 = client.get(f"/api/v1/requests/{req_id}", headers=citizen_headers)
     assert check2.json()["status"] == "PROCESSING"
+
+
+def test_unaccepted_request_messages_returns_empty_and_rejects_send(
+    client: TestClient, db_session: Session
+) -> None:
+    req_id, _centre_id, citizen_headers = setup_request_waiting_for_centre(client, db_session)
+
+    # 1. GET messages before acceptance returns 200 with empty list
+    get_res = client.get(f"/api/v1/requests/{req_id}/messages", headers=citizen_headers)
+    assert get_res.status_code == 200
+    assert get_res.json() == []
+
+    # 2. POST message before acceptance returns 409
+    post_res = client.post(
+        f"/api/v1/requests/{req_id}/messages",
+        json={"body": "Hello before acceptance"},
+        headers=citizen_headers,
+    )
+    assert post_res.status_code == 409
+    assert (
+        post_res.json()["detail"]
+        == "Chat is not available before the request is accepted by a centre employee"
+    )
+
+
+def test_freshly_submitted_request_details_and_sub_endpoints(
+    client: TestClient, db_session: Session
+) -> None:
+    req_id, _centre_id, citizen_headers = setup_request_waiting_for_centre(client, db_session)
+
+    # Verify all detail-page endpoints succeed with empty states on a freshly submitted request
+    req_res = client.get(f"/api/v1/requests/{req_id}", headers=citizen_headers)
+    assert req_res.status_code == 200
+    assert req_res.json()["status"] == "WAITING_FOR_CENTRE"
+
+    docs_res = client.get(f"/api/v1/requests/{req_id}/documents", headers=citizen_headers)
+    assert docs_res.status_code == 200
+    assert isinstance(docs_res.json(), list)
+
+    reviews_res = client.get(f"/api/v1/requests/{req_id}/document-reviews", headers=citizen_headers)
+    assert reviews_res.status_code == 200
+    assert isinstance(reviews_res.json(), list)
+
+    interactions_res = client.get(
+        f"/api/v1/requests/{req_id}/interactions", headers=citizen_headers
+    )
+    assert interactions_res.status_code == 200
+    assert isinstance(interactions_res.json(), list)
+
+    messages_res = client.get(f"/api/v1/requests/{req_id}/messages", headers=citizen_headers)
+    assert messages_res.status_code == 200
+    assert messages_res.json() == []
+
+    payments_res = client.get(f"/api/v1/requests/{req_id}/payments", headers=citizen_headers)
+    assert payments_res.status_code == 200
+    assert messages_res.json() == []

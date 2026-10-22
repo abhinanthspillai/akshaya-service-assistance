@@ -1210,6 +1210,8 @@ def list_request_messages(
     if not service_request:
         raise HTTPException(status_code=404, detail="Request not found")
     _verify_message_access(current_user, service_request, session)
+    if service_request.status in {"DRAFT", "SUBMITTED", "WAITING_FOR_CENTRE"}:
+        return []
     messages = session.scalars(
         select(RequestMessage)
         .where(RequestMessage.request_id == request_id)
@@ -2082,32 +2084,38 @@ def _verify_active_assignment(user: Any, service_request: ServiceRequest, sessio
 def _verify_message_access(
     user: Any, service_request: ServiceRequest, session: Any, for_sending: bool = False
 ) -> None:
-    if service_request.status in {"DRAFT", "SUBMITTED", "WAITING_FOR_CENTRE"}:
-        raise HTTPException(
-            status_code=400,
-            detail="Chat is not available before the request is accepted by a centre employee",
-        )
-    if for_sending and service_request.status in {
-        "COMPLETED",
-        "CLOSED",
-        "CANCELLED",
-        "UNABLE_TO_PROCEED",
-    }:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"This thread is read-only because the request is in "
-                f"'{service_request.status}' state"
-            ),
-        )
     if user.role == "citizen":
         if service_request.citizen_id != user.id:
             raise HTTPException(status_code=403, detail="Not authorized")
-        return
-    if user.role == "centre_employee":
+    elif user.role == "centre_employee":
+        if service_request.status in {"DRAFT", "SUBMITTED", "WAITING_FOR_CENTRE"}:
+            raise HTTPException(
+                status_code=403,
+                detail="Request has not been accepted by centre staff yet",
+            )
         _verify_active_assignment(user, service_request, session)
-        return
-    raise HTTPException(status_code=403, detail="Not authorized")
+    else:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if for_sending:
+        if service_request.status in {"DRAFT", "SUBMITTED", "WAITING_FOR_CENTRE"}:
+            raise HTTPException(
+                status_code=409,
+                detail="Chat is not available before the request is accepted by a centre employee",
+            )
+        if service_request.status in {
+            "COMPLETED",
+            "CLOSED",
+            "CANCELLED",
+            "UNABLE_TO_PROCEED",
+        }:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"This thread is read-only because the request is in "
+                    f"'{service_request.status}' state"
+                ),
+            )
 
 
 def _verify_ready_for_processing_preconditions(

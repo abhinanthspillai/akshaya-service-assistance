@@ -4,7 +4,7 @@ import { api } from '../../lib/api';
 import { Loader2, ArrowLeft, CheckCircle2, ChevronRight, FileCheck, Building2, Send, UploadCloud } from 'lucide-react';
 import { AxiosError } from 'axios';
 import clsx from 'clsx';
-import { DocumentUpload } from '../../components/documents/DocumentUpload';
+import { DocumentUpload, type DocumentUploadStatus } from '../../components/documents/DocumentUpload';
 
 interface ServiceDetail {
   id: string;
@@ -64,6 +64,9 @@ export function NewRequest() {
   const [selectedCentreId, setSelectedCentreId] = useState<string | null>(null);
   
   const [isProcessing, setIsProcessing] = useState(false);
+  const [stagedFiles, setStagedFiles] = useState<Record<string, File>>({});
+  const [docStatuses, setDocStatuses] = useState<Record<string, DocumentUploadStatus>>({});
+  const [docErrors, setDocErrors] = useState<Record<string, string>>({});
   
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
@@ -190,9 +193,70 @@ export function NewRequest() {
 
   const requiredDocs = service.document_requirements.filter(req => req.requirement_type === 'REQUIRED');
   const conditionalDocs = service.document_requirements.filter(req => req.requirement_type === 'CONDITIONAL');
+  const allDocs = service.document_requirements;
 
-  const hasAllRequiredDocuments = requiredDocs
-    .every(req => documents.some(doc => doc.requirement_id === req.id && doc.status !== 'REJECTED'));
+  const isRequirementSatisfied = (reqId: string) => {
+    const hasUploaded = documents.some(d => d.requirement_id === reqId && d.status !== 'REJECTED');
+    const hasStaged = !!stagedFiles[reqId];
+    return hasUploaded || hasStaged;
+  };
+
+  const allRequirementsSatisfied = allDocs.length > 0 && allDocs.every(req => isRequirementSatisfied(req.id));
+
+  const handleUploadAndContinue = async () => {
+    if (!requestId || isProcessing) return;
+    setIsProcessing(true);
+    setError('');
+
+    const newStatuses: Record<string, DocumentUploadStatus> = { ...docStatuses };
+    const newErrors: Record<string, string> = { ...docErrors };
+    let hasAnyFailure = false;
+
+    for (const req of allDocs) {
+      const staged = stagedFiles[req.id];
+      if (!staged) continue;
+
+      newStatuses[req.id] = 'uploading';
+      delete newErrors[req.id];
+      setDocStatuses({ ...newStatuses });
+      setDocErrors({ ...newErrors });
+
+      const formData = new FormData();
+      formData.append('requirement_id', req.id);
+      formData.append('file', staged);
+
+      try {
+        const res = await api.post(`/requests/${requestId}/documents`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const uploadedDoc = res.data;
+        setDocuments(prev => {
+          const filtered = prev.filter(d => d.requirement_id !== uploadedDoc.requirement_id);
+          return [...filtered, uploadedDoc];
+        });
+        newStatuses[req.id] = 'uploaded';
+        setStagedFiles(prev => {
+          const updated = { ...prev };
+          delete updated[req.id];
+          return updated;
+        });
+      } catch (err) {
+        hasAnyFailure = true;
+        newStatuses[req.id] = 'failed';
+        const e = err as AxiosError<{ detail: string }>;
+        newErrors[req.id] = e.response?.data?.detail || 'Upload failed.';
+      }
+
+      setDocStatuses({ ...newStatuses });
+      setDocErrors({ ...newErrors });
+    }
+
+    setIsProcessing(false);
+
+    if (!hasAnyFailure) {
+      setCurrentStep('review');
+    }
+  };
 
   const filteredCentres = centres.filter(c => 
     !searchQuery || 
@@ -447,77 +511,89 @@ export function NewRequest() {
               </div>
             </div>
 
-            <div className="space-y-10">
-              {requiredDocs.length > 0 && (
-                <div>
-                  <h3 className="text-[13px] font-bold text-mono-muted mb-4 uppercase tracking-wider border-b border-mono-border pb-2">Required Documents</h3>
-                  <div className="space-y-4">
-                    {requiredDocs.map(req => {
-                      const existingDoc = documents.find(d => d.requirement_id === req.id);
-                      return (
-                        <DocumentUpload
-                          key={req.id}
-                          requestId={requestId!}
-                          requirement={req}
-                          existingDocument={existingDoc}
-                          onUploadSuccess={(newDoc) => {
-                            setDocuments(prev => {
-                              const filtered = prev.filter(d => d.requirement_id !== newDoc.requirement_id);
-                              return [...filtered, newDoc];
-                            });
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+            <div className="space-y-4">
+              {allDocs.map(req => {
+                const existingDoc = documents.find(d => d.requirement_id === req.id);
+                const staged = stagedFiles[req.id];
+                const status = docStatuses[req.id];
+                const errorMsg = docErrors[req.id];
 
-              {conditionalDocs.length > 0 && (
-                <div>
-                  <h3 className="text-[13px] font-bold text-mono-muted mb-4 uppercase tracking-wider border-b border-mono-border pb-2">Conditional Documents</h3>
-                  <div className="space-y-4">
-                    {conditionalDocs.map(req => {
-                      const existingDoc = documents.find(d => d.requirement_id === req.id);
-                      return (
-                        <DocumentUpload
-                          key={req.id}
-                          requestId={requestId!}
-                          requirement={req}
-                          existingDocument={existingDoc}
-                          onUploadSuccess={(newDoc) => {
-                            setDocuments(prev => {
-                              const filtered = prev.filter(d => d.requirement_id !== newDoc.requirement_id);
-                              return [...filtered, newDoc];
-                            });
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                return (
+                  <DocumentUpload
+                    key={req.id}
+                    requestId={requestId!}
+                    requirement={req}
+                    existingDocument={existingDoc}
+                    stagedFile={staged}
+                    uploadStatus={status}
+                    uploadErrorMessage={errorMsg}
+                    disabled={isProcessing}
+                    onSelectFile={(selectedFile) => {
+                      setStagedFiles(prev => ({ ...prev, [req.id]: selectedFile }));
+                      setDocStatuses(prev => {
+                        const updated = { ...prev };
+                        delete updated[req.id];
+                        return updated;
+                      });
+                      setDocErrors(prev => {
+                        const updated = { ...prev };
+                        delete updated[req.id];
+                        return updated;
+                      });
+                    }}
+                    onRemoveStagedFile={() => {
+                      setStagedFiles(prev => {
+                        const updated = { ...prev };
+                        delete updated[req.id];
+                        return updated;
+                      });
+                      setDocStatuses(prev => {
+                        const updated = { ...prev };
+                        delete updated[req.id];
+                        return updated;
+                      });
+                      setDocErrors(prev => {
+                        const updated = { ...prev };
+                        delete updated[req.id];
+                        return updated;
+                      });
+                    }}
+                  />
+                );
+              })}
             </div>
 
-            <div className="mt-8 flex justify-between">
+            <div className="mt-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <button
+                type="button"
                 onClick={() => setCurrentStep('centre')}
                 disabled={isProcessing}
-                className="text-mono-muted font-medium px-4 py-2 hover:bg-mono-bg rounded-[16px] transition-colors"
+                className="text-mono-muted font-medium px-4 py-2 hover:bg-mono-bg rounded-[16px] transition-colors order-2 sm:order-1 self-start sm:self-auto"
               >
                 Back
               </button>
-              <button
-                onClick={() => setCurrentStep('review')}
-                disabled={!hasAllRequiredDocuments || isProcessing}
-                className="flex items-center gap-2 bg-mono-text hover:bg-mono-text disabled:bg-ink-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-2.5 rounded-[16px] transition-all "
-              >
-                Continue
-                <ChevronRight size={18} />
-              </button>
+
+              <div className="flex flex-col items-end gap-1.5 order-1 sm:order-2">
+                <button
+                  type="button"
+                  onClick={handleUploadAndContinue}
+                  disabled={!allRequirementsSatisfied || isProcessing}
+                  className="flex items-center gap-2 bg-mono-text hover:bg-black disabled:bg-ink-300 disabled:cursor-not-allowed text-white font-semibold px-6 py-2.5 rounded-[16px] transition-all"
+                >
+                  {isProcessing && <Loader2 size={18} className="animate-spin" />}
+                  {isProcessing ? 'Uploading...' : 'Upload and continue'}
+                  {!isProcessing && <ChevronRight size={18} />}
+                </button>
+                {!allRequirementsSatisfied && (
+                  <span className="text-xs text-mono-muted font-medium">
+                    Select all documents to continue
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         )}
+
 
         {currentStep === 'review' && (
           <div className="p-8">

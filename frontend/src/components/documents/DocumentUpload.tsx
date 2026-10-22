@@ -1,8 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useRef } from 'react';
 import { api } from '../../lib/api';
-import { Upload, X, File as FileIcon, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Upload, X, File as FileIcon, CheckCircle2, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
-import { AxiosError } from 'axios';
 
 interface Requirement {
   id: string;
@@ -23,86 +22,90 @@ interface RequestDocument {
   size_bytes: number;
 }
 
+export type DocumentUploadStatus = 'pending' | 'uploading' | 'uploaded' | 'failed';
+
 interface DocumentUploadProps {
   requestId: string;
   requirement: Requirement;
   existingDocument?: RequestDocument;
-  onUploadSuccess: (document: RequestDocument) => void;
+  stagedFile?: File | null;
+  onSelectFile: (file: File) => void;
+  onRemoveStagedFile: () => void;
+  uploadStatus?: DocumentUploadStatus;
+  uploadErrorMessage?: string | null;
+  disabled?: boolean;
 }
 
-export function DocumentUpload({ requestId, requirement, existingDocument, onUploadSuccess }: DocumentUploadProps) {
-  const [file, setFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
+export function DocumentUpload({
+  requestId,
+  requirement,
+  existingDocument,
+  stagedFile,
+  onSelectFile,
+  onRemoveStagedFile,
+  uploadStatus,
+  uploadErrorMessage,
+  disabled = false,
+}: DocumentUploadProps) {
+  const [localError, setLocalError] = React.useState<string | null>(null);
+  const [isDragging, setIsDragging] = React.useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const maxMb = requirement.max_file_size_bytes ? requirement.max_file_size_bytes / (1024 * 1024) : 5;
 
   const handleDragOver = (e: React.DragEvent) => {
+    if (disabled) return;
     e.preventDefault();
     setIsDragging(true);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
+    if (disabled) return;
     e.preventDefault();
     setIsDragging(false);
   };
 
-  const validateAndSetFile = (selectedFile: File) => {
-    setError(null);
-    if (requirement.max_file_size_bytes && selectedFile.size > requirement.max_file_size_bytes) {
-      setError(`File exceeds maximum size of ${maxMb} MB`);
+  const validateAndSelectFile = (selectedFile: File) => {
+    setLocalError(null);
+    const maxBytes = requirement.max_file_size_bytes || 5 * 1024 * 1024;
+    if (selectedFile.size > maxBytes) {
+      setLocalError(`File exceeds maximum size of ${maxMb} MB.`);
       return;
     }
-    const allowedTypes = requirement.allowed_file_types.map(ft => ft.mime_type);
-    if (allowedTypes.length > 0 && !allowedTypes.includes(selectedFile.type)) {
-      const exts = allowedTypes.map(t => t.split('/')[1].toUpperCase()).join(', ');
-      setError(`Only ${exts} files are allowed.`);
+    const allowedMimeTypes = requirement.allowed_file_types.map(ft => ft.mime_type.toLowerCase());
+    const validExtensions = ['.pdf', '.jpg', '.jpeg', '.png'];
+    const fileName = selectedFile.name.toLowerCase();
+    const hasValidExt = validExtensions.some(ext => fileName.endsWith(ext));
+    const validMimes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+
+    const isAllowedMime = allowedMimeTypes.length > 0
+      ? allowedMimeTypes.includes(selectedFile.type.toLowerCase())
+      : validMimes.includes(selectedFile.type.toLowerCase());
+
+    if (!hasValidExt || !isAllowedMime) {
+      setLocalError('Invalid file type. Only PDF, JPEG, and PNG files are allowed.');
       return;
     }
-    setFile(selectedFile);
+
+    onSelectFile(selectedFile);
   };
 
   const handleDrop = (e: React.DragEvent) => {
+    if (disabled) return;
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      validateAndSetFile(e.dataTransfer.files[0]);
+      validateAndSelectFile(e.dataTransfer.files[0]);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      validateAndSetFile(e.target.files[0]);
+      validateAndSelectFile(e.target.files[0]);
     }
   };
 
-  const handleUpload = async () => {
-    if (!file) return;
-    setIsUploading(true);
-    setError(null);
-
-    const formData = new FormData();
-    formData.append('requirement_id', requirement.id);
-    formData.append('file', file);
-
-    try {
-      const res = await api.post(`/requests/${requestId}/documents`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      setFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      onUploadSuccess(res.data);
-    } catch (err) {
-      const error = err as AxiosError<{ detail: string }>;
-      setError(error.response?.data?.detail || 'Failed to upload document.');
-    } finally {
-      setIsUploading(false);
-    }
-  };
+  const displayError = localError || uploadErrorMessage;
 
   return (
     <div className="bg-mono-bg p-4 rounded-xl border border-mono-border">
@@ -110,39 +113,82 @@ export function DocumentUpload({ requestId, requirement, existingDocument, onUpl
         <div className="flex-1">
           <h3 className="font-semibold text-mono-text flex items-center gap-3 text-[16px] leading-tight">
             {requirement.name}
-            {requirement.requirement_type === 'REQUIRED' && (
-              <span className="text-mono-text text-[11px] font-bold uppercase tracking-wider">Required</span>
-            )}
-            {requirement.requirement_type === 'CONDITIONAL' && (
-              <span className="text-orange-600 text-[11px] font-bold uppercase tracking-wider">Conditional</span>
-            )}
-            {requirement.requirement_type === 'OPTIONAL' && (
-              <span className="text-mono-muted text-[11px] font-bold uppercase tracking-wider">Optional</span>
-            )}
           </h3>
-          {!existingDocument && requirement.description && (
+          {!existingDocument && !stagedFile && requirement.description && (
             <p className="text-[13px] text-mono-muted mt-2">{requirement.description}</p>
           )}
-          {!existingDocument && requirement.conditional_rule && requirement.requirement_type === 'CONDITIONAL' && (
-            <p className="text-[13px] text-orange-600 mt-2">When to upload: {requirement.conditional_rule}</p>
-          )}
-          {!existingDocument && (
-            <p className="text-[12px] font-medium text-mono-muted mt-4 uppercase tracking-wider">
-              {requirement.allowed_file_types.map(t => t.mime_type.split('/')[1].toUpperCase()).join(', ')} • Maximum {maxMb} MB
+          {!existingDocument && !stagedFile && (
+            <p className="text-[12px] font-medium text-mono-muted mt-3 uppercase tracking-wider">
+              PDF, JPEG, PNG • Maximum {maxMb} MB
             </p>
           )}
         </div>
-        {!existingDocument && !file && (
+
+        {!existingDocument && !stagedFile && (
           <button
+            type="button"
+            disabled={disabled}
             onClick={() => fileInputRef.current?.click()}
-            className="shrink-0 mt-4 sm:mt-0 text-[14px] font-semibold bg-white border border-mono-border px-4 py-2 rounded-xl text-mono-text hover:bg-mono-surface hover:text-black transition-colors"
+            className="shrink-0 text-[14px] font-semibold bg-white border border-mono-border px-4 py-2 rounded-xl text-mono-text hover:bg-mono-surface hover:text-black transition-colors disabled:opacity-50"
           >
             [ Choose File ]
           </button>
         )}
       </div>
 
-      {existingDocument ? (
+      {/* Show staged file if user selected one */}
+      {stagedFile ? (
+        <div className="mt-3">
+          <div className={clsx(
+            "w-full flex items-center justify-between bg-white p-3 rounded-lg shadow-xs border transition-all",
+            uploadStatus === 'failed' || displayError ? "border-red-300 bg-red-50/50" :
+            uploadStatus === 'uploaded' ? "border-green-300 bg-green-50/50" :
+            "border-mono-border"
+          )}>
+            <div className="flex items-center gap-2.5 truncate pr-3">
+              {uploadStatus === 'uploaded' ? (
+                <CheckCircle2 className="text-green-600 shrink-0" size={18} />
+              ) : (
+                <FileIcon className="text-blue-600 shrink-0" size={18} />
+              )}
+              <div className="flex flex-col truncate">
+                <span className="text-[14px] font-medium text-mono-text truncate">{stagedFile.name}</span>
+                <span className="text-[11px] text-mono-muted">
+                  {(stagedFile.size / 1024 / 1024).toFixed(2)} MB
+                  {uploadStatus === 'uploading' && ' • Uploading...'}
+                  {uploadStatus === 'uploaded' && ' • Uploaded successfully'}
+                  {uploadStatus === 'failed' && ' • Upload failed'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => fileInputRef.current?.click()}
+                className="text-[13px] font-semibold text-mono-text hover:text-black px-2 py-1 rounded transition-colors disabled:opacity-50"
+              >
+                [ Replace ]
+              </button>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => {
+                  setLocalError(null);
+                  onRemoveStagedFile();
+                  if (fileInputRef.current) fileInputRef.current.value = '';
+                }}
+                className="p-1 text-mono-muted hover:text-red-600 hover:bg-red-50 rounded transition disabled:opacity-50"
+                aria-label="Remove staged file"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : existingDocument ? (
+        /* If already uploaded to server and not replaced with staged file */
         <div className="mt-4 flex flex-col gap-3">
           <div className={clsx(
             "rounded-xl p-4 flex flex-col gap-3 border",
@@ -161,15 +207,14 @@ export function DocumentUpload({ requestId, requirement, existingDocument, onUpl
                   {existingDocument.original_filename}
                 </p>
                 <p className="text-[13px] text-mono-muted mt-0.5">
-                  {(existingDocument.size_bytes / 1024 / 1024).toFixed(1)} MB
+                  {(existingDocument.size_bytes / 1024 / 1024).toFixed(2)} MB
                 </p>
-                
-                <p className={clsx("text-[13px] font-medium mt-3",
+                <p className={clsx("text-[13px] font-medium mt-2",
                   existingDocument.status === 'REJECTED' ? "text-red-700" :
                   existingDocument.status === 'REUPLOAD_REQUIRED' ? "text-orange-700" :
                   "text-green-700"
                 )}>
-                  {existingDocument.status === 'PENDING' ? 'Uploaded successfully' : 
+                  {existingDocument.status === 'PENDING' ? 'Uploaded' : 
                    existingDocument.status === 'REUPLOAD_REQUIRED' ? 'Re-upload Required' :
                    existingDocument.status.replace(/_/g, ' ')}
                 </p>
@@ -191,8 +236,10 @@ export function DocumentUpload({ requestId, requirement, existingDocument, onUpl
                 [ Preview ]
               </a>
               <button 
+                type="button"
+                disabled={disabled}
                 onClick={() => fileInputRef.current?.click()}
-                className="text-[13px] font-semibold text-mono-text hover:text-black transition-colors"
+                className="text-[13px] font-semibold text-mono-text hover:text-black transition-colors disabled:opacity-50"
               >
                 [ Replace ]
               </button>
@@ -200,64 +247,42 @@ export function DocumentUpload({ requestId, requirement, existingDocument, onUpl
           </div>
         </div>
       ) : (
+        /* Empty drag-and-drop zone */
         <div
           className={clsx(
-            "transition-all duration-200 ease-in-out flex flex-col items-center justify-center",
-            (isDragging || error || file) ? "mt-3 p-4 border-2 border-dashed rounded-lg" : "h-0 overflow-hidden opacity-0 p-0 border-0",
-            isDragging ? "border-mono-text bg-blue-600/5" : "border-mono-border",
-            error ? "border-red-600/50 bg-red-50" : ""
+            "transition-all duration-200 ease-in-out flex flex-col items-center justify-center cursor-pointer",
+            "mt-3 p-4 border-2 border-dashed rounded-lg",
+            isDragging ? "border-mono-text bg-blue-600/5" : "border-mono-border hover:border-mono-muted",
+            displayError ? "border-red-600/50 bg-red-50" : ""
           )}
+          onClick={() => {
+            if (!disabled) fileInputRef.current?.click();
+          }}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
-          {file ? (
-            <div className="w-full flex items-center justify-between bg-white p-2.5 rounded-lg shadow-sm border border-mono-border">
-              <div className="flex items-center gap-2.5 truncate pr-3">
-                <FileIcon className="text-blue-600 shrink-0" size={16} />
-                <span className="text-[13px] font-medium text-mono-text truncate">{file.name}</span>
-                <span className="text-[11px] text-mono-muted shrink-0">({(file.size / 1024 / 1024).toFixed(1)} MB)</span>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  onClick={() => setFile(null)}
-                  className="p-1.5 text-mono-muted hover:text-red-600 hover:bg-red-50 rounded-md transition"
-                  disabled={isUploading}
-                >
-                  <X size={14} />
-                </button>
-                <button
-                  onClick={handleUpload}
-                  disabled={isUploading}
-                  className="bg-mono-text text-white text-[11px] font-semibold px-3 py-1.5 rounded-md hover:bg-black transition flex items-center gap-1.5 disabled:opacity-70"
-                >
-                  {isUploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                  Upload
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center text-center">
-              <Upload size={18} className="text-mono-muted mb-2" />
-              <p className="text-[13px] font-medium text-mono-text mb-0.5">Drop file here</p>
-              <p className="text-[11px] text-mono-muted">Up to {maxMb} MB</p>
-            </div>
-          )}
+          <div className="flex flex-col items-center text-center">
+            <Upload size={18} className="text-mono-muted mb-2" />
+            <p className="text-[13px] font-medium text-mono-text mb-0.5">Drop file here or click to browse</p>
+            <p className="text-[11px] text-mono-muted">Up to {maxMb} MB</p>
+          </div>
         </div>
       )}
-      
+
       <input
         type="file"
         ref={fileInputRef}
         className="hidden"
-        accept={requirement.allowed_file_types.map(t => t.mime_type).join(',')}
+        accept={requirement.allowed_file_types?.map(t => t.mime_type).join(',') || '.pdf,.jpg,.jpeg,.png'}
         onChange={handleFileChange}
+        disabled={disabled}
       />
-      
-      {error && (
+
+      {displayError && (
         <div className="flex items-center gap-2 text-red-600 text-[13px] mt-3 bg-red-50 px-3 py-2 rounded-lg border border-red-100">
           <AlertCircle size={14} className="shrink-0" />
-          {error}
+          {displayError}
         </div>
       )}
     </div>
