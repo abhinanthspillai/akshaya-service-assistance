@@ -192,4 +192,96 @@ describe('RequestWorkspace.tsx', () => {
       );
     });
   });
+
+  it('shows "Request payment" and NOT "Mark ready and start processing" for paid service when docs approved', async () => {
+    const paidRequestUnderReview = {
+      ...mockRequestData,
+      status: 'UNDER_REVIEW',
+      fee_snapshot: 200,
+    };
+
+    const approvedReviews = [
+      {
+        id: 'rev-1',
+        document_id: 'doc-uuid-1',
+        decision: 'APPROVED',
+      },
+    ];
+
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === '/requests/req-uuid-1234') return Promise.resolve({ data: paidRequestUnderReview });
+      if (url === '/requests/req-uuid-1234/history') return Promise.resolve({ data: mockHistoryData });
+      if (url === '/requests/req-uuid-1234/documents') return Promise.resolve({ data: mockDocsData });
+      if (url === '/requests/req-uuid-1234/document-reviews') return Promise.resolve({ data: approvedReviews });
+      if (url === '/services/serv-1') return Promise.resolve({ data: mockServiceData });
+      if (url === '/requests/req-uuid-1234/interactions') return Promise.resolve({ data: [] });
+      if (url === '/requests/req-uuid-1234/messages') return Promise.resolve({ data: [] });
+      if (url === '/requests/req-uuid-1234/payments') return Promise.resolve({ data: [] });
+      if (url === '/requests/req-uuid-1234/citizen') return Promise.resolve({ data: { full_name: 'John Doe' } });
+      return Promise.reject(new Error(`Unhandled URL: ${url}`));
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/employee/requests/req-uuid-1234']}>
+        <Routes>
+          <Route path="/employee/requests/:id" element={<RequestWorkspace />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Income Certificate Service')).toBeInTheDocument();
+    });
+
+    // Paid service with approved docs and no confirmed payment must show "Request payment"
+    expect(screen.getByRole('button', { name: /Request payment/i })).toBeInTheDocument();
+    // Must NOT show "Mark ready and start processing"
+    expect(screen.queryByText('Mark ready and start processing')).not.toBeInTheDocument();
+  });
+
+  it('shows "Mark ready and start processing" for zero-fee service when docs approved', async () => {
+    const zeroFeeRequestUnderReview = {
+      ...mockRequestData,
+      status: 'UNDER_REVIEW',
+      fee_snapshot: 0,
+    };
+
+    const approvedReviews = [
+      {
+        id: 'rev-1',
+        document_id: 'doc-uuid-1',
+        decision: 'APPROVED',
+      },
+    ];
+
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === '/requests/req-uuid-1234') return Promise.resolve({ data: zeroFeeRequestUnderReview });
+      if (url === '/requests/req-uuid-1234/history') return Promise.resolve({ data: mockHistoryData });
+      if (url === '/requests/req-uuid-1234/documents') return Promise.resolve({ data: mockDocsData });
+      if (url === '/requests/req-uuid-1234/document-reviews') return Promise.resolve({ data: approvedReviews });
+      if (url === '/services/serv-1') return Promise.resolve({ data: mockServiceData });
+      if (url === '/requests/req-uuid-1234/interactions') return Promise.resolve({ data: [] });
+      if (url === '/requests/req-uuid-1234/messages') return Promise.resolve({ data: [] });
+      if (url === '/requests/req-uuid-1234/payments') return Promise.resolve({ data: [] });
+      if (url === '/requests/req-uuid-1234/citizen') return Promise.resolve({ data: { full_name: 'John Doe' } });
+      return Promise.reject(new Error(`Unhandled URL: ${url}`));
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/employee/requests/req-uuid-1234']}>
+        <Routes>
+          <Route path="/employee/requests/:id" element={<RequestWorkspace />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Income Certificate Service')).toBeInTheDocument();
+    });
+
+    // Zero-fee service should show "Mark ready and start processing"
+    expect(screen.getByRole('button', { name: /Mark ready and start processing/i })).toBeInTheDocument();
+    // Must NOT show "Request payment"
+    expect(screen.queryByRole('button', { name: /^Request payment$/i })).not.toBeInTheDocument();
+  });
 });

@@ -80,6 +80,7 @@ ALLOWED_TRANSITIONS = {
         ("CORRECTION_REQUIRED", ["centre_employee"]),
         ("INTERACTION_REQUIRED", ["centre_employee"]),
         ("READY_FOR_PROCESSING", ["centre_employee"]),
+        ("PAYMENT_PENDING", ["centre_employee"]),
         ("UNABLE_TO_PROCEED", ["centre_employee", "centre_administrator", "system_administrator"]),
         ("CANCELLED", ["citizen"]),
     ],
@@ -1591,8 +1592,12 @@ def request_payment(
     if not service_request:
         raise HTTPException(status_code=404, detail="Request not found")
     _verify_active_assignment(current_user, service_request, session)
-    if service_request.status != "PROCESSING":
-        raise HTTPException(status_code=409, detail="Request must be PROCESSING")
+    if service_request.status not in {"PROCESSING", "UNDER_REVIEW"}:
+        raise HTTPException(
+            status_code=409, detail="Request must be in UNDER_REVIEW or PROCESSING state"
+        )
+    if service_request.status == "UNDER_REVIEW":
+        _verify_ready_for_processing_preconditions(session, service_request)
     if not service_request.fee_snapshot or service_request.fee_snapshot <= 0:
         raise HTTPException(status_code=409, detail="No payment is required for this request")
 
@@ -2413,6 +2418,18 @@ def complete_request(
                 status_code=409, detail="Cannot complete request with pending payments"
             )
 
+    # For paid services, payment must be confirmed before completion
+    if service_request.fee_snapshot and service_request.fee_snapshot > 0:
+        has_confirmed = session.scalar(
+            select(func.count())
+            .select_from(RequestPayment)
+            .where(RequestPayment.request_id == request_id, RequestPayment.status == "CONFIRMED")
+        )
+        if has_confirmed == 0:
+            raise HTTPException(
+                status_code=409, detail="Cannot complete paid request without confirmed payment"
+            )
+
     existing_output = session.scalar(
         select(CompletedOutput).where(CompletedOutput.request_id == request_id)
     )
@@ -2662,6 +2679,19 @@ def mark_ready_and_start_processing_request(
     if service_request.status != "UNDER_REVIEW":
         raise HTTPException(status_code=409, detail="Request must be in UNDER_REVIEW state")
     _verify_ready_for_processing_preconditions(session, service_request)
+
+    if service_request.fee_snapshot and service_request.fee_snapshot > 0:
+        confirmed_payment = session.scalar(
+            select(RequestPayment).where(
+                RequestPayment.request_id == request_id,
+                RequestPayment.status == "CONFIRMED",
+            )
+        )
+        if not confirmed_payment:
+            raise HTTPException(
+                status_code=409,
+                detail="Payment is required before processing for paid services",
+            )
 
     _perform_transition(
         session, service_request, current_user, "READY_FOR_PROCESSING", RequestAction.MARK_READY

@@ -279,11 +279,14 @@ def test_archive_completed_request(client: TestClient, db_session: Session) -> N
     req_id, centre_id, citizen_headers = setup_request_waiting_for_centre(client, db_session)
     employee_headers = get_employee_headers(client, db_session, centre_id)
 
-    # Fast track to COMPLETED
+    # Fast track to COMPLETED (including payment since base_fee=100)
     client.post(f"/api/v1/requests/{req_id}/accept", headers=employee_headers)
     client.post(f"/api/v1/requests/{req_id}/start-review", headers=employee_headers)
     client.post(f"/api/v1/requests/{req_id}/mark-ready", headers=employee_headers)
     client.post(f"/api/v1/requests/{req_id}/start-processing", headers=employee_headers)
+    pay_res = client.post(f"/api/v1/requests/{req_id}/request-payment", headers=employee_headers)
+    payment_id = pay_res.json()["id"]
+    client.post(f"/api/v1/requests/{req_id}/payments/{payment_id}/confirm", headers=citizen_headers)
     client.post(
         f"/api/v1/requests/{req_id}/complete",
         json={"collection_instructions": "Collect"},
@@ -368,3 +371,116 @@ def test_citizen_status_counts_isolated_to_own_requests(
     assert res2.status_code == 200
     counts2 = res2.json()["status_counts"]
     assert counts2.get("DRAFT", 0) == 2
+
+
+def test_mark_ready_and_start_processing_rejects_paid_service_without_payment(
+    client: TestClient, db_session: Session
+) -> None:
+    req_id, centre_id, _ = setup_request_waiting_for_centre(client, db_session)
+    employee_headers = get_employee_headers(client, db_session, centre_id)
+
+    # Move to UNDER_REVIEW
+    client.post(f"/api/v1/requests/{req_id}/accept", headers=employee_headers)
+    client.post(f"/api/v1/requests/{req_id}/start-review", headers=employee_headers)
+
+    # Calling mark-ready-and-start-processing for paid service without
+    # confirmed payment must fail with 409
+    res = client.post(
+        f"/api/v1/requests/{req_id}/mark-ready-and-start-processing",
+        headers=employee_headers,
+    )
+    assert res.status_code == 409
+    assert "Payment is required" in res.json()["detail"]
+
+
+def test_mark_ready_and_start_processing_allows_zero_fee_service(
+    client: TestClient, db_session: Session
+) -> None:
+    citizen_headers = get_citizen_headers(client, db_session, "cit_zerofee@example.com")
+    service = Service(name="Zero Fee Service", code="TZF001", service_type="A", base_fee=0)
+    db_session.add(service)
+    centre = AkshayaCentre(
+        name="Zero Fee Centre",
+        code="TZFC001",
+        district="Kollam",
+        locality="Kollam",
+        address_text="Addr",
+    )
+    db_session.add(centre)
+    db_session.commit()
+
+    css = CentreSupportedService(centre_id=centre.id, service_id=service.id, is_active=True)
+    db_session.add(css)
+    db_session.commit()
+
+    r = client.post(
+        "/api/v1/requests/", json={"service_id": str(service.id)}, headers=citizen_headers
+    )
+    req_id = r.json()["id"]
+    client.post(
+        f"/api/v1/requests/{req_id}/select-centre",
+        json={"centre_id": str(centre.id)},
+        headers=citizen_headers,
+    )
+    client.post(f"/api/v1/requests/{req_id}/submit", headers=citizen_headers)
+
+    employee_headers = get_employee_headers(
+        client, db_session, str(centre.id), email="emp_zerofee@example.com"
+    )
+    client.post(f"/api/v1/requests/{req_id}/accept", headers=employee_headers)
+    client.post(f"/api/v1/requests/{req_id}/start-review", headers=employee_headers)
+
+    # Zero-fee service should succeed
+    res = client.post(
+        f"/api/v1/requests/{req_id}/mark-ready-and-start-processing",
+        headers=employee_headers,
+    )
+    assert res.status_code == 200
+    assert res.json()["status"] == "PROCESSING"
+
+
+def test_complete_blocked_for_paid_service_without_confirmed_payment(
+    client: TestClient, db_session: Session
+) -> None:
+    req_id, centre_id, _ = setup_request_waiting_for_centre(client, db_session)
+    employee_headers = get_employee_headers(client, db_session, centre_id)
+
+    client.post(f"/api/v1/requests/{req_id}/accept", headers=employee_headers)
+    client.post(f"/api/v1/requests/{req_id}/start-review", headers=employee_headers)
+    client.post(f"/api/v1/requests/{req_id}/mark-ready", headers=employee_headers)
+    client.post(f"/api/v1/requests/{req_id}/start-processing", headers=employee_headers)
+
+    # Try to complete directly without paying
+    r = client.post(
+        f"/api/v1/requests/{req_id}/complete",
+        json={"collection_instructions": "Collect"},
+        headers=employee_headers,
+    )
+    assert r.status_code == 409
+    assert "Cannot complete paid request without confirmed payment" in r.json()["detail"]
+
+
+def test_request_payment_from_under_review_transitions_to_payment_pending(
+    client: TestClient, db_session: Session
+) -> None:
+    req_id, centre_id, citizen_headers = setup_request_waiting_for_centre(client, db_session)
+    employee_headers = get_employee_headers(client, db_session, centre_id)
+
+    client.post(f"/api/v1/requests/{req_id}/accept", headers=employee_headers)
+    client.post(f"/api/v1/requests/{req_id}/start-review", headers=employee_headers)
+
+    # Request payment directly from UNDER_REVIEW
+    pay_res = client.post(f"/api/v1/requests/{req_id}/request-payment", headers=employee_headers)
+    assert pay_res.status_code == 200
+    payment_id = pay_res.json()["id"]
+
+    check = client.get(f"/api/v1/requests/{req_id}", headers=citizen_headers)
+    assert check.json()["status"] == "PAYMENT_PENDING"
+
+    # Confirming payment transitions to PROCESSING
+    conf_res = client.post(
+        f"/api/v1/requests/{req_id}/payments/{payment_id}/confirm", headers=citizen_headers
+    )
+    assert conf_res.status_code == 200
+    check2 = client.get(f"/api/v1/requests/{req_id}", headers=citizen_headers)
+    assert check2.json()["status"] == "PROCESSING"

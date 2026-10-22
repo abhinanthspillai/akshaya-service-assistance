@@ -528,6 +528,11 @@ export function RequestWorkspace() {
       return rev && rev.decision === 'APPROVED';
     });
 
+  const isPaidService = Boolean(request.fee_snapshot && Number(request.fee_snapshot) > 0);
+  const hasConfirmedPayment = payments.some(
+    (p) => p.status === 'CONFIRMED' || p.status === 'PAID'
+  );
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12">
       {/* Top Breadcrumb & Nav */}
@@ -618,7 +623,19 @@ export function RequestWorkspace() {
               </button>
             )}
 
-            {request.status === 'UNDER_REVIEW' && allDocsApproved && (
+            {request.status === 'UNDER_REVIEW' && allDocsApproved && isPaidService && !hasConfirmedPayment && (
+              <button
+                onClick={handleRequestPayment}
+                disabled={isActionLoading}
+                className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
+              >
+                {isActionLoading && <Loader2 size={14} className="animate-spin" />}
+                <CreditCard size={14} />
+                Request payment
+              </button>
+            )}
+
+            {request.status === 'UNDER_REVIEW' && allDocsApproved && (!isPaidService || hasConfirmedPayment) && (
               <button
                 onClick={handleMarkReadyAndStartProcessing}
                 disabled={isActionLoading}
