@@ -67,7 +67,18 @@ describe('EmployeeDashboard.tsx', () => {
       recent_activity: [],
     };
 
-    vi.mocked(api.get).mockResolvedValue({ data: mockDashboardData });
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+      if (url.includes('/requests/dashboard/stats')) {
+        return { data: mockDashboardData.buckets };
+      }
+      if (url.includes('/requests/dashboard/needs-attention')) {
+        return { data: mockDashboardData.needs_attention };
+      }
+      if (url.includes('/requests/dashboard/recent-activity')) {
+        return { data: mockDashboardData.recent_activity };
+      }
+      return { data: mockDashboardData };
+    });
 
     render(
       <BrowserRouter>

@@ -37,8 +37,9 @@ export function Profile() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       await refreshUser();
-    } catch (err: any) {
-      setPhotoError(err.response?.data?.detail || 'Failed to upload photo');
+    } catch (err: unknown) {
+      const anyErr = err as { response?: { data?: { detail?: string } } };
+      setPhotoError(anyErr.response?.data?.detail || 'Failed to upload photo');
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -50,8 +51,9 @@ export function Profile() {
     try {
       await api.delete('/users/me/photo');
       await refreshUser();
-    } catch (err: any) {
-      setPhotoError(err.response?.data?.detail || 'Failed to remove photo');
+    } catch (err: unknown) {
+      const anyErr = err as { response?: { data?: { detail?: string } } };
+      setPhotoError(anyErr.response?.data?.detail || 'Failed to remove photo');
     }
   };
 

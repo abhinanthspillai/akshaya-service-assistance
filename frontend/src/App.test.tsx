@@ -22,7 +22,7 @@ describe('App Routing', () => {
     window.history.pushState({}, '', '/');
   });
 
-  it('unauthenticated users go to /login', () => {
+  it('unauthenticated users at root see LandingPage', () => {
     vi.mocked(AuthContext.useAuth).mockReturnValue({
       user: null,
       token: null,
@@ -32,6 +32,21 @@ describe('App Routing', () => {
       isLoading: false,
     });
 
+    render(<App />);
+    expect(screen.getAllByText('SAHAYA').length).toBeGreaterThan(0);
+  });
+
+  it('unauthenticated users navigating to protected route go to /login', () => {
+    vi.mocked(AuthContext.useAuth).mockReturnValue({
+      user: null,
+      token: null,
+      login: vi.fn(),
+      logout: vi.fn(),
+      refreshUser: vi.fn(),
+      isLoading: false,
+    });
+
+    window.history.pushState({}, '', '/dashboard');
     render(<App />);
     expect(screen.getAllByRole('heading', { name: 'Sign in' }).length).toBeGreaterThan(0);
   });

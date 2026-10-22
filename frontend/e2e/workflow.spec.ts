@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, BrowserContext, Page } from '@playwright/test';
 import { execSync } from 'child_process';
 import path from 'path';
 
@@ -19,8 +19,8 @@ test.describe.serial('Akshaya Service Assistance Full E2E Workflow', () => {
   test('Full E2E Flow', async ({ page: citizenPage, browser }) => {
     test.setTimeout(120000); // Increase timeout to 2 minutes for full E2E flow
 
-  let employeeContext: any;
-  let employeePage: any;
+    let employeeContext: BrowserContext;
+    let employeePage: Page;
 
   await test.step('1. Citizen Registration and Login', async () => {
     // Navigate to register

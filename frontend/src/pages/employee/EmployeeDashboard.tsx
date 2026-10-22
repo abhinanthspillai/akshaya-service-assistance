@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import {
-  Loader2,
   FileText,
   Clock,
   CheckCircle,
@@ -10,8 +9,6 @@ import {
   RefreshCw,
   ChevronRight,
   History,
-  CheckCircle2,
-  FileCheck,
   ArrowRight
 } from 'lucide-react';
 import { formatStatus, formatRelativeTime } from '../../utils/format';
@@ -53,15 +50,6 @@ interface DashboardBuckets {
   rejected_last_30_days: number;
 }
 
-interface DashboardData {
-  status_counts: Record<string, number>;
-  completed_today: number;
-  rejected_last_30_days: number;
-  buckets: DashboardBuckets;
-  needs_attention: ServiceRequest[];
-  recent_activity: RecentActivityItem[];
-}
-
 export function EmployeeDashboard() {
   const [stats, setStats] = useState<DashboardBuckets | null>(null);
   const [needsAttention, setNeedsAttention] = useState<ServiceRequest[] | null>(null);
@@ -84,7 +72,7 @@ export function EmployeeDashboard() {
         const res = await api.get('/requests/dashboard/stats');
         setStats(res.data);
         setErrors(p => ({ ...p, stats: '' }));
-      } catch (e: any) {
+      } catch {
         setErrors(p => ({ ...p, stats: 'Failed to load stats' }));
       } finally {
         setLoading(p => ({ ...p, stats: false }));
@@ -97,7 +85,7 @@ export function EmployeeDashboard() {
         const res = await api.get('/requests/dashboard/needs-attention');
         setNeedsAttention(res.data);
         setErrors(p => ({ ...p, attention: '' }));
-      } catch (e: any) {
+      } catch {
         setErrors(p => ({ ...p, attention: 'Failed to load queue' }));
       } finally {
         setLoading(p => ({ ...p, attention: false }));
@@ -116,7 +104,7 @@ export function EmployeeDashboard() {
             setRecentActivity([]);
             setErrors(p => ({ ...p, activity: '' }));
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('Failed to load activity:', e);
         setRecentActivity([]);
         setErrors(p => ({ ...p, activity: 'Failed to load activity' }));

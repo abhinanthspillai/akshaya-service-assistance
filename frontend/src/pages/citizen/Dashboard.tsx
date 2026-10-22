@@ -4,7 +4,6 @@ import { api } from '../../lib/api';
 import { useNavigate } from 'react-router-dom';
 import { FileText, AlertCircle, CheckCircle, Search, ArrowRight, Loader2, Plus, Clock, FileEdit, HelpCircle, PhoneCall, ChevronRight, Info } from 'lucide-react';
 import clsx from 'clsx';
-import { PageHeader } from '../../components/ui/PageHeader';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';

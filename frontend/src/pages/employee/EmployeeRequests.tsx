@@ -7,8 +7,7 @@ import {
   Search,
   Filter,
   ChevronRight,
-  ChevronLeft,
-  RefreshCw
+  ChevronLeft
 } from 'lucide-react';
 import { formatStatus } from '../../utils/format';
 
@@ -90,8 +89,9 @@ export function EmployeeRequests() {
       const res = await api.get(`/requests/?${params.toString()}`);
       setRequestsData(res.data);
       setError('');
-    } catch (e: any) {
-      setError(e.response?.data?.detail || 'Failed to load requests');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      setError(err.response?.data?.detail || 'Failed to load requests');
     } finally {
       setIsLoading(false);
     }

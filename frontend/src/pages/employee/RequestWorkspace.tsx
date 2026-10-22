@@ -5,22 +5,16 @@ import {
   Loader2,
   ArrowLeft,
   CheckCircle2,
-  Clock,
   FileText,
   CalendarClock,
   MessageSquare,
-  AlertTriangle,
   Download,
   Send,
   AlertCircle,
-  FileCheck,
   CreditCard,
-  Building2,
-  User,
   History,
   Check,
   X,
-  ExternalLink,
   ShieldAlert,
   ChevronDown,
 } from 'lucide-react';
@@ -248,7 +242,7 @@ export function RequestWorkspace() {
           });
           const url = window.URL.createObjectURL(new Blob([res.data], { type: doc.content_type }));
           setDocumentUrls(prev => ({ ...prev, [doc.id]: { url, type: doc.content_type } }));
-        } catch (e) {
+        } catch {
           console.error("Failed to load preview for", doc.id);
         }
       }
@@ -301,36 +295,6 @@ export function RequestWorkspace() {
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
       setError(err.response?.data?.detail || 'Failed to mark ready and start processing.');
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
-
-  const handleAcceptRequest = async () => {
-    if (!request) return;
-    setIsActionLoading(true);
-    try {
-      await api.post(`/requests/${request.id}/accept`);
-      triggerNotification('Request accepted into your queue.');
-      await fetchWorkspace();
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } } };
-      setError(err.response?.data?.detail || 'Failed to accept request.');
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
-
-  const handleStartReview = async () => {
-    if (!request) return;
-    setIsActionLoading(true);
-    try {
-      await api.post(`/requests/${request.id}/start-review`);
-      triggerNotification('Document review process started.');
-      await fetchWorkspace();
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } } };
-      setError(err.response?.data?.detail || 'Failed to start review.');
     } finally {
       setIsActionLoading(false);
     }
@@ -433,36 +397,6 @@ export function RequestWorkspace() {
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
       setError(err.response?.data?.detail || 'Failed to record interaction outcome.');
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
-
-  const handleMarkReady = async () => {
-    if (!request) return;
-    setIsActionLoading(true);
-    try {
-      await api.post(`/requests/${request.id}/mark-ready`);
-      triggerNotification('Application marked Ready for Processing.');
-      await fetchWorkspace();
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } } };
-      setError(err.response?.data?.detail || 'Failed to mark ready.');
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
-
-  const handleStartProcessing = async () => {
-    if (!request) return;
-    setIsActionLoading(true);
-    try {
-      await api.post(`/requests/${request.id}/start-processing`);
-      triggerNotification('Processing started.');
-      await fetchWorkspace();
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } } };
-      setError(err.response?.data?.detail || 'Failed to start processing.');
     } finally {
       setIsActionLoading(false);
     }
@@ -650,7 +584,13 @@ export function RequestWorkspace() {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 pt-1">
               <span>Submitted: {new Date(request.submitted_at || request.created_at).toLocaleString()}</span>
               <span>•</span>
-              <span>Citizen ID: <span className="font-mono text-slate-700">{request.citizen_id.slice(0, 8)}</span></span>
+              <span>
+                Applicant:{' '}
+                <span className="font-medium text-slate-800">
+                  {citizen?.full_name || 'Citizen'}
+                </span>{' '}
+                (<span className="font-mono text-slate-600">{request.citizen_id.slice(0, 8)}</span>)
+              </span>
             </div>
           </div>
 
@@ -902,6 +842,43 @@ export function RequestWorkspace() {
                 </button>
               )}
             </div>
+
+            {/* Payments Summary */}
+            {payments.length > 0 && (
+              <div className="pt-4 border-t border-slate-100 space-y-2">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                  <CreditCard size={14} className="text-slate-500" />
+                  Payments ({payments.length})
+                </h3>
+                <div className="space-y-2">
+                  {payments.map((p) => (
+                    <div
+                      key={p.id}
+                      className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs"
+                    >
+                      <div>
+                        <span className="font-semibold text-slate-900">₹{p.amount}</span>
+                        <span className="text-slate-500 ml-2">via {p.provider}</span>
+                        {p.confirmed_at && (
+                          <span className="text-slate-400 ml-2">
+                            • Confirmed: {new Date(p.confirmed_at).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          p.status === 'SUCCESS' || p.status === 'PAID'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {p.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             
         {/* 2. Physical / Biometric Interactions Section */}
         {(interactions.length > 0 || interactionRequirements.length > 0) && (
@@ -1317,6 +1294,17 @@ export function RequestWorkspace() {
                   rows={3}
                   value={collectionInstructions}
                   onChange={(e) => setCollectionInstructions(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:bg-white focus:border-slate-400"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700">Completion Note (Optional)</label>
+                <textarea
+                  rows={2}
+                  value={completionNote}
+                  onChange={(e) => setCompletionNote(e.target.value)}
+                  placeholder="Additional remarks or internal notes..."
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:bg-white focus:border-slate-400"
                 />
               </div>

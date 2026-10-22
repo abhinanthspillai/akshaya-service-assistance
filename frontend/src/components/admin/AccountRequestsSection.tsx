@@ -52,7 +52,6 @@ export function AccountRequestsSection({
 
   useEffect(() => {
     fetchRequests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleApprove = async (req: AccountRequest) => {

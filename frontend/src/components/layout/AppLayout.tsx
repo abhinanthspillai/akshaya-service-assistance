@@ -4,7 +4,7 @@ import { Avatar } from '../ui/Avatar';
 import { ChatSidebar } from './ChatSidebar';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, LogOut, FileSearch, Bell, LifeBuoy, Menu, X, Search } from 'lucide-react';
+import { LayoutDashboard, FileText, LogOut, FileSearch, Bell, LifeBuoy, Menu, X } from 'lucide-react';
 import clsx from 'clsx';
 import { api } from '../../lib/api';
 

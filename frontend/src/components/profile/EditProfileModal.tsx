@@ -40,8 +40,9 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
       await api.patch('/users/me', formData);
       await refreshUser();
       onClose();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to update profile');
+    } catch (err: unknown) {
+      const anyErr = err as { response?: { data?: { detail?: string } } };
+      setError(anyErr.response?.data?.detail || 'Failed to update profile');
     } finally {
       setIsSubmitting(false);
     }
