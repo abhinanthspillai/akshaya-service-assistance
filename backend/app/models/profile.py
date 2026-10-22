@@ -46,8 +46,10 @@ class EmployeeProfile(Base):
         UUID(as_uuid=True), ForeignKey("akshaya_centres.id"), index=True, nullable=False
     )
     full_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    photo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     max_active_requests: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    approval_status: Mapped[str] = mapped_column(String(32), default="APPROVED", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.now(), nullable=False
     )
@@ -57,6 +59,10 @@ class EmployeeProfile(Base):
 
     __table_args__ = (
         CheckConstraint("max_active_requests > 0", name="employee_max_active_check"),
+        CheckConstraint(
+            "approval_status IN ('PENDING_APPROVAL', 'APPROVED', 'REJECTED')",
+            name="employee_approval_status_check",
+        ),
         Index("ix_employee_profiles_centre_id_is_available", "centre_id", "is_available"),
     )
 
@@ -71,6 +77,7 @@ class CentreAdministrator(Base):
         UUID(as_uuid=True), ForeignKey("akshaya_centres.id"), index=True, nullable=False
     )
     full_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    approval_status: Mapped[str] = mapped_column(String(32), default="APPROVED", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.now(), nullable=False
     )
@@ -80,4 +87,14 @@ class CentreAdministrator(Base):
 
     __table_args__ = (
         UniqueConstraint("user_id", "centre_id", name="uq_centre_administrators_user_centre"),
+        CheckConstraint(
+            "approval_status IN ('PENDING_APPROVAL', 'APPROVED', 'REJECTED')",
+            name="centre_admin_approval_status_check",
+        ),
+        Index(
+            "uq_centre_admin_active_or_pending",
+            "centre_id",
+            unique=True,
+            postgresql_where="approval_status IN ('APPROVED', 'PENDING_APPROVAL')",
+        ),
     )

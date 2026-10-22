@@ -1,20 +1,27 @@
 import axios from 'axios';
 
 export const api = axios.create({
- baseURL: '/api/v1',
+  baseURL: import.meta.env.VITE_API_URL
+    ? `${import.meta.env.VITE_API_URL}/api/v1`
+    : '/api/v1',
 });
 
 api.interceptors.request.use((config) => {
- const token = localStorage.getItem('token');
- if (token && config.headers) {
- config.headers.Authorization = `Bearer ${token}`;
- }
- return config;
+  const token = localStorage.getItem('token');
+  if (token && config.headers) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 export interface User {
- id: string;
- email: string;
- role: string;
- full_name?: string;
+  id: string;
+  email: string;
+  role: string;
+  full_name?: string;
+  phone?: string;
+  address_text?: string;
+  centre_id?: string;
+  approval_status?: string;
+  photo_url?: string;
 }

@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -53,17 +53,20 @@ def detect_stale_requests(
     centre_id = None
     if current_user.role == "centre_administrator":
         from app.models.profile import CentreAdministrator
+
         admin = session.get(CentreAdministrator, current_user.id)
         if not admin:
             raise HTTPException(status_code=403, detail="Admin profile not found")
         centre_id = admin.centre_id
 
     from app.services.escalation import run_stale_request_detection
+
     created_escalations = run_stale_request_detection(session, centre_id=centre_id)
 
     # Optionally add a notification for admin
     if created_escalations:
         from app.api.endpoints.requests import _safe_add_notification
+
         for req in created_escalations:
             _safe_add_notification(
                 session,

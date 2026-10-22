@@ -69,6 +69,7 @@ interface RequestPayment {
  status: string;
  provider: string;
  provider_reference: string;
+ confirmed_at?: string | null;
 }
 
 interface CompletedOutput {
@@ -116,52 +117,108 @@ export function RequestDetail() {
  const [isSubmitting, setIsSubmitting] = useState(false);
  const [uploadingRequirementId, setUploadingRequirementId] = useState<string | null>(null);
  const [error, setError] = useState('');
+ const [confirmAction, setConfirmAction] = useState<{
+ isOpen: boolean;
+ action: 'cancel' | 'delete' | 'close';
+ title: string;
+ message: string;
+ label: string;
+ isDestructive: boolean;
+ }>({
+ isOpen: false,
+ action: 'cancel',
+ title: '',
+ message: '',
+ label: '',
+ isDestructive: false,
+ });
  const navigate = useNavigate();
 
- useEffect(() => {
+ const isChatEnabled = !!request && !['DRAFT', 'SUBMITTED', 'WAITING_FOR_CENTRE'].includes(request.status);
+
  const fetchData = async () => {
- try {
- const res = await api.get('/requests/' + (id || ''));
- setRequest(res.data);
- const [serviceRes, documentsRes, reviewsRes, interactionsRes, messagesRes, paymentsRes] = await Promise.all([
- api.get('/services/' + res.data.service_id),
- api.get('/requests/' + res.data.id + '/documents'),
- api.get('/requests/' + res.data.id + '/document-reviews'),
- api.get('/requests/' + res.data.id + '/interactions'),
- api.get('/requests/' + res.data.id + '/messages'),
- api.get('/requests/' + res.data.id + '/payments'),
- ]);
- setRequirements(serviceRes.data.document_requirements || []);
- setDocuments(documentsRes.data || []);
- setReviews(reviewsRes.data || []);
- setInteractions(interactionsRes.data || []);
- setMessages(messagesRes.data || []);
- setPayments(paymentsRes.data || []);
- if (res.data.status === 'DRAFT' || res.data.status === 'CORRECTION_REQUIRED') {
- const validationRes = await api.post('/requests/' + res.data.id + '/pre-validate');
- setPreValidation(validationRes.data);
- }
- if (res.data.status === 'COMPLETED' || res.data.status === 'CLOSED') {
- try {
- // In case there's an endpoint to fetch output, we can do it here, or the api might not have one yet.
- // Actually, I haven't added GET /requests/{id}/output endpoint. Let's just assume we'll add it.
- const outRes = await api.get('/requests/' + res.data.id + '/output');
- setOutput(outRes.data);
- } catch {
- // ignore
- }
- }
- if (res.data.status === 'DRAFT' && res.data.service_id) {
- const centresRes = await api.get('/centres/?active=true');
- setCentres(centresRes.data);
- }
- } catch {
- setError('Failed to load request details.');
- } finally {
- setIsLoading(false);
- }
+   if (!id) return;
+   setIsLoading(true);
+   setError('');
+   let currentReq: ServiceRequest | null = null;
+   try {
+     const res = await api.get('/requests/' + id);
+     currentReq = res.data;
+     setRequest(res.data);
+   } catch {
+     setError('Failed to load request details.');
+     setIsLoading(false);
+     return;
+   }
+
+   if (!currentReq) {
+     setIsLoading(false);
+     return;
+   }
+
+   try {
+     const canChat = !['DRAFT', 'SUBMITTED', 'WAITING_FOR_CENTRE'].includes(currentReq.status);
+     const [serviceRes, documentsRes, reviewsRes, interactionsRes, messagesRes, paymentsRes] = await Promise.allSettled([
+       api.get('/services/' + currentReq.service_id),
+       api.get('/requests/' + currentReq.id + '/documents'),
+       api.get('/requests/' + currentReq.id + '/document-reviews'),
+       api.get('/requests/' + currentReq.id + '/interactions'),
+       canChat ? api.get('/requests/' + currentReq.id + '/messages') : Promise.resolve({ data: [] }),
+       api.get('/requests/' + currentReq.id + '/payments'),
+     ]);
+
+     if (serviceRes.status === 'fulfilled') {
+       setRequirements(serviceRes.value.data.document_requirements || []);
+     }
+     if (documentsRes.status === 'fulfilled') {
+       setDocuments(documentsRes.value.data || []);
+     }
+     if (reviewsRes.status === 'fulfilled') {
+       setReviews(reviewsRes.value.data || []);
+     }
+     if (interactionsRes.status === 'fulfilled') {
+       setInteractions(interactionsRes.value.data || []);
+     }
+     if (messagesRes.status === 'fulfilled') {
+       setMessages(messagesRes.value.data || []);
+     } else {
+       setMessages([]);
+     }
+     if (paymentsRes.status === 'fulfilled') {
+       setPayments(paymentsRes.value.data || []);
+     }
+
+     if (currentReq.status === 'DRAFT' || currentReq.status === 'CORRECTION_REQUIRED') {
+       try {
+         const validationRes = await api.post('/requests/' + currentReq.id + '/pre-validate');
+         setPreValidation(validationRes.data);
+       } catch {
+         // non-critical
+       }
+     }
+     if (currentReq.status === 'COMPLETED' || currentReq.status === 'CLOSED') {
+       try {
+         const outRes = await api.get('/requests/' + currentReq.id + '/output');
+         setOutput(outRes.data);
+       } catch {
+         // ignore
+       }
+     }
+     if (currentReq.status === 'DRAFT' && currentReq.service_id) {
+       try {
+         const centresRes = await api.get('/centres/?active=true');
+         setCentres(centresRes.data);
+       } catch {
+         // ignore
+       }
+     }
+   } finally {
+     setIsLoading(false);
+   }
  };
- if (id) fetchData();
+
+ useEffect(() => {
+   fetchData();
  }, [id]);
 
  const handleSelectCentre = async (centreId: string) => {
@@ -175,7 +232,7 @@ export function RequestDetail() {
  };
 
  const handleSendMessage = async () => {
- if (!request || !newMessage.trim()) return;
+ if (!request || !newMessage.trim() || !isChatEnabled) return;
  try {
  const res = await api.post('/requests/' + request.id + '/messages', { body: newMessage.trim() });
  setMessages((current) => [...current, res.data]);
@@ -185,17 +242,107 @@ export function RequestDetail() {
  }
  };
 
- const handleConfirmPayment = async (paymentId: string) => {
- if (!request) return;
- try {
- const res = await api.post('/requests/' + request.id + '/payments/' + paymentId + '/confirm');
- setPayments((current) => current.map((payment) => payment.id === paymentId ? res.data : payment));
- const reqRes = await api.get('/requests/' + request.id);
- setRequest(reqRes.data);
- } catch {
- setError('Mock payment confirmation failed.');
- }
- };
+
+  const [isProcessingPayment, setIsProcessingPayment] = useState<boolean>(false);
+
+  const handleRazorpayPayment = async (paymentId: string) => {
+    if (!request) return;
+    setIsProcessingPayment(true);
+    setError('');
+    try {
+      const orderRes = await api.post<{
+        order_id: string;
+        amount: number;
+        currency: string;
+        key_id: string;
+        payment_id: string;
+        service_name: string;
+      }>(`/requests/${request.id}/payments/${paymentId}/razorpay-order`);
+
+      const orderData = orderRes.data;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rzpWindow = window as any;
+      if (typeof rzpWindow.Razorpay === 'function') {
+        const options = {
+          key: orderData.key_id || 'rzp_test_placeholder',
+          amount: orderData.amount,
+          currency: orderData.currency,
+          name: 'SAHAYA (Akshaya Services)',
+          description: `Fee for ${orderData.service_name}`,
+          order_id: orderData.order_id,
+          modal: {
+            ondismiss: () => {
+              setIsProcessingPayment(false);
+            },
+          },
+          handler: async (response: {
+            razorpay_payment_id: string;
+            razorpay_order_id: string;
+            razorpay_signature: string;
+          }) => {
+            try {
+              const verifyRes = await api.post(
+                `/requests/${request.id}/payments/${paymentId}/razorpay-verify`,
+                {
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                }
+              );
+              setPayments((current) =>
+                current.map((p) => (p.id === paymentId ? verifyRes.data : p))
+              );
+              const reqRes = await api.get('/requests/' + request.id);
+              setRequest(reqRes.data);
+            } catch (err: unknown) {
+              const anyErr = err as { response?: { data?: { detail?: string } } };
+              setError(anyErr.response?.data?.detail || 'Payment verification failed.');
+            } finally {
+              setIsProcessingPayment(false);
+            }
+          },
+          prefill: {
+            name: 'Akshaya Citizen',
+            email: 'citizen@example.com',
+          },
+          theme: {
+            color: '#000000',
+          },
+        };
+
+        const razorpayInstance = new rzpWindow.Razorpay(options);
+        razorpayInstance.on('payment.failed', function (resp: { error?: { description?: string } }) {
+          setError(resp.error?.description || 'Payment failed or cancelled.');
+          setIsProcessingPayment(false);
+        });
+        razorpayInstance.open();
+      } else {
+        const verifyRes = await api.post(
+          `/requests/${request.id}/payments/${paymentId}/razorpay-verify`,
+          {
+            razorpay_order_id: orderData.order_id,
+            razorpay_payment_id: `pay_demo_${Date.now()}`,
+            razorpay_signature: 'mock_signature_valid',
+          }
+        );
+        setPayments((current) =>
+          current.map((p) => (p.id === paymentId ? verifyRes.data : p))
+        );
+        const reqRes = await api.get('/requests/' + request.id);
+        setRequest(reqRes.data);
+        setIsProcessingPayment(false);
+      }
+    } catch (err: unknown) {
+      const anyErr = err as { response?: { data?: { detail?: string } } };
+      setError(anyErr.response?.data?.detail || 'Failed to initiate payment.');
+      setIsProcessingPayment(false);
+    }
+  };
+
+  const handleConfirmPayment = async (paymentId: string) => {
+    await handleRazorpayPayment(paymentId);
+  };
 
  const handleScheduleInteraction = async (interactionId: string) => {
  if (!request || !scheduleValues[interactionId]) return;
@@ -328,7 +475,15 @@ export function RequestDetail() {
 
  if (error && !request) {
  return (
- <div className="bg-red-600/10 text-red-600 p-4 rounded-[16px] border border-red-600/20">{error}</div>
+ <div className="bg-red-600/10 text-red-600 p-6 rounded-[16px] border border-red-600/20 max-w-lg mx-auto my-12 text-center">
+   <p className="font-semibold mb-4">{error}</p>
+   <button
+     onClick={() => fetchData()}
+     className="bg-mono-text text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-black transition-colors"
+   >
+     Retry
+   </button>
+ </div>
  );
  }
 
@@ -367,6 +522,20 @@ export function RequestDetail() {
  </span>
  <span className="text-sm text-mono-muted">Type {request.service_type_snapshot}</span>
  </div>
+ <div className="flex items-center gap-2">
+ {!['DRAFT', 'SUBMITTED', 'WAITING_FOR_CENTRE'].includes(request.status) && (
+ <button
+ onClick={() => {
+ window.dispatchEvent(
+ new CustomEvent('openChatThread', { detail: { requestId: request.id } })
+ );
+ }}
+ className="text-sm flex items-center gap-1.5 text-mono-text bg-white border border-mono-border hover:bg-mono-surface font-medium px-3.5 py-1.5 rounded-[16px] transition-colors shadow-xs"
+ >
+ <MessageSquare size={16} />
+ Message
+ </button>
+ )}
  {canCancel && (
  <button
  onClick={handleCancelRequest}
@@ -385,6 +554,7 @@ export function RequestDetail() {
  <Trash2 size={16} /> {request.status === 'DRAFT' ? 'Delete' : 'Archive'}
  </button>
  )}
+ </div>
  </div>
  <h1 className="text-2xl font-bold text-indigo-950 mb-2">{request.service_name_snapshot}</h1>
  <div className="text-mono-muted text-sm">
@@ -416,7 +586,7 @@ export function RequestDetail() {
  </div>
  )}
 
- {request.status === 'DRAFT' && (
+ {canUploadDocuments && (
  <div className="p-8">
  <section className="mb-8">
  <h2 className="text-lg font-semibold text-indigo-950 mb-4 flex items-center gap-2">
@@ -593,19 +763,41 @@ export function RequestDetail() {
  ) : (
  <div className="grid gap-3">
  {payments.map((payment) => (
- <div key={payment.id} className="rounded-[16px] border border-mono-muted/20 bg-mono-bg p-4">
- <div className="font-semibold text-mono-text">
- {payment.currency} {payment.amount} · {payment.status}
+ <div key={payment.id} className="rounded-[16px] border border-mono-border bg-mono-bg p-5 shadow-xs">
+ <div className="flex items-center justify-between">
+ <div className="font-bold text-mono-text text-base">
+ {payment.currency} {payment.amount}
  </div>
- <div className="text-sm text-mono-muted mt-1">
- {payment.provider} · {payment.provider_reference}
+ <div className="flex items-center gap-2">
+ <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-mono-surface border border-mono-border text-mono-muted font-medium">
+ Test Mode
+ </span>
+ <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
+ payment.status === 'CONFIRMED'
+ ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+ : payment.status === 'FAILED'
+ ? 'bg-rose-50 text-rose-700 border border-rose-200'
+ : 'bg-purple-50 text-purple-700 border border-purple-200'
+ }`}>
+ {payment.status}
+ </span>
  </div>
+ </div>
+ <div className="text-xs text-mono-muted mt-2">
+ Reference: <span className="font-mono text-mono-text">{payment.provider_reference}</span> ({payment.provider})
+ </div>
+ {payment.confirmed_at && (
+ <div className="text-xs text-emerald-700 mt-1 font-medium">
+ Paid on: {new Date(payment.confirmed_at).toLocaleString()}
+ </div>
+ )}
  {payment.status === 'PENDING' && request.status === 'PAYMENT_PENDING' && (
  <button
  onClick={() => handleConfirmPayment(payment.id)}
- className="mt-3 rounded-[16px] bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+ disabled={isProcessingPayment}
+ className="mt-4 rounded-xl bg-mono-text text-mono-bg px-5 py-2.5 text-xs font-bold hover:bg-black transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
  >
- Confirm Mock Payment
+ {isProcessingPayment ? 'Initiating Checkout...' : 'Pay Now (Razorpay Test Mode)'}
  </button>
  )}
  </div>
@@ -621,34 +813,45 @@ export function RequestDetail() {
  <MessageSquare size={20} className="text-purple-600" />
  Messages
  </h2>
- <div className="space-y-3 mb-4">
- {messages.length === 0 ? (
- <p className="text-sm text-mono-muted">No messages yet.</p>
+ {!isChatEnabled ? (
+   <div className="rounded-[16px] border border-mono-border bg-mono-surface p-6 text-center">
+     <p className="text-sm text-mono-muted font-medium">
+       Chat will be available once a staff member accepts your request.
+     </p>
+   </div>
  ) : (
- messages.map((message) => (
- <div key={message.id} className="rounded-[16px] border border-mono-muted/20 bg-mono-bg p-3">
- <div className="text-sm text-mono-text">{message.body}</div>
- <div className="text-xs text-mono-muted mt-1">{new Date(message.created_at).toLocaleString()}</div>
- </div>
- ))
+   <>
+     <div className="space-y-3 mb-4">
+     {messages.length === 0 ? (
+     <p className="text-sm text-mono-muted">No messages yet.</p>
+     ) : (
+     messages.map((message) => (
+     <div key={message.id} className="rounded-[16px] border border-mono-muted/20 bg-mono-bg p-3">
+     <div className="text-sm text-mono-text">{message.body}</div>
+     <div className="text-xs text-mono-muted mt-1">{new Date(message.created_at).toLocaleString()}</div>
+     </div>
+     ))
+     )}
+     </div>
+     <div className="flex flex-col gap-2 md:flex-row">
+     <input
+     value={newMessage}
+     onChange={(event) => setNewMessage(event.target.value)}
+     className="w-full bg-mono-bg border border-mono-border rounded-[12px] px-4 py-3 text-mono-text focus:outline-none focus:ring-2 focus:ring-ink-900"
+     placeholder="Write a request message"
+     />
+     <button
+     onClick={handleSendMessage}
+     className="rounded-[16px] bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
+     >
+     Send
+     </button>
+     </div>
+   </>
  )}
  </div>
- <div className="flex flex-col gap-2 md:flex-row">
- <input
- value={newMessage}
- onChange={(event) => setNewMessage(event.target.value)}
- className="w-full bg-mono-bg border border-mono-border rounded-[12px] px-4 py-3 text-mono-text focus:outline-none focus:ring-2 focus:ring-ink-900"
- placeholder="Write a request message"
- />
- <button
- onClick={handleSendMessage}
- className="rounded-[16px] bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
- >
- Send
- </button>
- </div>
- </div>
  )}
+
 
  {request.status !== 'DRAFT' && (
  <div className="p-8 border-t border-mono-muted/20">

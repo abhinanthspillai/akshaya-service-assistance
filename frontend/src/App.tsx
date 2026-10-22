@@ -13,13 +13,17 @@ import { Notifications } from './pages/citizen/Notifications';
 import { Support } from './pages/citizen/Support';
 import { TicketDetail } from './pages/citizen/TicketDetail';
 import { Profile } from './pages/citizen/Profile';
-import { Queue } from './pages/employee/Queue';
+import { EmployeeDashboard } from './pages/employee/EmployeeDashboard';
+import { EmployeeRequests } from './pages/employee/EmployeeRequests';
 import { RequestWorkspace } from './pages/employee/RequestWorkspace';
 import { Escalations } from './pages/admin/Escalations';
 import { SupportAdmin } from './pages/admin/SupportAdmin';
 import { AuditLogs } from './pages/admin/AuditLogs';
 import { SysAdminDashboard } from './pages/admin/SysAdminDashboard';
+import { PendingApproval } from './pages/auth/PendingApproval';
+import { LandingPage } from './pages/LandingPage';
 import { Loader2 } from 'lucide-react';
+
 
 type UserRole = 'citizen' | 'centre_employee' | 'centre_administrator' | 'system_administrator';
 
@@ -43,7 +47,7 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode,
 
  if (isLoading) {
  return (
- <div className="h-screen w-screen flex items-center justify-center bg-[#f8fafc]">
+ <div className="h-screen w-screen flex items-center justify-center bg-mono-50">
  <Loader2 className="animate-spin text-mono-text" size={40} />
  </div>
  );
@@ -51,6 +55,10 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode,
 
  if (!user) {
  return <Navigate to="/login" replace />;
+ }
+
+ if (user.role === 'centre_employee' && user.approval_status === 'PENDING_APPROVAL') {
+ return <PendingApproval />;
  }
 
  if (allowedRoles && !allowedRoles.includes(user.role as UserRole)) {
@@ -61,29 +69,34 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode,
 }
 
 function RootRedirect() {
- const { user, isLoading } = useAuth();
- 
- if (isLoading) {
- return (
- <div className="h-screen w-screen flex items-center justify-center bg-[#f8fafc]">
- <Loader2 className="animate-spin text-mono-text" size={40} />
- </div>
- );
- }
+  const { user, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-mono-50">
+        <Loader2 className="animate-spin text-mono-text" size={40} />
+      </div>
+    );
+  }
 
- if (!user) {
- return <Navigate to="/login" replace />;
- }
+  if (!user) {
+    return <LandingPage />;
+  }
 
- return <Navigate to={getRoleLandingPage(user.role)} replace />;
+  if (user.role === 'centre_employee' && user.approval_status === 'PENDING_APPROVAL') {
+    return <PendingApproval />;
+  }
+
+  return <Navigate to={getRoleLandingPage(user.role)} replace />;
 }
+
 
 function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
  const { user, isLoading } = useAuth();
  
  if (isLoading) {
  return (
- <div className="h-screen w-screen flex items-center justify-center bg-[#f8fafc]">
+ <div className="h-screen w-screen flex items-center justify-center bg-mono-50">
  <Loader2 className="animate-spin text-mono-text" size={40} />
  </div>
  );
@@ -114,13 +127,14 @@ export default function App() {
  <Route path="/services/:id/request" element={<ProtectedRoute allowedRoles={['citizen']}><NewRequest /></ProtectedRoute>} />
  <Route path="/requests" element={<ProtectedRoute allowedRoles={['citizen']}><MyRequests /></ProtectedRoute>} />
  <Route path="/requests/:id" element={<ProtectedRoute allowedRoles={['citizen']}><RequestDetail /></ProtectedRoute>} />
- <Route path="/notifications" element={<ProtectedRoute allowedRoles={['citizen']}><Notifications /></ProtectedRoute>} />
- <Route path="/support" element={<ProtectedRoute allowedRoles={['citizen']}><Support /></ProtectedRoute>} />
- <Route path="/support/:id" element={<ProtectedRoute allowedRoles={['citizen']}><TicketDetail /></ProtectedRoute>} />
- <Route path="/profile" element={<ProtectedRoute allowedRoles={['citizen']}><Profile /></ProtectedRoute>} />
+ <Route path="/notifications" element={<ProtectedRoute allowedRoles={['citizen', 'centre_employee']}><Notifications /></ProtectedRoute>} />
+ <Route path="/support" element={<ProtectedRoute allowedRoles={['citizen', 'centre_employee']}><Support /></ProtectedRoute>} />
+ <Route path="/support/:id" element={<ProtectedRoute allowedRoles={['citizen', 'centre_employee']}><TicketDetail /></ProtectedRoute>} />
+ <Route path="/profile" element={<ProtectedRoute allowedRoles={['citizen', 'centre_employee', 'centre_administrator', 'system_administrator']}><Profile /></ProtectedRoute>} />
 
  {/* Employee Routes */}
- <Route path="/queue" element={<ProtectedRoute allowedRoles={['centre_employee']}><Queue /></ProtectedRoute>} />
+ <Route path="/queue" element={<ProtectedRoute allowedRoles={['centre_employee']}><EmployeeDashboard /></ProtectedRoute>} />
+ <Route path="/employee/requests" element={<ProtectedRoute allowedRoles={['centre_employee']}><EmployeeRequests /></ProtectedRoute>} />
  <Route path="/employee/requests/:id" element={<ProtectedRoute allowedRoles={['centre_employee']}><RequestWorkspace /></ProtectedRoute>} />
 
  {/* Admin Routes */}

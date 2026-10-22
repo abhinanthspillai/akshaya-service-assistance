@@ -31,6 +31,7 @@
 - password_hash VARCHAR(255) NOT NULL
 - role VARCHAR(32) NOT NULL CHECK in citizen, centre_employee, centre_administrator, system_administrator
 - is_active BOOLEAN NOT NULL DEFAULT true
+- profile_photo VARCHAR(512) NULL
 - created_at TIMESTAMPTZ NOT NULL
 - updated_at TIMESTAMPTZ NOT NULL
 Indexes: unique(email), role, is_active.
@@ -63,6 +64,7 @@ Indexes: district, is_active.
 - user_id UUID PK/FK -> users.id ON DELETE CASCADE
 - centre_id UUID NOT NULL FK -> akshaya_centres.id
 - full_name VARCHAR(160) NOT NULL
+- photo_url VARCHAR(512) NULL
 - max_active_requests INTEGER NOT NULL DEFAULT 10 CHECK > 0
 - is_available BOOLEAN NOT NULL DEFAULT true
 - created_at TIMESTAMPTZ NOT NULL

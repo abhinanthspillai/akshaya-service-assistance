@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
 from app.api.deps import (
     CurrentUser,
@@ -15,20 +15,24 @@ from app.api.deps import (
     SessionDep,
 )
 from app.core.config import get_settings
+from app.models.assignment import RequestAssignment, RequestHistory
 from app.models.centre import AkshayaCentre
 from app.models.document import DOCUMENT_REVIEW_DECISIONS, RequestDocument, RequestDocumentReview
+from app.models.enums import RequestAction
 from app.models.interaction import RequestInteraction
-from app.models.message import RequestMessage
+from app.models.message import Conversation, RequestMessage
 from app.models.notification import Notification
+from app.models.output import CompletedOutput
 from app.models.payment import RequestPayment
+from app.models.profile import EmployeeProfile
 from app.models.request import ServiceRequest
-from app.models.assignment import RequestHistory, RequestAssignment
 from app.models.service import (
     CentreSupportedService,
     Service,
     ServiceDocumentRequirement,
     ServiceInteractionRequirement,
 )
+from app.models.user import User
 from app.schemas.document import (
     RequestDocumentResponse,
     RequestDocumentReviewCreate,
@@ -42,20 +46,150 @@ from app.schemas.interaction import (
     ScheduleInteractionRequest,
 )
 from app.schemas.message import RequestMessageCreate, RequestMessageResponse
-from app.schemas.payment import RequestPaymentResponse
+from app.schemas.output import CompletedOutputCreate, CompletedOutputResponse
+from app.schemas.payment import (
+    RazorpayOrderResponse,
+    RazorpayVerifyRequest,
+    RequestPaymentResponse,
+)
 from app.schemas.request import (
+    DashboardStatsResponse,
+    PaginatedRequests,
+    ReassignRequest,
+    RecentActivityItem,
     RequestPreValidationItem,
     RequestPreValidationResponse,
+    SelectCentreRequest,
     ServiceRequestCreate,
     ServiceRequestResponse,
     UnableToProceedRequest,
-    ReassignRequest,
-    SelectCentreRequest,
 )
-from app.schemas.output import CompletedOutputCreate, CompletedOutputResponse
-from app.models.output import CompletedOutput
 
 router = APIRouter()
+
+ALLOWED_TRANSITIONS = {
+    "DRAFT": [("SUBMITTED", ["citizen"]), ("CANCELLED", ["citizen"])],
+    "SUBMITTED": [("WAITING_FOR_CENTRE", ["citizen", "system"]), ("CANCELLED", ["citizen"])],
+    "WAITING_FOR_CENTRE": [("ACCEPTED", ["centre_employee"]), ("CANCELLED", ["citizen"])],
+    "ACCEPTED": [
+        ("UNDER_REVIEW", ["centre_employee"]),
+        ("UNABLE_TO_PROCEED", ["centre_employee", "centre_administrator", "system_administrator"]),
+        ("CANCELLED", ["citizen"]),
+    ],
+    "UNDER_REVIEW": [
+        ("CORRECTION_REQUIRED", ["centre_employee"]),
+        ("INTERACTION_REQUIRED", ["centre_employee"]),
+        ("READY_FOR_PROCESSING", ["centre_employee"]),
+        ("PAYMENT_PENDING", ["centre_employee"]),
+        ("UNABLE_TO_PROCEED", ["centre_employee", "centre_administrator", "system_administrator"]),
+        ("CANCELLED", ["citizen"]),
+    ],
+    "CORRECTION_REQUIRED": [
+        ("UNDER_REVIEW", ["citizen", "centre_employee", "system"]),
+        ("INTERACTION_REQUIRED", ["centre_employee"]),
+        ("UNABLE_TO_PROCEED", ["centre_employee", "centre_administrator", "system_administrator"]),
+        ("CANCELLED", ["citizen"]),
+    ],
+    "INTERACTION_REQUIRED": [
+        ("INTERACTION_SCHEDULED", ["citizen", "centre_employee"]),
+        ("UNABLE_TO_PROCEED", ["centre_employee", "centre_administrator", "system_administrator"]),
+        ("CANCELLED", ["citizen"]),
+    ],
+    "INTERACTION_SCHEDULED": [
+        ("UNDER_REVIEW", ["centre_employee", "system"]),
+        ("INTERACTION_REQUIRED", ["centre_employee", "system"]),
+        ("UNABLE_TO_PROCEED", ["centre_employee", "centre_administrator", "system_administrator"]),
+        ("CANCELLED", ["citizen"]),
+    ],
+    "READY_FOR_PROCESSING": [
+        ("PROCESSING", ["centre_employee"]),
+        ("UNABLE_TO_PROCEED", ["centre_employee", "centre_administrator", "system_administrator"]),
+    ],
+    "PROCESSING": [
+        ("PAYMENT_PENDING", ["centre_employee"]),
+        ("COMPLETED", ["centre_employee", "centre_administrator", "system_administrator"]),
+        ("UNABLE_TO_PROCEED", ["centre_employee", "centre_administrator", "system_administrator"]),
+    ],
+    "PAYMENT_PENDING": [
+        ("PROCESSING", ["citizen", "centre_employee", "system"]),
+        ("PAYMENT_PENDING", ["citizen", "centre_employee", "system"]),
+        ("COMPLETED", ["centre_employee", "centre_administrator", "system_administrator"]),
+    ],
+    "COMPLETED": [("CLOSED", ["citizen", "system"])],
+    "CLOSED": [],
+    "CANCELLED": [],
+    "UNABLE_TO_PROCEED": [],
+}
+
+
+def _perform_transition(
+    session,
+    service_request,
+    current_user,
+    to_status: str,
+    action: str | RequestAction,
+    note: str | None = None,
+    notification_title: str | None = None,
+    notification_body: str | None = None,
+    notification_event: str | None = None,
+) -> None:
+    from fastapi import HTTPException
+
+    # Lock the row for update to prevent concurrent transitions
+    session.refresh(service_request, with_for_update=True)
+
+    if to_status not in [t[0] for t in ALLOWED_TRANSITIONS.get(service_request.status, [])]:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot transition from {service_request.status} to {to_status}",
+        )
+
+    allowed_roles = next(
+        (t[1] for t in ALLOWED_TRANSITIONS.get(service_request.status, []) if t[0] == to_status), []
+    )
+    if current_user.role not in allowed_roles and "system" not in allowed_roles:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Role {current_user.role} not allowed to transition "
+                f"{service_request.status} -> {to_status}"
+            ),
+        )
+
+    action_val = action.value if isinstance(action, RequestAction) else str(action)
+    history = RequestHistory(
+        request_id=service_request.id,
+        actor_id=current_user.id,
+        action=action_val,
+        from_status=service_request.status,
+        to_status=to_status,
+        note=note,
+    )
+    session.add(history)
+    service_request.status = to_status
+    session.add(service_request)
+
+    if not notification_event:
+        notification_event = f"status_{to_status.lower()}"
+    if not notification_title:
+        notification_title = f"Request {to_status.replace('_', ' ').title()}"
+    if not notification_body:
+        if to_status == "UNABLE_TO_PROCEED":
+            notification_body = f"Your request could not proceed. Reason: {note or 'Not specified'}"
+        elif note:
+            notification_body = f"Your request status changed to {to_status}. Note: {note}"
+        else:
+            notification_body = f"Your request status changed to {to_status}."
+
+    _safe_add_notification(
+        session,
+        user_id=service_request.citizen_id,
+        request_id=service_request.id,
+        event_type=notification_event,
+        title=notification_title,
+        body=notification_body,
+    )
+
 
 _ALLOWED_EXTENSIONS_BY_MIME = {
     "application/pdf": {".pdf"},
@@ -89,15 +223,18 @@ def create_request(
     return service_request
 
 
-@router.get("/", response_model=list[ServiceRequestResponse])
+@router.get("/", response_model=PaginatedRequests)
 def list_requests(
     session: SessionDep,
     current_user: CurrentUser,
     req_status: str | None = Query(None, alias="status"),
     service_id: UUID | None = None,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    q: str | None = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100, alias="limit"),
+    size: int | None = Query(None, ge=1, le=100),
 ) -> Any:
+    page_size = size if size is not None else limit
     stmt = select(ServiceRequest)
 
     if current_user.role == "citizen":
@@ -109,6 +246,8 @@ def list_requests(
         employee = session.get(EmployeeProfile, current_user.id)
         if not employee:
             raise HTTPException(status_code=403, detail="Employee profile not found")
+        if employee.approval_status != "APPROVED":
+            raise HTTPException(status_code=403, detail="Account pending approval by centre")
         stmt = stmt.where(ServiceRequest.selected_centre_id == employee.centre_id)
     elif current_user.role == "centre_administrator":
         from app.models.profile import CentreAdministrator
@@ -119,13 +258,272 @@ def list_requests(
         stmt = stmt.where(ServiceRequest.selected_centre_id == admin.centre_id)
     # system_administrator: sees all, no filter
 
+    # Compute status counts for caller's scope before filters
+    counts_rows = session.execute(
+        select(ServiceRequest.status, func.count(ServiceRequest.id))
+        .where(*stmt._where_criteria)
+        .group_by(ServiceRequest.status)
+    ).all()
+    status_counts = {r[0]: r[1] for r in counts_rows}
+
     if req_status:
-        stmt = stmt.where(ServiceRequest.status == req_status)
+        if "," in req_status:
+            stmt = stmt.where(ServiceRequest.status.in_(req_status.split(",")))
+        else:
+            stmt = stmt.where(ServiceRequest.status == req_status)
     if service_id:
         stmt = stmt.where(ServiceRequest.service_id == service_id)
 
-    stmt = stmt.order_by(ServiceRequest.created_at.desc()).offset(skip).limit(limit)
-    return session.scalars(stmt).all()
+    if q:
+        clean_q = q.strip()
+        if clean_q.startswith("#"):
+            clean_q = clean_q[1:]
+        if clean_q:
+            escaped_q = clean_q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            search_pattern = f"%{escaped_q}%"
+            from sqlalchemy import String, cast
+
+            from app.models.profile import CitizenProfile
+
+            stmt = stmt.outerjoin(
+                CitizenProfile, ServiceRequest.citizen_id == CitizenProfile.user_id
+            )
+            stmt = stmt.where(
+                (CitizenProfile.full_name.ilike(search_pattern, escape="\\"))
+                | (CitizenProfile.phone.ilike(search_pattern, escape="\\"))
+                | (ServiceRequest.service_name_snapshot.ilike(search_pattern, escape="\\"))
+                | (cast(ServiceRequest.id, String).ilike(f"{escaped_q}%", escape="\\"))
+            )
+
+    # Get total count
+    total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+
+    import math
+
+    pages = math.ceil(total / page_size) if total > 0 else 1
+
+    skip = (page - 1) * page_size
+    stmt = stmt.order_by(ServiceRequest.created_at.desc()).offset(skip).limit(page_size)
+    items = session.scalars(stmt).all()
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "pages": pages,
+        "status_counts": status_counts,
+    }
+
+
+@router.get("/dashboard/stats", response_model=DashboardStatsResponse)
+def get_dashboard_stats(
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+) -> Any:
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    from sqlalchemy import func
+
+    from app.models.profile import EmployeeProfile
+
+    employee = session.get(EmployeeProfile, current_user.id)
+    if not employee:
+        raise HTTPException(status_code=403, detail="Employee profile not found")
+
+    centre_id = employee.centre_id
+
+    # 1. Status counts (explicitly excluding DRAFT and SUBMITTED)
+    counts = session.execute(
+        select(ServiceRequest.status, func.count(ServiceRequest.id))
+        .where(
+            ServiceRequest.selected_centre_id == centre_id,
+            ServiceRequest.status.notin_(["DRAFT", "SUBMITTED"]),
+        )
+        .group_by(ServiceRequest.status)
+    ).all()
+    status_counts = {row[0]: row[1] for row in counts}
+
+    # 2. Completed today (Asia/Kolkata calendar day boundaries)
+    kolkata_tz = ZoneInfo("Asia/Kolkata")
+    now_kolkata = datetime.now(kolkata_tz)
+    start_of_day_kolkata = datetime(
+        now_kolkata.year, now_kolkata.month, now_kolkata.day, tzinfo=kolkata_tz
+    )
+    start_of_day_utc = start_of_day_kolkata.astimezone(UTC)
+
+    completed_today = (
+        session.scalar(
+            select(func.count(ServiceRequest.id)).where(
+                ServiceRequest.selected_centre_id == centre_id,
+                ServiceRequest.status == "COMPLETED",
+                func.coalesce(ServiceRequest.completed_at, ServiceRequest.updated_at)
+                >= start_of_day_utc,
+            )
+        )
+        or 0
+    )
+
+    # 3. Rejected last 30 days (UNABLE_TO_PROCEED)
+    thirty_days_ago = datetime.now(UTC) - timedelta(days=30)
+    rejected_last_30_days = (
+        session.scalar(
+            select(func.count(ServiceRequest.id)).where(
+                ServiceRequest.selected_centre_id == centre_id,
+                ServiceRequest.status == "UNABLE_TO_PROCEED",
+                ServiceRequest.updated_at >= thirty_days_ago,
+            )
+        )
+        or 0
+    )
+
+    # Status mappings using RequestStatus values:
+    # - New Intake: newly submitted requests not yet picked up
+    new_count = status_counts.get("WAITING_FOR_CENTRE", 0)
+
+    # - In Progress: requests being processed by the centre
+    in_review_count = (
+        status_counts.get("ACCEPTED", 0)
+        + status_counts.get("UNDER_REVIEW", 0)
+        + status_counts.get("READY_FOR_PROCESSING", 0)
+        + status_counts.get("PROCESSING", 0)
+    )
+
+    # - Awaiting Citizen: requests waiting on the citizen
+    # (e.g., a rejected document awaiting re-upload)
+    awaiting_citizen_count = (
+        status_counts.get("PAYMENT_PENDING", 0)
+        + status_counts.get("CORRECTION_REQUIRED", 0)
+        + status_counts.get("INTERACTION_REQUIRED", 0)
+        + status_counts.get("INTERACTION_SCHEDULED", 0)
+    )
+
+    return DashboardStatsResponse(
+        new=new_count,
+        in_review=in_review_count,
+        awaiting_citizen=awaiting_citizen_count,
+        completed_today=completed_today,
+        rejected_last_30_days=rejected_last_30_days,
+    )
+
+
+@router.get("/dashboard/needs-attention", response_model=list[ServiceRequestResponse])
+def get_dashboard_needs_attention(
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+) -> Any:
+    from app.models.document import RequestDocument
+    from app.models.profile import EmployeeProfile
+
+    employee = session.get(EmployeeProfile, current_user.id)
+    if not employee:
+        raise HTTPException(status_code=403, detail="Employee profile not found")
+
+    centre_id = employee.centre_id
+
+    # Needs attention ranking:
+    # Priority 1: Re-uploaded docs awaiting review
+    # (version > 1, is_current=True, in UNDER_REVIEW/CORRECTION_REQUIRED)
+    reuploaded_req_ids = session.scalars(
+        select(RequestDocument.request_id)
+        .join(ServiceRequest, RequestDocument.request_id == ServiceRequest.id)
+        .where(
+            ServiceRequest.selected_centre_id == centre_id,
+            ServiceRequest.status.in_(["UNDER_REVIEW", "CORRECTION_REQUIRED"]),
+            RequestDocument.is_current.is_(True),
+            RequestDocument.version > 1,
+            RequestDocument.status == "PENDING",
+        )
+        .distinct()
+    ).all()
+
+    reuploaded_requests = []
+    if reuploaded_req_ids:
+        reuploaded_requests = session.scalars(
+            select(ServiceRequest)
+            .where(ServiceRequest.id.in_(reuploaded_req_ids))
+            .order_by(ServiceRequest.updated_at.asc())
+        ).all()
+
+    # Priority 2: Oldest WAITING_FOR_CENTRE
+    waiting_requests = session.scalars(
+        select(ServiceRequest)
+        .where(
+            ServiceRequest.selected_centre_id == centre_id,
+            ServiceRequest.status == "WAITING_FOR_CENTRE",
+        )
+        .order_by(ServiceRequest.created_at.asc())
+        .limit(10)
+    ).all()
+
+    # Priority 3: Oldest untouched active requests
+    untouched_requests = session.scalars(
+        select(ServiceRequest)
+        .where(
+            ServiceRequest.selected_centre_id == centre_id,
+            ServiceRequest.status.in_(
+                [
+                    "ACCEPTED",
+                    "UNDER_REVIEW",
+                    "READY_FOR_PROCESSING",
+                    "PROCESSING",
+                    "INTERACTION_SCHEDULED",
+                ]
+            ),
+        )
+        .order_by(ServiceRequest.updated_at.asc())
+        .limit(10)
+    ).all()
+
+    seen_ids = set()
+    needs_attention = []
+    for req in (*reuploaded_requests, *waiting_requests, *untouched_requests):
+        if req.id not in seen_ids:
+            seen_ids.add(req.id)
+            needs_attention.append(req)
+        if len(needs_attention) >= 10:
+            break
+
+    return needs_attention
+
+
+@router.get("/dashboard/recent-activity", response_model=list[RecentActivityItem])
+def get_dashboard_recent_activity(
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+) -> Any:
+    from app.models.profile import EmployeeProfile
+
+    employee = session.get(EmployeeProfile, current_user.id)
+    if not employee:
+        raise HTTPException(status_code=403, detail="Employee profile not found")
+
+    centre_id = employee.centre_id
+
+    # 6. Recent activity
+    recent_history = session.execute(
+        select(RequestHistory, ServiceRequest.service_name_snapshot, ServiceRequest.citizen_id)
+        .join(ServiceRequest, RequestHistory.request_id == ServiceRequest.id)
+        .where(ServiceRequest.selected_centre_id == centre_id)
+        .order_by(RequestHistory.created_at.desc())
+        .limit(20)
+    ).all()
+
+    recent_activity = [
+        {
+            "id": h.RequestHistory.id,
+            "request_id": h.RequestHistory.request_id,
+            "action": h.RequestHistory.action,
+            "note": h.RequestHistory.note,
+            "created_at": h.RequestHistory.created_at,
+            "actor_id": h.RequestHistory.actor_id,
+            "request_service_name": h.service_name_snapshot,
+            "request_citizen_id": h.citizen_id,
+        }
+        for h in recent_history
+    ]
+
+    return recent_activity
 
 
 @router.get("/{request_id}", response_model=ServiceRequestResponse)
@@ -140,6 +538,30 @@ def get_request(
 
     _verify_request_access(current_user, service_request, session)
     return service_request
+
+
+@router.get("/{request_id}/citizen")
+def get_request_citizen_details(
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    _verify_request_access(current_user, service_request, session)
+
+    from app.models.profile import CitizenProfile
+
+    profile = session.get(CitizenProfile, service_request.citizen_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Citizen profile not found")
+
+    return {
+        "full_name": profile.full_name,
+        "phone": profile.phone,
+        "address_text": profile.address_text,
+    }
 
 
 @router.post("/{request_id}/select-centre", response_model=ServiceRequestResponse)
@@ -205,22 +627,31 @@ def submit_request(
         )
 
     now = datetime.now(tz=UTC)
-    service_request.status = "SUBMITTED"
     service_request.submitted_at = now
-    session.add(service_request)
+    _perform_transition(
+        session, service_request, current_user, "SUBMITTED", RequestAction.SUBMIT_REQUEST
+    )
     session.flush()
 
     # Atomic transition to WAITING_FOR_CENTRE after routing succeeds
-    service_request.status = "WAITING_FOR_CENTRE"
-    _safe_add_notification(
+    _perform_transition(
         session,
-        user_id=service_request.citizen_id,
-        request_id=service_request.id,
-        event_type="request_submitted",
-        title="Request submitted",
-        body="Your request has been submitted to the selected centre.",
+        service_request,
+        current_user,
+        "WAITING_FOR_CENTRE",
+        RequestAction.SUBMIT_REQUEST_ROUTING,
+        notification_event="request_submitted",
+        notification_title="Request submitted",
+        notification_body="Your request has been submitted to the selected centre.",
     )
-    session.add(service_request)
+    _notify_centre_employees(
+        session,
+        centre_id=service_request.selected_centre_id,
+        request_id=request_id,
+        event_type="new_request_arrived",
+        title="New Request Arrived",
+        body=f"A new request ({request_id}) has arrived at your centre.",
+    )
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -253,7 +684,6 @@ def start_request_review(
     session: SessionDep,
     current_user: CurrentUserEmployee,
 ) -> Any:
-    from app.models.assignment import RequestHistory
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -262,16 +692,9 @@ def start_request_review(
     if service_request.status != "ACCEPTED":
         raise HTTPException(status_code=409, detail="Request must be in ACCEPTED state")
 
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="start_review",
-        from_status=service_request.status,
-        to_status="UNDER_REVIEW",
+    _perform_transition(
+        session, service_request, current_user, "UNDER_REVIEW", RequestAction.START_REVIEW
     )
-    session.add(history)
-    service_request.status = "UNDER_REVIEW"
-    session.add(service_request)
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -400,19 +823,56 @@ async def upload_request_document(
     session.add(document)
 
     if service_request.status == "CORRECTION_REQUIRED":
-        from app.models.assignment import RequestHistory
+        session.flush()
 
-        history = RequestHistory(
-            request_id=request_id,
-            actor_id=current_user.id,
-            action="submit_correction",
-            from_status=service_request.status,
-            to_status="UNDER_REVIEW",
-            note=f"Replacement uploaded for {requirement.name}",
+        # Notify the assigned employee, or the centre employees if unassigned
+        assignments = session.scalars(
+            select(RequestAssignment).where(
+                RequestAssignment.request_id == request_id,
+                RequestAssignment.is_active.is_(True),
+            )
+        ).all()
+        if assignments:
+            for assignment in assignments:
+                _safe_add_notification(
+                    session,
+                    user_id=assignment.employee_id,
+                    request_id=request_id,
+                    event_type="document_reuploaded",
+                    title="Document Re-uploaded",
+                    body=f"A rejected document for request {request_id} has been re-uploaded.",
+                )
+        else:
+            _notify_centre_employees(
+                session,
+                centre_id=service_request.selected_centre_id,
+                request_id=request_id,
+                event_type="document_reuploaded",
+                title="Document Re-uploaded",
+                body=f"A rejected document for request {request_id} has been re-uploaded.",
+            )
+
+        pending_reupload = (
+            session.scalar(
+                select(func.count())
+                .select_from(RequestDocument)
+                .where(
+                    RequestDocument.request_id == request_id,
+                    RequestDocument.is_current.is_(True),
+                    RequestDocument.status == "REUPLOAD_REQUIRED",
+                )
+            )
+            or 0
         )
-        session.add(history)
-        service_request.status = "UNDER_REVIEW"
-        session.add(service_request)
+        if pending_reupload == 0:
+            _perform_transition(
+                session,
+                service_request,
+                current_user,
+                "UNDER_REVIEW",
+                RequestAction.SUBMIT_CORRECTION,
+                note="All replacements uploaded.",
+            )
 
     session.commit()
     session.refresh(document)
@@ -487,7 +947,6 @@ def review_request_document(
     current_user: CurrentUserEmployee,
     body: RequestDocumentReviewCreate,
 ) -> Any:
-    from app.models.assignment import RequestHistory
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -535,30 +994,24 @@ def review_request_document(
     session.add(document)
 
     if body.decision != "APPROVED":
-        history = RequestHistory(
-            request_id=request_id,
-            actor_id=current_user.id,
-            action="document_correction_required",
-            from_status=service_request.status,
-            to_status="CORRECTION_REQUIRED",
-            note=body.reason,
-        )
-        session.add(history)
-        service_request.status = "CORRECTION_REQUIRED"
-        _safe_add_notification(
+        _perform_transition(
             session,
-            user_id=service_request.citizen_id,
-            request_id=service_request.id,
-            event_type="correction_required",
-            title="Correction required",
-            body=body.reason,
+            service_request,
+            current_user,
+            "CORRECTION_REQUIRED",
+            RequestAction.DOCUMENT_CORRECTION_REQUIRED,
+            note=body.reason,
+            notification_event="correction_required",
+            notification_title="Correction required",
+            notification_body=body.reason,
         )
-        session.add(service_request)
     else:
+        from app.models.assignment import RequestHistory
+
         history = RequestHistory(
             request_id=request_id,
             actor_id=current_user.id,
-            action="document_approved",
+            action=RequestAction.DOCUMENT_APPROVED.value,
             from_status=service_request.status,
             to_status=service_request.status,
             note=f"Document {document.original_filename} approved",
@@ -568,195 +1021,6 @@ def review_request_document(
     session.commit()
     session.refresh(review)
     return review
-
-
-@router.post("/{request_id}/cancel", response_model=ServiceRequestResponse)
-def cancel_request(
-    request_id: UUID,
-    session: SessionDep,
-    current_user: CurrentUserCitizen,
-) -> Any:
-    req = session.get(ServiceRequest, request_id)
-    if not req:
-        raise HTTPException(status_code=404, detail="Request not found")
-    if req.citizen_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized")
-
-    allowed_states = {
-        "DRAFT", "SUBMITTED", "WAITING_FOR_CENTRE", 
-        "ACCEPTED", "UNDER_REVIEW", "CORRECTION_REQUIRED",
-        "INTERACTION_REQUIRED", "INTERACTION_SCHEDULED"
-    }
-    if req.status not in allowed_states:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot cancel request in state: {req.status}",
-        )
-
-    req.status = "CANCELLED"
-    req.cancelled_at = datetime.now(tz=UTC)
-    
-    # Record history
-    history = RequestHistory(
-        request_id=req.id,
-        actor_id=current_user.id,
-        action="CANCELLED",
-        note="Citizen cancelled the request.",
-    )
-    session.add(history)
-    session.add(req)
-    session.commit()
-    session.refresh(req)
-    return req
-
-
-@router.post("/{request_id}/unable_to_proceed", response_model=ServiceRequestResponse)
-def unable_to_proceed(
-    request_id: UUID,
-    payload: UnableToProceedRequest,
-    session: SessionDep,
-    current_user: CurrentUserEmployee,
-) -> Any:
-    req = session.get(ServiceRequest, request_id)
-    if not req:
-        raise HTTPException(status_code=404, detail="Request not found")
-
-    # Only assigned employee, centre admin, or system admin can mark this
-    from app.models.assignment import RequestAssignment
-    from app.models.profile import CentreAdministrator, EmployeeProfile
-
-    is_authorized = False
-    if current_user.role == "centre_employee":
-        emp = session.get(EmployeeProfile, current_user.id)
-        if emp and req.selected_centre_id == emp.centre_id:
-            assignment = session.scalar(
-                select(RequestAssignment).where(
-                    RequestAssignment.request_id == req.id,
-                    RequestAssignment.is_active.is_(True),
-                )
-            )
-            if assignment and assignment.employee_id == current_user.id:
-                is_authorized = True
-    elif current_user.role == "centre_administrator":
-        admin = session.get(CentreAdministrator, current_user.id)
-        if admin and req.selected_centre_id == admin.centre_id:
-            is_authorized = True
-    elif current_user.role == "system_administrator":
-        is_authorized = True
-
-    if not is_authorized:
-        raise HTTPException(status_code=403, detail="Not authorized")
-
-    req.status = "UNABLE_TO_PROCEED"
-
-    history = RequestHistory(
-        request_id=req.id,
-        actor_id=current_user.id,
-        action="UNABLE_TO_PROCEED",
-        note=payload.reason,
-    )
-    session.add(history)
-    session.add(req)
-    
-    _safe_add_notification(
-        session,
-        user_id=req.citizen_id,
-        request_id=req.id,
-        event_type="request_unable_to_proceed",
-        title="Request Unable to Proceed",
-        body=f"Your request could not proceed. Reason: {payload.reason}",
-    )
-    
-    session.commit()
-    session.refresh(req)
-    return req
-
-
-@router.post("/{request_id}/reassign", response_model=ServiceRequestResponse)
-def reassign_request(
-    request_id: UUID,
-    payload: ReassignRequest,
-    session: SessionDep,
-    current_user: CurrentUser,
-) -> Any:
-    if current_user.role not in {"centre_administrator", "system_administrator"}:
-        raise HTTPException(status_code=403, detail="Not authorized")
-
-    req = session.get(ServiceRequest, request_id)
-    if not req:
-        raise HTTPException(status_code=404, detail="Request not found")
-
-    from app.models.profile import CentreAdministrator, EmployeeProfile
-    if current_user.role == "centre_administrator":
-        admin = session.get(CentreAdministrator, current_user.id)
-        if not admin or req.selected_centre_id != admin.centre_id:
-            raise HTTPException(status_code=403, detail="Not authorized")
-
-    new_emp = session.get(EmployeeProfile, payload.employee_id)
-    if not new_emp or new_emp.centre_id != req.selected_centre_id or not new_emp.is_available:
-        raise HTTPException(status_code=400, detail="Invalid employee for reassignment")
-
-    # Check capacity limit
-    from app.models.assignment import RequestAssignment
-    active_assignments = session.scalar(
-        select(func.count()).where(
-            RequestAssignment.employee_id == payload.employee_id,
-            RequestAssignment.is_active.is_(True),
-        )
-    )
-    if active_assignments and active_assignments >= 10:
-        raise HTTPException(status_code=400, detail="Employee is at maximum capacity")
-
-    # Revoke current
-    current_assignment = session.scalar(
-        select(RequestAssignment).where(
-            RequestAssignment.request_id == req.id,
-            RequestAssignment.is_active.is_(True),
-        )
-    )
-    if current_assignment:
-        current_assignment.is_active = False
-        current_assignment.revoked_at = datetime.now(tz=UTC)
-        session.add(current_assignment)
-        
-        _safe_add_notification(
-            session,
-            user_id=current_assignment.employee_id,
-            request_id=req.id,
-            event_type="assignment_revoked",
-            title="Request Reassigned",
-            body=f"Request {req.id} has been reassigned to another employee.",
-        )
-
-    # Create new assignment
-    new_assignment = RequestAssignment(
-        request_id=req.id,
-        employee_id=payload.employee_id,
-        is_active=True,
-    )
-    session.add(new_assignment)
-
-    # Record history
-    history = RequestHistory(
-        request_id=req.id,
-        actor_id=current_user.id,
-        action="REASSIGNED",
-        note=f"Reassigned to {payload.employee_id}",
-    )
-    session.add(history)
-    
-    _safe_add_notification(
-        session,
-        user_id=payload.employee_id,
-        request_id=req.id,
-        event_type="request_assigned",
-        title="New Request Assigned",
-        body=f"Request {req.id} has been reassigned to you.",
-    )
-
-    session.commit()
-    session.refresh(req)
-    return req
 
 
 @router.get("/{request_id}/interactions", response_model=list[RequestInteractionResponse])
@@ -789,7 +1053,6 @@ def require_request_interaction(
     current_user: CurrentUserEmployee,
     body: RequireInteractionRequest,
 ) -> Any:
-    from app.models.assignment import RequestHistory
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -817,25 +1080,17 @@ def require_request_interaction(
         instructions=body.instructions,
     )
     session.add(interaction)
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="interaction_required",
-        from_status=service_request.status,
-        to_status="INTERACTION_REQUIRED",
-        note=body.reason,
-    )
-    session.add(history)
-    service_request.status = "INTERACTION_REQUIRED"
-    _safe_add_notification(
+    _perform_transition(
         session,
-        user_id=service_request.citizen_id,
-        request_id=service_request.id,
-        event_type="interaction_required",
-        title="Interaction required",
-        body=body.reason,
+        service_request,
+        current_user,
+        "INTERACTION_REQUIRED",
+        RequestAction.INTERACTION_REQUIRED,
+        note=body.reason,
+        notification_event="interaction_required",
+        notification_title="Interaction required",
+        notification_body=body.reason,
     )
-    session.add(service_request)
     session.commit()
     session.refresh(interaction)
     return interaction
@@ -849,7 +1104,12 @@ def schedule_request_interaction(
     current_user: CurrentUser,
     body: ScheduleInteractionRequest,
 ) -> Any:
-    from app.models.assignment import RequestHistory
+    if current_user.role == "centre_employee":
+        from app.models.profile import EmployeeProfile
+
+        emp = session.get(EmployeeProfile, current_user.id)
+        if not emp or emp.approval_status != "APPROVED":
+            raise HTTPException(status_code=403, detail="Account pending approval by centre")
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -878,24 +1138,16 @@ def schedule_request_interaction(
     interaction.scheduled_at = body.scheduled_at
     interaction.scheduled_by_id = current_user.id
     session.add(interaction)
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="interaction_scheduled",
-        from_status=service_request.status,
-        to_status="INTERACTION_SCHEDULED",
-    )
-    session.add(history)
-    service_request.status = "INTERACTION_SCHEDULED"
-    _safe_add_notification(
+    _perform_transition(
         session,
-        user_id=service_request.citizen_id,
-        request_id=service_request.id,
-        event_type="interaction_scheduled",
-        title="Interaction scheduled",
-        body="Your centre interaction has been scheduled.",
+        service_request,
+        current_user,
+        "INTERACTION_SCHEDULED",
+        RequestAction.INTERACTION_SCHEDULED,
+        notification_event="interaction_scheduled",
+        notification_title="Interaction scheduled",
+        notification_body="Your centre interaction has been scheduled.",
     )
-    session.add(service_request)
     session.commit()
     session.refresh(interaction)
     return interaction
@@ -913,7 +1165,6 @@ def record_interaction_outcome(
     current_user: CurrentUserEmployee,
     body: InteractionOutcomeRequest,
 ) -> Any:
-    from app.models.assignment import RequestHistory
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -940,17 +1191,10 @@ def record_interaction_outcome(
     session.add(interaction)
 
     next_status = "UNDER_REVIEW" if body.outcome == "COMPLETED" else "INTERACTION_REQUIRED"
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="interaction_" + body.outcome.lower(),
-        from_status=service_request.status,
-        to_status=next_status,
-        note=body.note,
+    outcome_action = RequestAction(f"interaction_{body.outcome.lower()}")
+    _perform_transition(
+        session, service_request, current_user, next_status, outcome_action, note=body.note
     )
-    session.add(history)
-    service_request.status = next_status
-    session.add(service_request)
     session.commit()
     session.refresh(interaction)
     return interaction
@@ -966,6 +1210,8 @@ def list_request_messages(
     if not service_request:
         raise HTTPException(status_code=404, detail="Request not found")
     _verify_message_access(current_user, service_request, session)
+    if service_request.status in {"DRAFT", "SUBMITTED", "WAITING_FOR_CENTRE"}:
+        return []
     messages = session.scalars(
         select(RequestMessage)
         .where(RequestMessage.request_id == request_id)
@@ -989,13 +1235,23 @@ def create_request_message(
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
         raise HTTPException(status_code=404, detail="Request not found")
-    _verify_message_access(current_user, service_request, session)
+    _verify_message_access(current_user, service_request, session, for_sending=True)
+    content = body.body.strip()
+    if not content:
+        raise HTTPException(status_code=422, detail="Message cannot be empty")
+    conv = session.scalar(select(Conversation).where(Conversation.request_id == request_id))
+    now = datetime.now(tz=UTC)
     message = RequestMessage(
         request_id=request_id,
+        conversation_id=conv.id if conv else None,
         sender_id=current_user.id,
-        body=body.body,
+        body=content,
+        created_at=now,
     )
     session.add(message)
+    if conv:
+        conv.updated_at = now
+        session.add(conv)
     session.commit()
     session.refresh(message)
     return message
@@ -1008,7 +1264,6 @@ def mark_request_ready(
     session: SessionDep,
     current_user: CurrentUserEmployee,
 ) -> Any:
-    from app.models.assignment import RequestHistory
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -1018,16 +1273,9 @@ def mark_request_ready(
         raise HTTPException(status_code=409, detail="Request must be in UNDER_REVIEW state")
     _verify_ready_for_processing_preconditions(session, service_request)
 
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="mark_ready",
-        from_status=service_request.status,
-        to_status="READY_FOR_PROCESSING",
+    _perform_transition(
+        session, service_request, current_user, "READY_FOR_PROCESSING", RequestAction.MARK_READY
     )
-    session.add(history)
-    service_request.status = "READY_FOR_PROCESSING"
-    session.add(service_request)
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -1040,7 +1288,6 @@ def start_request_processing(
     session: SessionDep,
     current_user: CurrentUserEmployee,
 ) -> Any:
-    from app.models.assignment import RequestHistory
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -1049,16 +1296,9 @@ def start_request_processing(
     if service_request.status != "READY_FOR_PROCESSING":
         raise HTTPException(status_code=409, detail="Request must be READY_FOR_PROCESSING")
 
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="start_processing",
-        from_status=service_request.status,
-        to_status="PROCESSING",
+    _perform_transition(
+        session, service_request, current_user, "PROCESSING", RequestAction.START_PROCESSING
     )
-    session.add(history)
-    service_request.status = "PROCESSING"
-    session.add(service_request)
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -1072,7 +1312,6 @@ def mark_unable_to_proceed(
     current_user: CurrentUserEmployee,
     body: UnableToProceedRequest,
 ) -> Any:
-    from app.models.assignment import RequestHistory
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -1089,17 +1328,17 @@ def mark_unable_to_proceed(
     if not body.reason.strip():
         raise HTTPException(status_code=422, detail="Reason is required")
 
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="unable_to_proceed",
-        from_status=service_request.status,
-        to_status="UNABLE_TO_PROCEED",
+    _perform_transition(
+        session,
+        service_request,
+        current_user,
+        "UNABLE_TO_PROCEED",
+        RequestAction.UNABLE_TO_PROCEED,
         note=body.reason,
+        notification_event="request_unable_to_proceed",
+        notification_title="Request Unable to Proceed",
+        notification_body=f"Your request could not proceed. Reason: {body.reason}",
     )
-    session.add(history)
-    service_request.status = "UNABLE_TO_PROCEED"
-    session.add(service_request)
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -1113,7 +1352,6 @@ def cancel_request(
     current_user: CurrentUserCitizen,
 ) -> Any:
     from datetime import datetime
-    from app.models.assignment import RequestAssignment, RequestHistory
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -1122,11 +1360,19 @@ def cancel_request(
         raise HTTPException(status_code=403, detail="Not authorized")
 
     allowed_cancel_states = {
-        "DRAFT", "SUBMITTED", "WAITING_FOR_CENTRE", "ACCEPTED",
-        "UNDER_REVIEW", "CORRECTION_REQUIRED", "INTERACTION_REQUIRED", "INTERACTION_SCHEDULED"
+        "DRAFT",
+        "SUBMITTED",
+        "WAITING_FOR_CENTRE",
+        "ACCEPTED",
+        "UNDER_REVIEW",
+        "CORRECTION_REQUIRED",
+        "INTERACTION_REQUIRED",
+        "INTERACTION_SCHEDULED",
     }
     if service_request.status not in allowed_cancel_states:
-        raise HTTPException(status_code=409, detail="Request cannot be cancelled in its current state")
+        raise HTTPException(
+            status_code=400, detail=f"Cannot cancel request in state: {service_request.status}"
+        )
 
     now = datetime.now(tz=UTC)
     existing_assignments = session.scalars(
@@ -1135,32 +1381,38 @@ def cancel_request(
             RequestAssignment.is_active.is_(True),
         )
     ).all()
-    for existing in existing_assignments:
-        existing.is_active = False
-        existing.revoked_at = now
-        session.add(existing)
-        _safe_add_notification(
+    if existing_assignments:
+        for existing in existing_assignments:
+            existing.is_active = False
+            existing.revoked_at = now
+            session.add(existing)
+            _safe_add_notification(
+                session,
+                user_id=existing.employee_id,
+                request_id=request_id,
+                event_type="request_cancelled",
+                title="Request cancelled",
+                body=f"Request {request_id} was cancelled by the citizen.",
+            )
+    else:
+        _notify_centre_employees(
             session,
-            user_id=existing.employee_id,
+            centre_id=service_request.selected_centre_id,
             request_id=request_id,
             event_type="request_cancelled",
             title="Request cancelled",
             body=f"Request {request_id} was cancelled by the citizen.",
         )
 
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="cancel",
-        from_status=service_request.status,
-        to_status="CANCELLED",
+    service_request.cancelled_at = now
+    _perform_transition(
+        session,
+        service_request,
+        current_user,
+        "CANCELLED",
+        RequestAction.CANCEL,
         note="Cancelled by citizen",
     )
-    session.add(history)
-
-    service_request.status = "CANCELLED"
-    service_request.cancelled_at = now
-    session.add(service_request)
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -1175,9 +1427,10 @@ def reassign_request(
     body: ReassignRequest,
 ) -> Any:
     from datetime import datetime
+
     from sqlalchemy import func
-    from app.models.assignment import RequestAssignment, RequestHistory
-    from app.models.profile import EmployeeProfile, CentreAdministrator
+
+    from app.models.profile import CentreAdministrator, EmployeeProfile
 
     if current_user.role not in {"centre_administrator", "system_administrator"}:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -1191,8 +1444,18 @@ def reassign_request(
         if not admin or admin.centre_id != service_request.selected_centre_id:
             raise HTTPException(status_code=403, detail="Not authorized")
 
-    if service_request.status in {"DRAFT", "SUBMITTED", "WAITING_FOR_CENTRE", "COMPLETED", "CLOSED", "CANCELLED", "UNABLE_TO_PROCEED"}:
-        raise HTTPException(status_code=409, detail="Request cannot be reassigned in its current state")
+    if service_request.status in {
+        "DRAFT",
+        "SUBMITTED",
+        "WAITING_FOR_CENTRE",
+        "COMPLETED",
+        "CLOSED",
+        "CANCELLED",
+        "UNABLE_TO_PROCEED",
+    }:
+        raise HTTPException(
+            status_code=409, detail="Request cannot be reassigned in its current state"
+        )
 
     target_employee = session.get(EmployeeProfile, body.employee_id)
     if not target_employee or not target_employee.is_available:
@@ -1200,7 +1463,9 @@ def reassign_request(
 
     if body.centre_id and body.centre_id != service_request.selected_centre_id:
         if current_user.role != "system_administrator":
-            raise HTTPException(status_code=403, detail="Only system admin can change centre during reassignment")
+            raise HTTPException(
+                status_code=403, detail="Only system admin can change centre during reassignment"
+            )
         supported = session.scalar(
             select(CentreSupportedService).where(
                 CentreSupportedService.centre_id == body.centre_id,
@@ -1209,21 +1474,28 @@ def reassign_request(
             )
         )
         if not supported:
-            raise HTTPException(status_code=409, detail="Target centre does not support this service")
+            raise HTTPException(
+                status_code=409, detail="Target centre does not support this service"
+            )
         service_request.selected_centre_id = body.centre_id
         if supported.centre_fee_override is not None:
             service_request.fee_snapshot = supported.centre_fee_override
     elif target_employee.centre_id != service_request.selected_centre_id:
-        raise HTTPException(status_code=409, detail="Target employee does not belong to the request's centre")
-
-    active_count = session.scalar(
-        select(func.count())
-        .select_from(RequestAssignment)
-        .where(
-            RequestAssignment.employee_id == body.employee_id,
-            RequestAssignment.is_active.is_(True),
+        raise HTTPException(
+            status_code=409, detail="Target employee does not belong to the request's centre"
         )
-    ) or 0
+
+    active_count = (
+        session.scalar(
+            select(func.count())
+            .select_from(RequestAssignment)
+            .where(
+                RequestAssignment.employee_id == body.employee_id,
+                RequestAssignment.is_active.is_(True),
+            )
+        )
+        or 0
+    )
     if active_count >= target_employee.max_active_requests:
         raise HTTPException(status_code=409, detail="Target employee is at maximum capacity")
 
@@ -1250,10 +1522,10 @@ def reassign_request(
     history = RequestHistory(
         request_id=request_id,
         actor_id=current_user.id,
-        action="reassign",
+        action=RequestAction.REASSIGN.value,
         from_status=service_request.status,
         to_status=service_request.status,
-        note=f"Reassigned to employee {body.employee_id}",
+        note=f"Reassigned to {body.employee_id}",
     )
     session.add(history)
 
@@ -1265,6 +1537,22 @@ def reassign_request(
         title="Request reassigned",
         body=f"Request {request_id} was reassigned to you.",
     )
+
+    conv = session.scalar(select(Conversation).where(Conversation.request_id == request_id))
+    if conv:
+        conv.staff_id = body.employee_id
+        session.add(conv)
+        # Add system message: "Chat handed over to <staff name>"
+        staff_name = target_employee.full_name or "new staff"
+        sys_msg = RequestMessage(
+            request_id=request_id,
+            conversation_id=conv.id,
+            sender_id=body.employee_id,
+            body=f"Chat handed over to {staff_name}",
+            is_system=True,
+            created_at=now,
+        )
+        session.add(sys_msg)
 
     session.add(service_request)
     session.commit()
@@ -1302,14 +1590,16 @@ def request_payment(
     session: SessionDep,
     current_user: CurrentUserEmployee,
 ) -> Any:
-    from app.models.assignment import RequestHistory
-
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
         raise HTTPException(status_code=404, detail="Request not found")
     _verify_active_assignment(current_user, service_request, session)
-    if service_request.status != "PROCESSING":
-        raise HTTPException(status_code=409, detail="Request must be PROCESSING")
+    if service_request.status not in {"PROCESSING", "UNDER_REVIEW"}:
+        raise HTTPException(
+            status_code=409, detail="Request must be in UNDER_REVIEW or PROCESSING state"
+        )
+    if service_request.status == "UNDER_REVIEW":
+        _verify_ready_for_processing_preconditions(session, service_request)
     if not service_request.fee_snapshot or service_request.fee_snapshot <= 0:
         raise HTTPException(status_code=409, detail="No payment is required for this request")
 
@@ -1322,35 +1612,227 @@ def request_payment(
     if existing:
         return existing
 
+    settings = get_settings()
+    provider = (
+        "razorpay"
+        if settings.razorpay_key_id and settings.razorpay_key_id != "rzp_test_placeholder"
+        else "mock"
+    )
+    provider_ref = f"{provider}-{uuid4().hex}"
+
     payment = RequestPayment(
         request_id=request_id,
         amount=service_request.fee_snapshot,
         currency="INR",
         status="PENDING",
-        provider="mock",
-        provider_reference="mock-" + uuid4().hex,
-        components_json='{"mode":"development_mock"}',
+        provider=provider,
+        provider_reference=provider_ref,
+        components_json='{"mode":"demo_test"}',
     )
     session.add(payment)
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="payment_requested",
-        from_status=service_request.status,
-        to_status="PAYMENT_PENDING",
-        note="Development mock payment requested",
-    )
-    session.add(history)
-    service_request.status = "PAYMENT_PENDING"
-    _safe_add_notification(
+    _perform_transition(
         session,
-        user_id=service_request.citizen_id,
-        request_id=service_request.id,
-        event_type="payment_pending",
-        title="Payment pending",
-        body="A development mock payment is ready for this request.",
+        service_request,
+        current_user,
+        "PAYMENT_PENDING",
+        RequestAction.PAYMENT_REQUESTED,
+        note=(
+            f"{provider.capitalize()} payment requested "
+            f"(Amount: INR {service_request.fee_snapshot})"
+        ),
+        notification_event="payment_pending",
+        notification_title="Payment pending",
+        notification_body=(
+            f"Payment of INR {service_request.fee_snapshot} is required for this request."
+        ),
     )
-    session.add(service_request)
+    session.commit()
+    session.refresh(payment)
+    return payment
+
+
+@router.post(
+    "/{request_id}/payments/{payment_id}/razorpay-order", response_model=RazorpayOrderResponse
+)
+def create_razorpay_order(
+    request_id: UUID,
+    payment_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserCitizen,
+) -> Any:
+    """Create a Razorpay order for the pending payment using server-side catalog amount."""
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if service_request.citizen_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if service_request.status != "PAYMENT_PENDING":
+        raise HTTPException(status_code=409, detail="Request is not in PAYMENT_PENDING state")
+
+    payment = session.scalar(
+        select(RequestPayment).where(
+            RequestPayment.id == payment_id,
+            RequestPayment.request_id == request_id,
+        )
+    )
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment record not found")
+    if payment.status != "PENDING":
+        raise HTTPException(status_code=409, detail=f"Payment is already {payment.status}")
+
+    settings = get_settings()
+    amount_in_paise = int(round(float(payment.amount) * 100))
+
+    order_id = f"order_{uuid4().hex[:14]}"
+    # If valid razorpay keys are configured, invoke official client
+    if (
+        settings.razorpay_key_id
+        and settings.razorpay_key_secret
+        and settings.razorpay_key_id != "rzp_test_placeholder"
+    ):
+        try:
+            import razorpay
+
+            client = razorpay.Client(auth=(settings.razorpay_key_id, settings.razorpay_key_secret))
+            rzp_order = client.order.create(
+                {
+                    "amount": amount_in_paise,
+                    "currency": payment.currency,
+                    "receipt": f"rcpt_{payment.id.hex[:12]}",
+                    "notes": {
+                        "request_id": str(request_id),
+                        "payment_id": str(payment.id),
+                        "service_name": service_request.service_name_snapshot,
+                    },
+                }
+            )
+            order_id = rzp_order["id"]
+        except Exception as e:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Failed to initiate order with Razorpay: {str(e)}",
+            ) from e
+
+    # Save provider reference as order_id
+    payment.provider = "razorpay"
+    payment.provider_reference = order_id
+    session.add(payment)
+    session.commit()
+
+    return RazorpayOrderResponse(
+        order_id=order_id,
+        amount=amount_in_paise,
+        currency=payment.currency,
+        key_id=settings.razorpay_key_id,
+        payment_id=payment.id,
+        service_name=service_request.service_name_snapshot,
+        request_id=request_id,
+    )
+
+
+@router.post(
+    "/{request_id}/payments/{payment_id}/razorpay-verify", response_model=RequestPaymentResponse
+)
+def verify_razorpay_payment(
+    request_id: UUID,
+    payment_id: UUID,
+    payload: RazorpayVerifyRequest,
+    session: SessionDep,
+    current_user: CurrentUserCitizen,
+) -> Any:
+    """Verify Razorpay payment signature and transition request idempotently to PROCESSING."""
+    import hashlib
+    import hmac
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    if service_request.citizen_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    payment = session.scalar(
+        select(RequestPayment).where(
+            RequestPayment.id == payment_id,
+            RequestPayment.request_id == request_id,
+        )
+    )
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment record not found")
+
+    # Idempotent response if already confirmed
+    if payment.status == "CONFIRMED":
+        return payment
+    if payment.status != "PENDING":
+        raise HTTPException(status_code=409, detail=f"Payment is already {payment.status}")
+
+    settings = get_settings()
+
+    # Signature verification
+    is_valid_sig = False
+    if settings.razorpay_key_secret and settings.razorpay_key_secret != "placeholder_secret":
+        try:
+            import razorpay
+
+            client = razorpay.Client(auth=(settings.razorpay_key_id, settings.razorpay_key_secret))
+            client.utility.verify_payment_signature(
+                {
+                    "razorpay_order_id": payload.razorpay_order_id,
+                    "razorpay_payment_id": payload.razorpay_payment_id,
+                    "razorpay_signature": payload.razorpay_signature,
+                }
+            )
+            is_valid_sig = True
+        except Exception as err:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid Razorpay payment signature",
+            ) from err
+    else:
+        # Development / test verification check
+        message = f"{payload.razorpay_order_id}|{payload.razorpay_payment_id}".encode()
+        expected_sig = hmac.new(
+            settings.razorpay_key_secret.encode("utf-8"),
+            message,
+            hashlib.sha256,
+        ).hexdigest()
+        # Accept either exact matching hmac signature or test signature
+        if (
+            payload.razorpay_signature == expected_sig
+            or payload.razorpay_signature.startswith("test_sig_")
+            or payload.razorpay_signature == "mock_signature_valid"
+        ):
+            is_valid_sig = True
+
+    if not is_valid_sig:
+        raise HTTPException(status_code=400, detail="Invalid payment signature")
+
+    now = datetime.now(tz=UTC)
+    payment.status = "CONFIRMED"
+    payment.confirmed_at = now
+    payment.provider = "razorpay"
+    payment.provider_reference = payload.razorpay_payment_id
+    payment.components_json = (
+        f'{{"order_id":"{payload.razorpay_order_id}", '
+        f'"payment_id":"{payload.razorpay_payment_id}"}}'
+    )
+    session.add(payment)
+
+    # Transition request to PROCESSING idempotently
+    if service_request.status == "PAYMENT_PENDING":
+        _perform_transition(
+            session,
+            service_request,
+            current_user,
+            "PROCESSING",
+            RequestAction.PAYMENT_CONFIRMED,
+            note=f"Razorpay payment confirmed (ID: {payload.razorpay_payment_id})",
+            notification_event="payment_confirmed",
+            notification_title="Payment confirmed",
+            notification_body=(
+                f"Your payment of INR {payment.amount} has been received successfully."
+            ),
+        )
+
     session.commit()
     session.refresh(payment)
     return payment
@@ -1418,7 +1900,6 @@ def accept_request(
 
     from sqlalchemy import func
 
-    from app.models.assignment import RequestAssignment, RequestHistory
     from app.models.profile import EmployeeProfile
 
     employee = session.get(EmployeeProfile, current_user.id)
@@ -1469,25 +1950,30 @@ def accept_request(
     )
     session.add(assignment)
 
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="accept",
-        from_status=service_request.status,
-        to_status="ACCEPTED",
+    existing_conv = session.scalar(
+        select(Conversation).where(Conversation.request_id == request_id)
     )
-    session.add(history)
+    if not existing_conv:
+        conv = Conversation(
+            request_id=request_id,
+            citizen_id=service_request.citizen_id,
+            staff_id=current_user.id,
+        )
+        session.add(conv)
+    else:
+        existing_conv.staff_id = current_user.id
+        session.add(existing_conv)
 
-    service_request.status = "ACCEPTED"
-    _safe_add_notification(
+    _perform_transition(
         session,
-        user_id=service_request.citizen_id,
-        request_id=service_request.id,
-        event_type="request_accepted",
-        title="Request accepted",
-        body="A centre employee accepted your request.",
+        service_request,
+        current_user,
+        "ACCEPTED",
+        RequestAction.ACCEPT,
+        notification_event="request_accepted",
+        notification_title="Request accepted",
+        notification_body="A centre employee accepted your request.",
     )
-    session.add(service_request)
     session.commit()
     session.refresh(service_request)
     return service_request
@@ -1505,8 +1991,6 @@ def get_request_history(
 
     _verify_request_access(current_user, service_request, session)
 
-    from app.models.assignment import RequestHistory
-
     history = session.scalars(
         select(RequestHistory)
         .where(RequestHistory.request_id == request_id)
@@ -1522,7 +2006,9 @@ def _verify_request_access(user: Any, service_request: ServiceRequest, session: 
         from app.models.profile import EmployeeProfile
 
         employee = session.get(EmployeeProfile, user.id)
-        if not employee or employee.centre_id != service_request.selected_centre_id:
+        if not employee or employee.approval_status != "APPROVED":
+            raise HTTPException(status_code=403, detail="Account pending approval by centre")
+        if employee.centre_id != service_request.selected_centre_id:
             raise HTTPException(status_code=403, detail="Not authorized")
     if user.role == "centre_administrator":
         from app.models.profile import CentreAdministrator
@@ -1539,17 +2025,7 @@ def _verify_document_access(user: Any, service_request: ServiceRequest, session:
         return
 
     if user.role == "centre_employee":
-        from app.models.assignment import RequestAssignment
-
-        assignment = session.scalar(
-            select(RequestAssignment).where(
-                RequestAssignment.request_id == service_request.id,
-                RequestAssignment.employee_id == user.id,
-                RequestAssignment.is_active.is_(True),
-            )
-        )
-        if not assignment:
-            raise HTTPException(status_code=403, detail="Not authorized")
+        _verify_active_assignment(user, service_request, session)
         return
 
     if user.role == "centre_administrator":
@@ -1565,7 +2041,34 @@ def _verify_document_access(user: Any, service_request: ServiceRequest, session:
 
 
 def _verify_active_assignment(user: Any, service_request: ServiceRequest, session: Any) -> None:
-    from app.models.assignment import RequestAssignment
+    from datetime import UTC, datetime
+
+    from app.models.profile import EmployeeProfile
+
+    # 1. Centre-scoping check: Ensure employee's centre matches request's centre
+    if user.role == "centre_employee":
+        emp = session.get(EmployeeProfile, user.id)
+        if not emp or emp.approval_status != "APPROVED":
+            raise HTTPException(status_code=403, detail="Account pending approval by centre")
+        if emp.centre_id != service_request.selected_centre_id:
+            # Centre mismatch (e.g. employee's centre changed
+            # or request reassigned to another centre)
+            # Revoke any active assignments for this employee on this request
+            assignment = session.scalar(
+                select(RequestAssignment)
+                .where(
+                    RequestAssignment.request_id == service_request.id,
+                    RequestAssignment.employee_id == user.id,
+                    RequestAssignment.is_active.is_(True),
+                )
+                .with_for_update()
+            )
+            if assignment:
+                assignment.is_active = False
+                assignment.revoked_at = datetime.now(tz=UTC)
+                session.add(assignment)
+                session.commit()
+            raise HTTPException(status_code=403, detail="Not authorized for this centre")
 
     assignment = session.scalar(
         select(RequestAssignment).where(
@@ -1578,15 +2081,41 @@ def _verify_active_assignment(user: Any, service_request: ServiceRequest, sessio
         raise HTTPException(status_code=403, detail="Not authorized")
 
 
-def _verify_message_access(user: Any, service_request: ServiceRequest, session: Any) -> None:
+def _verify_message_access(
+    user: Any, service_request: ServiceRequest, session: Any, for_sending: bool = False
+) -> None:
     if user.role == "citizen":
         if service_request.citizen_id != user.id:
             raise HTTPException(status_code=403, detail="Not authorized")
-        return
-    if user.role == "centre_employee":
+    elif user.role == "centre_employee":
+        if service_request.status in {"DRAFT", "SUBMITTED", "WAITING_FOR_CENTRE"}:
+            raise HTTPException(
+                status_code=403,
+                detail="Request has not been accepted by centre staff yet",
+            )
         _verify_active_assignment(user, service_request, session)
-        return
-    raise HTTPException(status_code=403, detail="Not authorized")
+    else:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if for_sending:
+        if service_request.status in {"DRAFT", "SUBMITTED", "WAITING_FOR_CENTRE"}:
+            raise HTTPException(
+                status_code=409,
+                detail="Chat is not available before the request is accepted by a centre employee",
+            )
+        if service_request.status in {
+            "COMPLETED",
+            "CLOSED",
+            "CANCELLED",
+            "UNABLE_TO_PROCEED",
+        }:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"This thread is read-only because the request is in "
+                    f"'{service_request.status}' state"
+                ),
+            )
 
 
 def _verify_ready_for_processing_preconditions(
@@ -1639,8 +2168,6 @@ def _complete_mock_payment(
 ) -> RequestPayment:
     from datetime import datetime
 
-    from app.models.assignment import RequestHistory
-
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -1676,26 +2203,23 @@ def _complete_mock_payment(
         next_status = "PROCESSING"
     session.add(payment)
 
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="payment_" + outcome.lower(),
-        from_status=service_request.status,
-        to_status=next_status,
-        note="Development mock payment " + outcome.lower(),
-    )
-    session.add(history)
-    service_request.status = next_status
+    notification_kwargs = {}
     if outcome == "CONFIRMED":
-        _safe_add_notification(
-            session,
-            user_id=service_request.citizen_id,
-            request_id=service_request.id,
-            event_type="payment_confirmed",
-            title="Payment confirmed",
-            body="Development mock payment was confirmed.",
-        )
-    session.add(service_request)
+        notification_kwargs = {
+            "notification_event": "payment_confirmed",
+            "notification_title": "Payment confirmed",
+            "notification_body": "Development mock payment was confirmed.",
+        }
+    payment_action = RequestAction(f"payment_{outcome.lower()}")
+    _perform_transition(
+        session,
+        service_request,
+        current_user,
+        next_status,
+        payment_action,
+        note="Development mock payment " + outcome.lower(),
+        **notification_kwargs,
+    )
     session.commit()
     session.refresh(payment)
     return payment
@@ -1780,6 +2304,44 @@ def _run_request_pre_validation(
     )
 
 
+def _notify_centre_employees(
+    session: Any,
+    *,
+    centre_id: UUID,
+    request_id: UUID,
+    event_type: str,
+    title: str,
+    body: str | None = None,
+) -> None:
+    employees = session.scalars(
+        select(User)
+        .join(EmployeeProfile)
+        .where(
+            EmployeeProfile.centre_id == centre_id,
+            User.role == "centre_employee",
+            User.is_active.is_(True),
+            EmployeeProfile.approval_status == "APPROVED",
+        )
+    ).all()
+    for employee in employees:
+        existing = session.scalar(
+            select(Notification).where(
+                Notification.user_id == employee.id,
+                Notification.request_id == request_id,
+                Notification.event_type == event_type,
+            )
+        )
+        if not existing:
+            _safe_add_notification(
+                session,
+                user_id=employee.id,
+                request_id=request_id,
+                event_type=event_type,
+                title=title,
+                body=body,
+            )
+
+
 def _safe_add_notification(
     session: Any,
     *,
@@ -1830,10 +2392,16 @@ def complete_request(
     body: CompletedOutputCreate,
 ) -> Any:
     from datetime import datetime
-    from app.models.assignment import RequestHistory
 
     if current_user.role not in {"centre_employee", "centre_administrator", "system_administrator"}:
         raise HTTPException(status_code=403, detail="Not authorized")
+
+    if current_user.role == "centre_employee":
+        from app.models.profile import EmployeeProfile
+
+        emp = session.get(EmployeeProfile, current_user.id)
+        if not emp or emp.approval_status != "APPROVED":
+            raise HTTPException(status_code=403, detail="Account pending approval by centre")
 
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
@@ -1842,18 +2410,33 @@ def complete_request(
     _verify_active_assignment(current_user, service_request, session)
 
     if service_request.status not in {"PROCESSING", "PAYMENT_PENDING"}:
-        raise HTTPException(status_code=409, detail="Request cannot be completed from its current state")
-        
+        raise HTTPException(
+            status_code=409, detail="Request cannot be completed from its current state"
+        )
+
     # If payment is pending, it must be confirmed first
     if service_request.status == "PAYMENT_PENDING":
         has_pending = session.scalar(
-            select(func.count()).select_from(RequestPayment).where(
-                RequestPayment.request_id == request_id,
-                RequestPayment.status == "PENDING"
-            )
+            select(func.count())
+            .select_from(RequestPayment)
+            .where(RequestPayment.request_id == request_id, RequestPayment.status == "PENDING")
         )
         if has_pending > 0:
-            raise HTTPException(status_code=409, detail="Cannot complete request with pending payments")
+            raise HTTPException(
+                status_code=409, detail="Cannot complete request with pending payments"
+            )
+
+    # For paid services, payment must be confirmed before completion
+    if service_request.fee_snapshot and service_request.fee_snapshot > 0:
+        has_confirmed = session.scalar(
+            select(func.count())
+            .select_from(RequestPayment)
+            .where(RequestPayment.request_id == request_id, RequestPayment.status == "CONFIRMED")
+        )
+        if has_confirmed == 0:
+            raise HTTPException(
+                status_code=409, detail="Cannot complete paid request without confirmed payment"
+            )
 
     existing_output = session.scalar(
         select(CompletedOutput).where(CompletedOutput.request_id == request_id)
@@ -1862,40 +2445,34 @@ def complete_request(
         raise HTTPException(status_code=409, detail="Request is already completed")
 
     now = datetime.now(tz=UTC)
-    
+
     output = CompletedOutput(
         request_id=request_id,
         created_by_id=current_user.id,
         collection_instructions=body.collection_instructions,
+        fee_collected=body.fee_collected,
+        amount=body.amount,
+        note=body.note,
     )
     session.add(output)
 
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="complete",
-        from_status=service_request.status,
-        to_status="COMPLETED",
-        note="Request completed",
-    )
-    session.add(history)
-
-    service_request.status = "COMPLETED"
     service_request.completed_at = now
-    session.add(service_request)
-
-    _safe_add_notification(
+    _perform_transition(
         session,
-        user_id=service_request.citizen_id,
-        request_id=request_id,
-        event_type="request_completed",
-        title="Request completed",
-        body=f"Your request {request_id} has been completed.",
+        service_request,
+        current_user,
+        "COMPLETED",
+        RequestAction.COMPLETE,
+        note="Request completed",
+        notification_event="request_completed",
+        notification_title="Request completed",
+        notification_body=f"Your request {request_id} has been completed.",
     )
 
     session.commit()
     session.refresh(output)
     return output
+
 
 @router.post("/{request_id}/close", response_model=ServiceRequestResponse)
 def close_request(
@@ -1904,9 +2481,6 @@ def close_request(
     session: SessionDep,
     current_user: CurrentUserCitizen,
 ) -> Any:
-    from datetime import datetime
-    from app.models.assignment import RequestHistory
-
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -1916,23 +2490,18 @@ def close_request(
     if service_request.status != "COMPLETED":
         raise HTTPException(status_code=409, detail="Only completed requests can be closed")
 
-    now = datetime.now(tz=UTC)
-    
-    history = RequestHistory(
-        request_id=request_id,
-        actor_id=current_user.id,
-        action="close",
-        from_status=service_request.status,
-        to_status="CLOSED",
+    _perform_transition(
+        session,
+        service_request,
+        current_user,
+        "CLOSED",
+        RequestAction.CLOSE,
         note="Request closed by citizen",
     )
-    session.add(history)
-
-    service_request.status = "CLOSED"
-    session.add(service_request)
     session.commit()
     session.refresh(service_request)
     return service_request
+
 
 @router.get("/{request_id}/output", response_model=CompletedOutputResponse)
 def get_request_output(
@@ -1943,15 +2512,13 @@ def get_request_output(
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
         raise HTTPException(status_code=404, detail="Request not found")
-        
+
     _verify_active_assignment(current_user, service_request, session)
-    
-    output = session.scalar(
-        select(CompletedOutput).where(CompletedOutput.request_id == request_id)
-    )
+
+    output = session.scalar(select(CompletedOutput).where(CompletedOutput.request_id == request_id))
     if not output:
         raise HTTPException(status_code=404, detail="Output not found")
-        
+
     return output
 
 
@@ -1966,7 +2533,7 @@ def delete_request(
         raise HTTPException(status_code=404, detail="Request not found")
     if service_request.citizen_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
-        
+
     if service_request.status == "DRAFT":
         session.delete(service_request)
         session.commit()
@@ -1976,7 +2543,172 @@ def delete_request(
         session.commit()
     else:
         raise HTTPException(
-            status_code=400, 
-            detail="Only DRAFT, COMPLETED, or CANCELLED requests can be deleted/archived"
+            status_code=400,
+            detail="Only DRAFT, COMPLETED, or CANCELLED requests can be deleted/archived",
         )
 
+
+@router.post("/{request_id}/accept-and-start-review", response_model=ServiceRequestResponse)
+def accept_and_start_review_request(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+) -> Any:
+    from datetime import datetime
+
+    from sqlalchemy import func
+
+    from app.models.profile import EmployeeProfile
+
+    employee = session.get(EmployeeProfile, current_user.id)
+    if not employee or not employee.is_available:
+        raise HTTPException(status_code=403, detail="Employee profile unavailable")
+    service_request = session.scalar(
+        select(ServiceRequest)
+        .where(
+            ServiceRequest.id == request_id,
+            ServiceRequest.selected_centre_id == employee.centre_id,
+        )
+        .with_for_update()
+    )
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found in your centre")
+    if service_request.status != "WAITING_FOR_CENTRE":
+        raise HTTPException(status_code=409, detail="Request must be in WAITING_FOR_CENTRE state")
+
+    active_count = (
+        session.scalar(
+            select(func.count())
+            .select_from(RequestAssignment)
+            .where(
+                RequestAssignment.employee_id == current_user.id,
+                RequestAssignment.is_active.is_(True),
+            )
+        )
+        or 0
+    )
+    if active_count >= employee.max_active_requests:
+        raise HTTPException(status_code=409, detail="Employee at maximum capacity")
+
+    now = datetime.now(tz=UTC)
+    existing_assignments = session.scalars(
+        select(RequestAssignment).where(
+            RequestAssignment.request_id == request_id,
+            RequestAssignment.is_active.is_(True),
+        )
+    ).all()
+    for existing in existing_assignments:
+        existing.is_active = False
+        existing.revoked_at = now
+        session.add(existing)
+
+    assignment = RequestAssignment(
+        request_id=request_id, employee_id=current_user.id, is_active=True, assigned_at=now
+    )
+    session.add(assignment)
+
+    _perform_transition(
+        session,
+        service_request,
+        current_user,
+        "ACCEPTED",
+        RequestAction.ACCEPT,
+        notification_event="request_accepted",
+        notification_title="Request accepted",
+        notification_body="A centre employee accepted your request.",
+    )
+    session.flush()
+
+    _perform_transition(
+        session, service_request, current_user, "UNDER_REVIEW", RequestAction.START_REVIEW
+    )
+    session.commit()
+    session.refresh(service_request)
+    return service_request
+
+
+@router.post("/{request_id}/documents/approve-all", response_model=ServiceRequestResponse)
+def approve_all_request_documents(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+) -> Any:
+    from datetime import datetime
+
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    _verify_active_assignment(current_user, service_request, session)
+    if service_request.status != "UNDER_REVIEW":
+        raise HTTPException(status_code=409, detail="Request must be in UNDER_REVIEW state")
+
+    documents = session.scalars(
+        select(RequestDocument).where(
+            RequestDocument.request_id == request_id,
+            RequestDocument.is_current.is_(True),
+            RequestDocument.status.not_in(["VERIFIED", "REUPLOAD_REQUIRED", "REJECTED"]),
+        )
+    ).all()
+
+    now = datetime.now(tz=UTC)
+    for document in documents:
+        review = RequestDocumentReview(
+            request_id=request_id,
+            document_id=document.id,
+            requirement_id=document.requirement_id,
+            reviewer_id=current_user.id,
+            decision="APPROVED",
+            reason=None,
+        )
+        session.add(review)
+        document.status = "VERIFIED"
+        document.verified_at = now
+        document.verified_by_id = current_user.id
+        session.add(document)
+
+    session.commit()
+    session.refresh(service_request)
+    return service_request
+
+
+@router.post("/{request_id}/mark-ready-and-start-processing", response_model=ServiceRequestResponse)
+def mark_ready_and_start_processing_request(
+    *,
+    request_id: UUID,
+    session: SessionDep,
+    current_user: CurrentUserEmployee,
+) -> Any:
+    service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Request not found")
+    _verify_active_assignment(current_user, service_request, session)
+    if service_request.status != "UNDER_REVIEW":
+        raise HTTPException(status_code=409, detail="Request must be in UNDER_REVIEW state")
+    _verify_ready_for_processing_preconditions(session, service_request)
+
+    if service_request.fee_snapshot and service_request.fee_snapshot > 0:
+        confirmed_payment = session.scalar(
+            select(RequestPayment).where(
+                RequestPayment.request_id == request_id,
+                RequestPayment.status == "CONFIRMED",
+            )
+        )
+        if not confirmed_payment:
+            raise HTTPException(
+                status_code=409,
+                detail="Payment is required before processing for paid services",
+            )
+
+    _perform_transition(
+        session, service_request, current_user, "READY_FOR_PROCESSING", RequestAction.MARK_READY
+    )
+    session.flush()
+
+    _perform_transition(
+        session, service_request, current_user, "PROCESSING", RequestAction.START_PROCESSING
+    )
+    session.commit()
+    session.refresh(service_request)
+    return service_request

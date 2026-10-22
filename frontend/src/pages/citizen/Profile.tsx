@@ -1,20 +1,69 @@
+import { useState, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { User, MapPin, ShieldCheck, Lock, Bell, Globe, FileText, Trash2, Edit2, ChevronRight } from 'lucide-react';
+import { User, MapPin, ShieldCheck, Lock, Bell, Globe, FileText, Trash2, Edit2, ChevronRight, Loader2 } from 'lucide-react';
+import { api } from '../../lib/api';
+import { Avatar } from '../../components/ui/Avatar';
+import { EditProfileModal } from '../../components/profile/EditProfileModal';
 
 
 
 export function Profile() {
- const { user } = useAuth();
- 
+  const { user, refreshUser } = useAuth();
+  const [photoError, setPhotoError] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoError('');
+    if (file.size > 2 * 1024 * 1024) {
+      setPhotoError('File too large. Maximum 2 MB allowed.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setPhotoError('Only JPEG, PNG, and WebP are allowed.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      await api.post('/users/me/photo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      await refreshUser();
+    } catch (err: unknown) {
+      const anyErr = err as { response?: { data?: { detail?: string } } };
+      setPhotoError(anyErr.response?.data?.detail || 'Failed to upload photo');
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handlePhotoRemove = async () => {
+    setPhotoError('');
+    try {
+      await api.delete('/users/me/photo');
+      await refreshUser();
+    } catch (err: unknown) {
+      const anyErr = err as { response?: { data?: { detail?: string } } };
+      setPhotoError(anyErr.response?.data?.detail || 'Failed to remove photo');
+    }
+  };
 
  // Safely parse name or fallback
  const fullName = user?.full_name || 'Sample';
- const initial = fullName.charAt(0).toUpperCase();
  const email = user?.email || 'sample@example.com';
  const role = user?.role.replace('_', ' ') || 'Citizen';
 
  return (
+ <>
  <div className="max-w-[1400px] mx-auto pb-12">
  {/* Header */}
  <div className="mb-8 border-b border-mono-border pb-6">
@@ -23,10 +72,20 @@ export function Profile() {
  </div>
 
  {/* Top Card: Basic Info */}
- <div className="bg-mono-bg rounded-2xl border border-mono-border p-8 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
- <div className="flex items-center gap-6">
- <div className="w-24 h-24 rounded-full bg-mono-surface flex items-center justify-center shrink-0">
- <span className="text-4xl font-bold text-mono-text">{initial}</span>
+ <div className="bg-mono-bg rounded-2xl border border-mono-border p-6 md:p-8 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 relative">
+ <div className="flex items-center gap-6 mt-4 md:mt-0">
+ <div className="relative group shrink-0">
+  <Avatar photoUrl={user?.photo_url ? `${user.photo_url}?ts=${Date.now()}` : undefined} name={fullName} className="w-20 h-20 md:w-24 md:h-24 text-3xl md:text-4xl" />
+  <label className="absolute inset-0 bg-black/50 text-white rounded-full flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
+    <input type="file" ref={fileInputRef} className="hidden" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoUpload} disabled={isUploading} />
+    {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Edit2 size={20} />}
+    <span className="text-xs font-medium mt-1">Change</span>
+  </label>
+  {user?.photo_url && (
+    <button onClick={handlePhotoRemove} className="absolute -top-1 -right-1 bg-red-100 text-red-600 p-1.5 rounded-full hover:bg-red-200 transition-colors" title="Remove Photo">
+      <Trash2 size={14} />
+    </button>
+  )}
  </div>
  <div>
  <h2 className="text-2xl font-bold text-mono-text mb-1">{fullName}</h2>
@@ -35,12 +94,15 @@ export function Profile() {
  <User size={14} />
  <span>#{user?.id ? user.id.substring(0, 8).toUpperCase() : 'UNKNOWN'}</span>
  </div>
+ {photoError && <p className="text-sm text-red-600 mt-2 font-medium">{photoError}</p>}
  </div>
  </div>
  
- <button className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-mono-border text-sm font-bold text-mono-text hover:bg-mono-surface transition-colors self-start md:self-center shrink-0">
+ <div className="absolute top-6 right-6 md:static">
+ <button onClick={() => setIsEditModalOpen(true)} className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-mono-border bg-mono-bg text-sm font-medium text-mono-text hover:bg-mono-surface transition-colors shadow-sm">
  <Edit2 size={16} /> Edit Profile
  </button>
+ </div>
  </div>
 
  {/* Grid Layout */}
@@ -53,7 +115,7 @@ export function Profile() {
  <User size={20} className="text-mono-text" />
  <h3 className="font-bold text-mono-text text-base">Personal Information</h3>
  </div>
- <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-mono-border text-xs font-bold text-mono-text hover:bg-mono-surface transition-colors bg-mono-bg">
+ <button onClick={() => setIsEditModalOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-mono-border text-xs font-bold text-mono-text hover:bg-mono-surface transition-colors bg-mono-bg">
  <Edit2 size={12} /> Edit
  </button>
  </div>
@@ -65,16 +127,8 @@ export function Profile() {
  <td className="py-4 pr-4 font-bold text-mono-text">{fullName}</td>
  </tr>
  <tr className="hover:bg-mono-surface/30 transition-colors">
- <td className="py-4 pl-4 font-medium text-mono-muted">Date of Birth</td>
- <td className="py-4 pr-4 font-bold text-mono-text"><span className="text-mono-muted font-medium italic">Not provided</span></td>
- </tr>
- <tr className="hover:bg-mono-surface/30 transition-colors">
- <td className="py-4 pl-4 font-medium text-mono-muted">Gender</td>
- <td className="py-4 pr-4 font-bold text-mono-text"><span className="text-mono-muted font-medium italic">Not provided</span></td>
- </tr>
- <tr className="hover:bg-mono-surface/30 transition-colors">
  <td className="py-4 pl-4 font-medium text-mono-muted">Phone Number</td>
- <td className="py-4 pr-4 font-bold text-mono-text"><span className="text-mono-muted font-medium italic">Not provided</span></td>
+ <td className="py-4 pr-4 font-bold text-mono-text">{user?.phone || <span className="text-mono-muted font-medium italic">Not provided</span>}</td>
  </tr>
  <tr className="hover:bg-mono-surface/30 transition-colors">
  <td className="py-4 pl-4 font-medium text-mono-muted">Email Address</td>
@@ -92,35 +146,21 @@ export function Profile() {
  <MapPin size={20} className="text-mono-text" />
  <h3 className="font-bold text-mono-text text-base">Address Information</h3>
  </div>
- <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-mono-border text-xs font-bold text-mono-text hover:bg-mono-surface transition-colors bg-mono-bg">
+ <button onClick={() => setIsEditModalOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-mono-border text-xs font-bold text-mono-text hover:bg-mono-surface transition-colors bg-mono-bg">
  <Edit2 size={12} /> Edit
  </button>
  </div>
- <div className="p-2 flex-1">
- <table className="w-full text-sm">
- <tbody className="divide-y divide-mono-border/50">
- <tr className="hover:bg-mono-surface/30 transition-colors">
- <td className="py-4 pl-4 font-medium text-mono-muted w-1/3">Address Line 1</td>
- <td className="py-4 pr-4 font-bold text-mono-text"><span className="text-mono-muted font-medium italic">Not provided</span></td>
- </tr>
- <tr className="hover:bg-mono-surface/30 transition-colors">
- <td className="py-4 pl-4 font-medium text-mono-muted">Address Line 2</td>
- <td className="py-4 pr-4 font-bold text-mono-text"><span className="text-mono-muted font-medium italic">Not provided</span></td>
- </tr>
- <tr className="hover:bg-mono-surface/30 transition-colors">
- <td className="py-4 pl-4 font-medium text-mono-muted">City</td>
- <td className="py-4 pr-4 font-bold text-mono-text"><span className="text-mono-muted font-medium italic">Not provided</span></td>
- </tr>
- <tr className="hover:bg-mono-surface/30 transition-colors">
- <td className="py-4 pl-4 font-medium text-mono-muted">State</td>
- <td className="py-4 pr-4 font-bold text-mono-text"><span className="text-mono-muted font-medium italic">Not provided</span></td>
- </tr>
- <tr className="hover:bg-mono-surface/30 transition-colors">
- <td className="py-4 pl-4 font-medium text-mono-muted">PIN Code</td>
- <td className="py-4 pr-4 font-bold text-mono-text"><span className="text-mono-muted font-medium italic">Not provided</span></td>
- </tr>
- </tbody>
- </table>
+ <div className="p-6 flex-1">
+ {user?.address_text ? (
+   <p className="text-sm font-medium text-mono-text whitespace-pre-line leading-relaxed">
+     {user.address_text}
+   </p>
+ ) : (
+   <div className="flex flex-col items-center justify-center h-full py-8 text-mono-muted">
+     <MapPin size={32} className="mb-3 opacity-20" />
+     <p className="text-sm font-medium">No address provided</p>
+   </div>
+ )}
  </div>
  </div>
 
@@ -184,7 +224,7 @@ export function Profile() {
  <FileText size={20} className="text-mono-text" />
  <h3 className="font-bold text-mono-text text-base">Linked Information</h3>
  </div>
- <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-mono-border text-xs font-bold text-mono-text hover:bg-mono-surface transition-colors bg-mono-bg">
+ <button onClick={() => setIsEditModalOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-mono-border text-xs font-bold text-mono-text hover:bg-mono-surface transition-colors bg-mono-bg">
  <Edit2 size={12} /> Edit
  </button>
  </div>
@@ -198,7 +238,7 @@ export function Profile() {
  <tr className="hover:bg-mono-surface/30 transition-colors">
  <td className="py-4 pl-4 font-medium text-mono-muted">Mobile Number</td>
  <td className="py-4 pr-4 font-bold text-mono-text flex items-center justify-between gap-2">
- <span><span className="text-mono-muted font-medium italic">Not provided</span></span>
+ <span>{user?.phone || <span className="text-mono-muted font-medium italic">Not provided</span>}</span>
  </td>
  </tr>
  <tr className="hover:bg-mono-surface/30 transition-colors">
@@ -232,5 +272,8 @@ export function Profile() {
 
  </div>
  </div>
+ 
+ <EditProfileModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} />
+ </>
  );
 }

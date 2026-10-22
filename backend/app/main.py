@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.api.api import api_router
@@ -17,6 +20,12 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Akshaya Service Assistance API")
 
     app.include_router(api_router, prefix="/api/v1")
+
+    # Serve avatars as static files
+    settings = get_settings()
+    avatars_dir = Path(settings.file_storage_path) / "avatars"
+    avatars_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/api/v1/avatars", StaticFiles(directory=str(avatars_dir)), name="avatars")
 
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:

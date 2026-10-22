@@ -1,27 +1,30 @@
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+
 from app.models.notification import Notification
 
 
-
 def test_list_notifications_citizen(
-    client: TestClient, db_session: Session, normal_user_headers: dict[str, str], normal_user_id: str
+    client: TestClient,
+    db_session: Session,
+    normal_user_headers: dict[str, str],
+    normal_user_id: str,
 ):
-    from uuid import uuid4, UUID
+    from uuid import UUID, uuid4
+
     n1 = Notification(
         id=uuid4(),
         user_id=UUID(normal_user_id),
         event_type="test_event_1",
         title="Test Notification 1",
-        is_read=False
+        is_read=False,
     )
     n2 = Notification(
         id=uuid4(),
         user_id=UUID(normal_user_id),
         event_type="test_event_2",
         title="Test Notification 2",
-        is_read=True
+        is_read=True,
     )
     db_session.add(n1)
     db_session.add(n2)
@@ -42,16 +45,21 @@ def test_list_notifications_citizen(
     assert "Test Notification 1" in titles
     assert "Test Notification 2" not in titles
 
+
 def test_mark_notification_read(
-    client: TestClient, db_session: Session, normal_user_headers: dict[str, str], normal_user_id: str
+    client: TestClient,
+    db_session: Session,
+    normal_user_headers: dict[str, str],
+    normal_user_id: str,
 ):
-    from uuid import uuid4, UUID
+    from uuid import UUID, uuid4
+
     n = Notification(
         id=uuid4(),
         user_id=UUID(normal_user_id),
         event_type="test_event_read",
         title="Test Mark Read",
-        is_read=False
+        is_read=False,
     )
     db_session.add(n)
     db_session.commit()
@@ -62,16 +70,18 @@ def test_mark_notification_read(
     data = r.json()
     assert data["is_read"] is True
 
+
 def test_cannot_read_others_notification(
     client: TestClient, db_session: Session, admin_headers: dict[str, str], normal_user_id: str
 ):
-    from uuid import uuid4, UUID
+    from uuid import UUID, uuid4
+
     n = Notification(
         id=uuid4(),
         user_id=UUID(normal_user_id),
         event_type="test_event_others",
         title="Others Notification",
-        is_read=False
+        is_read=False,
     )
     db_session.add(n)
     db_session.commit()

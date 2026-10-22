@@ -6,10 +6,11 @@ from sqlalchemy.orm import Session
 
 from app.models.escalation import Escalation
 from app.models.request import ServiceRequest
-from app.api.endpoints.requests import _safe_add_notification
 
 
-def run_stale_request_detection(session: Session, centre_id: UUID | None = None) -> list[Escalation]:
+def run_stale_request_detection(
+    session: Session, centre_id: UUID | None = None
+) -> list[Escalation]:
     """
     Detects requests that have been in WAITING_FOR_CENTRE state for more than 24 hours.
     Creates an Escalation record for each.

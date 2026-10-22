@@ -12,6 +12,7 @@
 | Passwords | pwdlib Argon2 | Password hashing |
 | Tokens | signed expiring JWT bearer tokens | API authentication |
 | Backend tests | Pytest | Unit/integration/API tests |
+| Image processing | Pillow | Profile avatars and images |
 | Source control | Git | Version control |
 | Hosting/CI source | GitHub | Source of truth, issues, PRs, CI |
 

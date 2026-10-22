@@ -4,45 +4,58 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, CurrentUserCitizen, SessionDep
-from app.models.ticket import SupportTicket, TicketMessage
-from app.schemas.ticket import SupportTicketCreate, SupportTicketResponse, SupportTicketUpdate, TicketMessageCreate, TicketMessageResponse
+from app.api.deps import CurrentUser, SessionDep
 from app.models.request import ServiceRequest
+from app.models.ticket import SupportTicket, TicketMessage
+from app.schemas.ticket import (
+    SupportTicketCreate,
+    SupportTicketResponse,
+    SupportTicketUpdate,
+    TicketMessageCreate,
+    TicketMessageResponse,
+)
 
 router = APIRouter()
+
 
 @router.post("/", response_model=SupportTicketResponse)
 def create_ticket(
     *,
     session: SessionDep,
-    current_user: CurrentUserCitizen,
+    current_user: CurrentUser,
     ticket_in: SupportTicketCreate,
 ) -> Any:
+    if current_user.role not in {"citizen", "centre_employee"}:
+        raise HTTPException(status_code=403, detail="Not authorized to create tickets")
+
     if ticket_in.request_id:
         request = session.get(ServiceRequest, ticket_in.request_id)
         if not request:
             raise HTTPException(status_code=404, detail="Linked request not found")
-        if request.citizen_id != current_user.id:
+        # Ensure employee is only linking to requests they manage?
+        # Actually, let's just check if it's citizen
+        if current_user.role == "citizen" and request.citizen_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized to link this request")
-            
+
     ticket = SupportTicket(
         citizen_id=current_user.id,
         request_id=ticket_in.request_id,
         subject=ticket_in.subject,
         description=ticket_in.description,
-        status="OPEN"
+        status="OPEN",
     )
     session.add(ticket)
     session.commit()
     session.refresh(ticket)
     return ticket
 
+
 @router.get("/", response_model=list[SupportTicketResponse])
 def list_tickets(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> Any:
-    if current_user.role == "citizen":
+    if current_user.role in {"citizen", "centre_employee"}:
         tickets = session.scalars(
             select(SupportTicket).where(SupportTicket.citizen_id == current_user.id)
         ).all()
@@ -50,6 +63,7 @@ def list_tickets(
         # Admins can see all tickets for now
         tickets = session.scalars(select(SupportTicket)).all()
     return list(tickets)
+
 
 @router.get("/{ticket_id}", response_model=SupportTicketResponse)
 def get_ticket(
@@ -60,9 +74,10 @@ def get_ticket(
     ticket = session.get(SupportTicket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    if current_user.role == "citizen" and ticket.citizen_id != current_user.id:
+    if current_user.role in {"citizen", "centre_employee"} and ticket.citizen_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
     return ticket
+
 
 @router.post("/{ticket_id}/status", response_model=SupportTicketResponse)
 def update_ticket_status(
@@ -74,20 +89,21 @@ def update_ticket_status(
 ) -> Any:
     if current_user.role not in {"centre_administrator", "system_administrator"}:
         raise HTTPException(status_code=403, detail="Not authorized to change ticket status")
-        
+
     ticket = session.get(SupportTicket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
-        
+
     allowed_statuses = {"OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"}
     if update_in.status not in allowed_statuses:
         raise HTTPException(status_code=400, detail="Invalid status")
-        
+
     ticket.status = update_in.status
     session.add(ticket)
-    
+
     # Notify citizen of ticket update
     from app.api.endpoints.requests import _safe_add_notification
+
     _safe_add_notification(
         session,
         user_id=ticket.citizen_id,
@@ -96,10 +112,11 @@ def update_ticket_status(
         title="Support Ticket Updated",
         body=f"Your support ticket '{ticket.subject}' status changed to {ticket.status}.",
     )
-    
+
     session.commit()
     session.refresh(ticket)
     return ticket
+
 
 @router.get("/{ticket_id}/messages", response_model=list[TicketMessageResponse])
 def list_ticket_messages(
@@ -110,13 +127,16 @@ def list_ticket_messages(
     ticket = session.get(SupportTicket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    if current_user.role == "citizen" and ticket.citizen_id != current_user.id:
+    if current_user.role in {"citizen", "centre_employee"} and ticket.citizen_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
-        
+
     messages = session.scalars(
-        select(TicketMessage).where(TicketMessage.ticket_id == ticket_id).order_by(TicketMessage.created_at)
+        select(TicketMessage)
+        .where(TicketMessage.ticket_id == ticket_id)
+        .order_by(TicketMessage.created_at)
     ).all()
     return list(messages)
+
 
 @router.post("/{ticket_id}/messages", response_model=TicketMessageResponse)
 def add_ticket_message(
@@ -129,19 +149,16 @@ def add_ticket_message(
     ticket = session.get(SupportTicket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    if current_user.role == "citizen" and ticket.citizen_id != current_user.id:
+    if current_user.role in {"citizen", "centre_employee"} and ticket.citizen_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
-        
-    message = TicketMessage(
-        ticket_id=ticket_id,
-        sender_id=current_user.id,
-        body=message_in.body
-    )
+
+    message = TicketMessage(ticket_id=ticket_id, sender_id=current_user.id, body=message_in.body)
     session.add(message)
-    
-    # Notify citizen if the message is from an admin
-    if current_user.role != "citizen":
+
+    # Notify ticket creator if the message is from an admin
+    if current_user.role not in {"citizen", "centre_employee"}:
         from app.api.endpoints.requests import _safe_add_notification
+
         _safe_add_notification(
             session,
             user_id=ticket.citizen_id,

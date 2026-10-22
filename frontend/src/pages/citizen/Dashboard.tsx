@@ -4,7 +4,7 @@ import { api } from '../../lib/api';
 import { useNavigate } from 'react-router-dom';
 import { FileText, AlertCircle, CheckCircle, Search, ArrowRight, Loader2, Plus, Clock, FileEdit, HelpCircle, PhoneCall, ChevronRight, Info } from 'lucide-react';
 import clsx from 'clsx';
-import { PageHeader } from '../../components/ui/PageHeader';
+import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -21,7 +21,13 @@ export function Dashboard() {
  const { user } = useAuth();
  const navigate = useNavigate();
   const [requests, setRequests] = useState<RequestSummary[]>([]);
-  const [popularServices, setPopularServices] = useState<unknown[]>([]);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  interface PopularService {
+    id: string;
+    name: string;
+    description?: string;
+  }
+  const [popularServices, setPopularServices] = useState<PopularService[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [requestsError, setRequestsError] = useState(false);
   const [servicesError, setServicesError] = useState(false);
@@ -31,7 +37,8 @@ export function Dashboard() {
     try {
       // Add trailing slash to prevent 307 redirect which causes CORS Network Error via Vite proxy
       const res = await api.get('/requests/');
-      setRequests(res.data || []);
+      setRequests(res.data.items || []);
+      setStatusCounts(res.data.status_counts || {});
     } catch (error) {
       console.error("Failed to fetch requests:", error);
       setRequestsError(true);
@@ -70,11 +77,19 @@ export function Dashboard() {
     );
   }
 
-  // Calculate summaries
+  // Calculate summaries using status counts from backend
+  const getCount = (statuses: string[]) => {
+    return statuses.reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
+  };
+  const needsActionCount = getCount(['CORRECTION_REQUIRED', 'INTERACTION_REQUIRED', 'PAYMENT_PENDING']);
+  const inProgressCount = getCount(['SUBMITTED', 'WAITING_FOR_CENTRE', 'ACCEPTED', 'UNDER_REVIEW', 'INTERACTION_SCHEDULED', 'READY_FOR_PROCESSING', 'PROCESSING']);
+  const completedCount = getCount(['COMPLETED', 'CLOSED']);
+  const draftCount = getCount(['DRAFT']);
+
+  // List previews
   const needsActionRequests = requests.filter(r => ['CORRECTION_REQUIRED', 'INTERACTION_REQUIRED', 'PAYMENT_PENDING'].includes(r.status));
   const inProgressRequests = requests.filter(r => ['SUBMITTED', 'WAITING_FOR_CENTRE', 'ACCEPTED', 'UNDER_REVIEW', 'INTERACTION_SCHEDULED', 'READY_FOR_PROCESSING', 'PROCESSING'].includes(r.status));
-  const completedRequests = requests.filter(r => ['COMPLETED', 'CLOSED'].includes(r.status));
-  const draftRequests = requests.filter(r => r.status === 'DRAFT');
+
 
   const getStatusText = (status: string) => {
     return status.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
@@ -94,14 +109,24 @@ export function Dashboard() {
   return (
   <div className="space-y-6 pb-12">
   {/* Header Area */}
-  <PageHeader 
-  title={`Good morning, ${user?.full_name || 'User'}`}
-  subtitle="Here's a quick overview of your requests."
-  >
-  <Button onClick={() => navigate('/services')} icon={<Plus size={18} strokeWidth={2.5} />}>
-  New Request
-  </Button>
-  </PageHeader>
+  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div className="flex items-center gap-4">
+      <Avatar photoUrl={user?.photo_url} name={user?.full_name} className="w-12 h-12 text-xl shrink-0" />
+      <div>
+        <h1 className="text-2xl font-bold text-mono-text tracking-tight leading-tight">
+          Welcome back, {user?.full_name || 'Citizen'}
+        </h1>
+        <p className="text-[15px] font-medium text-mono-muted mt-0.5">
+          Here's a quick overview of your requests.
+        </p>
+      </div>
+    </div>
+    <div className="shrink-0">
+      <Button onClick={() => navigate('/services')} icon={<Plus size={18} strokeWidth={2.5} />}>
+        New Request
+      </Button>
+    </div>
+  </div>
 
  {/* Primary Stats Grid */}
  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -116,7 +141,7 @@ export function Dashboard() {
  </div>
  <div className="flex items-center justify-between mt-2">
  <div>
- <span className="text-3xl font-bold text-mono-text">{needsActionRequests.length}</span>
+ <span className="text-3xl font-bold text-mono-text">{needsActionCount}</span>
  <p className="text-[13px] text-mono-muted mt-1">Requires your attention</p>
  </div>
  <ChevronRight size={20} className="text-mono-muted" />
@@ -134,7 +159,7 @@ export function Dashboard() {
  </div>
  <div className="flex items-center justify-between mt-2">
  <div>
- <span className="text-3xl font-bold text-mono-text">{inProgressRequests.length}</span>
+ <span className="text-3xl font-bold text-mono-text">{inProgressCount}</span>
  <p className="text-[13px] text-mono-muted mt-1">Being processed</p>
  </div>
  <ChevronRight size={20} className="text-mono-muted" />
@@ -152,7 +177,7 @@ export function Dashboard() {
  </div>
  <div className="flex items-center justify-between mt-2">
  <div>
- <span className="text-3xl font-bold text-mono-text">{completedRequests.length}</span>
+ <span className="text-3xl font-bold text-mono-text">{completedCount}</span>
  <p className="text-[13px] text-mono-muted mt-1">Successfully resolved</p>
  </div>
  <ChevronRight size={20} className="text-mono-muted" />
@@ -170,7 +195,7 @@ export function Dashboard() {
  </div>
  <div className="flex items-center justify-between mt-2">
  <div>
- <span className="text-3xl font-bold text-mono-text">{draftRequests.length}</span>
+ <span className="text-3xl font-bold text-mono-text">{draftCount}</span>
  <p className="text-[13px] text-mono-muted mt-1">Not yet submitted</p>
  </div>
  <ChevronRight size={20} className="text-mono-muted" />

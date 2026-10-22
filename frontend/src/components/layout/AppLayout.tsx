@@ -1,7 +1,10 @@
 import { ReactNode, useState, useEffect } from 'react';
+
+import { Avatar } from '../ui/Avatar';
+import { ChatSidebar } from './ChatSidebar';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, LogOut, FileSearch, Bell, LifeBuoy, Menu, X, Search } from 'lucide-react';
+import { LayoutDashboard, FileText, LogOut, FileSearch, Bell, LifeBuoy, Menu, X } from 'lucide-react';
 import clsx from 'clsx';
 import { api } from '../../lib/api';
 
@@ -28,8 +31,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
  const handleLogout = () => {
  logout();
- navigate('/login');
+ navigate('/');
  };
+
 
  let navItems: Array<{ name: string; path: string; icon: React.ElementType }> = [];
  if (user?.role === 'citizen') {
@@ -42,8 +46,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
  ];
  } else if (user?.role === 'centre_employee') {
  navItems = [
- { name: 'Queue', path: '/queue', icon: LayoutDashboard },
- { name: 'Support Tickets', path: '/support', icon: LifeBuoy },
+ { name: 'Dashboard', path: '/queue', icon: LayoutDashboard },
+ { name: 'Requests', path: '/employee/requests', icon: FileText },
+ { name: 'Notifications', path: '/notifications', icon: Bell },
+ { name: 'Help & Support', path: '/support', icon: LifeBuoy },
  ];
  } else if (user?.role === 'centre_administrator') {
  navItems = [
@@ -135,18 +141,22 @@ export function AppLayout({ children }: { children: ReactNode }) {
  </nav>
 
  <div className="p-4 mt-auto">
- <div className="flex items-center gap-3 px-3 mb-4">
- <div className="w-10 h-10 rounded-full bg-mono-surface flex items-center justify-center text-mono-text font-bold text-sm border border-mono-border shrink-0">
- {user?.full_name ? user.full_name.charAt(0).toUpperCase() : 'S'}
- </div>
+ <button 
+ onClick={() => {
+ navigate('/profile');
+ setIsMobileMenuOpen(false);
+ }}
+ className="w-full flex items-center gap-3 px-3 py-3 mb-4 rounded-xl hover:bg-mono-surface transition-colors text-left group"
+ >
+ <Avatar photoUrl={user?.photo_url} name={user?.full_name} className="w-10 h-10 text-sm shrink-0" />
  <div className="flex-1 min-w-0">
- <p className="text-sm font-bold text-mono-text truncate">{user?.full_name || 'Sample'}</p>
+ <p className="text-sm font-bold text-mono-text truncate" title={user?.full_name || 'Sample'}>{user?.full_name || 'Sample'}</p>
  <p className="text-xs font-medium text-mono-muted capitalize mt-0.5">{user?.role === 'citizen' ? 'Citizen' : user?.role.replace('_', ' ')}</p>
  </div>
- <button onClick={() => navigate('/profile')} className="text-mono-muted hover:text-mono-text">
+ <div className="text-mono-muted opacity-0 group-hover:opacity-100 transition-opacity">
  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
- </button>
  </div>
+ </button>
  <button
  onClick={handleLogout}
  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-mono-text hover:bg-mono-surface transition-colors"
@@ -161,18 +171,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
  <div className="flex-1 flex flex-col overflow-hidden md:mt-0 mt-16 bg-mono-bg">
  {/* Desktop Top Bar */}
  <header className="hidden md:flex h-20 border-b border-mono-border items-center justify-between px-8 shrink-0">
- <div className="flex items-center flex-1 max-w-xl">
- <div className="relative w-full">
- <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-mono-muted" size={18} />
- <input 
- type="text" 
- placeholder="Search for services, requests or help..." 
- className="w-full pl-11 pr-4 py-2.5 bg-mono-bg border border-mono-border rounded-full text-sm font-medium placeholder:text-mono-muted focus:outline-none focus:border-mono-text transition-all"
- onKeyDown={(e) => { if (e.key === 'Enter') navigate('/services'); }}
- />
- </div>
- </div>
+ <div className="flex-1"></div>
  <div className="flex items-center gap-4">
+ 
+ 
  <button onClick={() => navigate('/notifications')} className="relative p-2 text-mono-text hover:bg-mono-surface rounded-full transition-colors">
  <Bell size={24} strokeWidth={2} />
  {unreadCount > 0 && (
@@ -180,8 +182,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
  )}
  </button>
  <div className="w-px h-6 bg-mono-border"></div>
- <button onClick={() => navigate('/profile')} className="flex items-center justify-center w-8 h-8 rounded-full bg-mono-text text-mono-bg text-sm font-bold hover:opacity-90 transition-opacity">
- {user?.full_name ? user.full_name.charAt(0).toUpperCase() : 'S'}
+ <button onClick={() => navigate('/profile')} className="hover:opacity-90 transition-opacity flex items-center justify-center">
+ <Avatar photoUrl={user?.photo_url} name={user?.full_name} className="w-8 h-8 text-sm" />
  </button>
  </div>
  </header>
@@ -192,6 +194,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
  </main>
  </div>
  </div>
+ {(user?.role === 'citizen' || user?.role === 'centre_employee') && (
+   <ChatSidebar currentUserId={user.id} />
+ )}
  </div>
  );
 }

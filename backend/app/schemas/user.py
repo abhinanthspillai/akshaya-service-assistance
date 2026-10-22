@@ -1,6 +1,10 @@
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+import email_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+# Enable RFC test environment so @akshaya.test domains are accepted
+email_validator.TEST_ENVIRONMENT = True
 
 
 class UserRegister(BaseModel):
@@ -8,11 +12,27 @@ class UserRegister(BaseModel):
     password: str = Field(..., min_length=8, max_length=128)
     full_name: str = Field(..., min_length=2, max_length=160)
     phone: str | None = Field(None, max_length=32)
+    role: str = Field("citizen")
+    centre_id: UUID | None = None
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str) -> str:
+        allowed = ("citizen", "centre_employee", "centre_administrator")
+        if v not in allowed:
+            raise ValueError(f"Role must be one of {allowed}, got '{v}'")
+        return v
+
+
+class UserUpdate(BaseModel):
+    full_name: str | None = Field(None, min_length=2, max_length=160)
+    phone: str | None = Field(None, max_length=32)
+    address_text: str | None = None
 
 
 class UserRead(BaseModel):
     id: UUID
-    email: EmailStr
+    email: str
     role: str
     is_active: bool
 
@@ -22,3 +42,7 @@ class UserRead(BaseModel):
 class UserAuthMe(UserRead):
     full_name: str | None = None
     phone: str | None = None
+    address_text: str | None = None
+    centre_id: UUID | None = None
+    approval_status: str | None = None
+    photo_url: str | None = None

@@ -63,7 +63,7 @@ export function Support() {
  api.get('/requests/')
  ]);
  setTickets(ticketsRes.data);
- setMyRequests(requestsRes.data);
+ setMyRequests(requestsRes.data.items || (Array.isArray(requestsRes.data) ? requestsRes.data : []));
  } catch (err) {
  console.error('Failed to load tickets', err);
  } finally {

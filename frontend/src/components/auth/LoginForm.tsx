@@ -22,7 +22,7 @@ export function LoginForm() {
 
  try {
  const formData = new URLSearchParams();
- formData.append('username', email);
+ formData.append('username', email.trim().toLowerCase());
  formData.append('password', password);
 
  const res = await api.post('/auth/login', formData, {
@@ -38,7 +38,7 @@ export function LoginForm() {
  login(access_token, userRes.data);
  navigate(getRoleLandingPage(userRes.data.role), { replace: true });
  } catch (error) {
- const e = error as { response?: { data?: { detail?: string } } };
+ const e = error as { response?: { status?: number; data?: { detail?: string } } };
  if (!e.response) {
  setError('Backend is unavailable. Please try again later.');
  return;
@@ -46,8 +46,10 @@ export function LoginForm() {
  const data = e.response.data;
  if (data && data.detail && typeof data.detail === 'string') {
  setError(data.detail);
- } else {
+ } else if (e.response.status === 401) {
  setError('Invalid email or password');
+ } else {
+ setError('An unexpected error occurred. Please try again.');
  }
  } finally {
  setIsLoading(false);
@@ -55,7 +57,7 @@ export function LoginForm() {
  };
 
  return (
- <div className="w-full max-w-sm mx-auto flex flex-col justify-center h-full">
+ <div className="w-full max-w-sm mx-auto flex flex-col justify-center flex-1 my-auto pb-4">
  <h2 className="text-3xl font-bold text-ink-900 mb-2 text-center md:text-left">Sign in</h2>
  <p className="text-ink-500 mb-8 text-sm text-center md:text-left">
  Access your requests, services, and profile anytime, anywhere.

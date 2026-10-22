@@ -23,7 +23,6 @@ router = APIRouter()
 @router.get("/", response_model=list[AkshayaCentreResponse])
 def get_centres(
     session: SessionDep,
-    current_user: CurrentUser,
     district: str | None = None,
     active: bool = True,
     skip: int = Query(0, ge=0),
@@ -72,7 +71,7 @@ def create_centre(
         action="create_centre",
         target_resource_type="AkshayaCentre",
         target_resource_id=str(centre.id),
-        details={"code": centre.code, "name": centre.name}
+        details={"code": centre.code, "name": centre.name},
     )
     session.commit()
     session.refresh(centre)
@@ -110,7 +109,7 @@ def update_centre(
         action="update_centre",
         target_resource_type="AkshayaCentre",
         target_resource_id=str(centre.id),
-        details=update_data
+        details=update_data,
     )
     session.commit()
     session.refresh(centre)
@@ -176,7 +175,7 @@ def add_centre_service(
         action="add_centre_service",
         target_resource_type="CentreSupportedService",
         target_resource_id=f"{centre_id}:{service_in.service_id}",
-        details={"service_id": str(service_in.service_id)}
+        details={"service_id": str(service_in.service_id)},
     )
     session.commit()
     session.refresh(supported_service)
@@ -209,7 +208,7 @@ def update_centre_service(
         action="update_centre_service",
         target_resource_type="CentreSupportedService",
         target_resource_id=f"{centre_id}:{service_id}",
-        details=update_data
+        details=update_data,
     )
     session.commit()
     session.refresh(supported_service)
@@ -241,7 +240,7 @@ def remove_centre_service(
         action="remove_centre_service",
         target_resource_type="CentreSupportedService",
         target_resource_id=f"{centre_id}:{service_id}",
-        details={"service_id": str(service_id)}
+        details={"service_id": str(service_id)},
     )
     session.commit()
     return None
