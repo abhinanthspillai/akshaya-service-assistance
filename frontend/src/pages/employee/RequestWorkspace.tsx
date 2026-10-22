@@ -17,6 +17,8 @@ import {
   X,
   ShieldAlert,
   ChevronDown,
+  KeyRound,
+  Copy,
 } from 'lucide-react';
 import { formatStatus } from '../../utils/format';
 
@@ -109,6 +111,20 @@ interface RequestMessage {
   created_at: string;
 }
 
+interface OtpState {
+  id: string;
+  request_id: string;
+  status: string;
+  code: string | null;
+  expires_at: string;
+  created_at: string;
+  submitted_at: string | null;
+  resolved_at: string | null;
+  is_awaiting_otp: boolean;
+  failed_attempts_count: number;
+  is_blocked: boolean;
+}
+
 const STATUS_BADGES: Record<string, { bg: string; text: string; border: string }> = {
   WAITING_FOR_CENTRE: { bg: 'bg-amber-50', text: 'text-amber-800', border: 'border-amber-200' },
   ACCEPTED: { bg: 'bg-blue-50', text: 'text-blue-800', border: 'border-blue-200' },
@@ -145,6 +161,9 @@ export function RequestWorkspace() {
   const [interactions, setInteractions] = useState<RequestInteraction[]>([]);
   const [payments, setPayments] = useState<RequestPayment[]>([]);
   const [completedOutput, setCompletedOutput] = useState<CompletedOutput | null>(null);
+  const [otpState, setOtpState] = useState<OtpState | null>(null);
+  const [otpSecondsLeft, setOtpSecondsLeft] = useState<number | null>(null);
+  const [isCopied, setIsCopied] = useState(false);
   const [messages, setMessages] = useState<RequestMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [documentUrls, setDocumentUrls] = useState<Record<string, {url: string, type: string}>>({});
@@ -214,6 +233,13 @@ export function RequestWorkspace() {
             setCompletedOutput(null);
           }
         }
+
+        try {
+          const otpRes = await api.get(`/requests/${id}/otp`);
+          setOtpState(otpRes.data);
+        } catch {
+          setOtpState(null);
+        }
       } catch {
         // partial auxiliary failure fallback
       }
@@ -229,6 +255,47 @@ export function RequestWorkspace() {
   useEffect(() => {
     fetchWorkspace();
   }, [fetchWorkspace]);
+
+  // Poll OTP state if awaiting OTP
+  useEffect(() => {
+    if (!id || !request || request.status !== 'PROCESSING') return;
+    if (otpState && !otpState.is_awaiting_otp) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const otpRes = await api.get(`/requests/${id}/otp`);
+        setOtpState(otpRes.data);
+      } catch {
+        // ignore periodic error
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [id, request, otpState]);
+
+  // Countdown timer for OTP expiry
+  useEffect(() => {
+    if (!otpState || !otpState.is_awaiting_otp || !otpState.expires_at) {
+      setOtpSecondsLeft(null);
+      return;
+    }
+
+    const updateTimer = () => {
+      const diff = Math.floor((new Date(otpState.expires_at).getTime() - Date.now()) / 1000);
+      if (diff <= 0) {
+        setOtpSecondsLeft(0);
+        // refresh state
+        api.get(`/requests/${id}/otp`).then((res) => setOtpState(res.data)).catch(() => {});
+      } else {
+        setOtpSecondsLeft(diff);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [otpState, id]);
+
 
   useEffect(() => {
     if (!request || documents.length === 0) return;
@@ -299,6 +366,43 @@ export function RequestWorkspace() {
       setIsActionLoading(false);
     }
   };
+
+  const handleRequestOtp = async () => {
+    if (!request) return;
+    setIsActionLoading(true);
+    setError('');
+    try {
+      await api.post(`/requests/${request.id}/otp/request`);
+      triggerNotification('OTP requested from citizen.');
+      await fetchWorkspace();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      setError(err.response?.data?.detail || 'Failed to request OTP.');
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleResolveOtp = async (outcome: 'used' | 'failed') => {
+    if (!request) return;
+    setIsActionLoading(true);
+    setError('');
+    try {
+      await api.post(`/requests/${request.id}/otp/resolve`, { outcome });
+      triggerNotification(
+        outcome === 'used'
+          ? 'OTP verified and marked as used.'
+          : 'OTP marked as failed. You can request again if within limit.'
+      );
+      await fetchWorkspace();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      setError(err.response?.data?.detail || `Failed to resolve OTP as ${outcome}.`);
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
 
   const handleDocumentApproval = async (docId: string) => {
     if (!request) return;
@@ -647,18 +751,36 @@ export function RequestWorkspace() {
             )}
 
             {request.status === 'PROCESSING' && (
-              <button
-                onClick={() => {
-                  setActiveModal('complete');
-                  setFeeAmount(request.fee_snapshot || 0);
-                  setFeeCollected(true);
-                }}
-                disabled={isActionLoading}
-                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5"
-              >
-                <CheckCircle2 size={14} />
-                Mark completed
-              </button>
+              <>
+                <button
+                  onClick={handleRequestOtp}
+                  disabled={isActionLoading || otpState?.is_awaiting_otp || otpState?.is_blocked}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+                  title={
+                    otpState?.is_blocked
+                      ? 'Maximum attempts (3) reached. Contact Centre Manager.'
+                      : otpState?.is_awaiting_otp
+                      ? 'OTP already requested and awaiting resolution.'
+                      : 'Request OTP from citizen'
+                  }
+                >
+                  {isActionLoading && <Loader2 size={14} className="animate-spin" />}
+                  <KeyRound size={14} />
+                  Request OTP
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveModal('complete');
+                    setFeeAmount(request.fee_snapshot || 0);
+                    setFeeCollected(true);
+                  }}
+                  disabled={isActionLoading}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                >
+                  <CheckCircle2 size={14} />
+                  Mark completed
+                </button>
+              </>
             )}
             {request.status !== 'WAITING_FOR_CENTRE' && (
               <button
@@ -676,6 +798,168 @@ export function RequestWorkspace() {
             )}
           </div>
         </div>
+
+        {/* OTP Status Panel for Staff */}
+        {request.status === 'PROCESSING' && otpState && (
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-blue-50 text-blue-700 rounded-xl">
+                  <KeyRound size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Government Portal OTP Relay</h3>
+                  <p className="text-xs text-slate-500">
+                    Direct OTP relay from citizen to staff for portal submission
+                  </p>
+                </div>
+              </div>
+
+              {otpState.status === 'PENDING' && (
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                  Waiting for citizen entry...
+                </span>
+              )}
+              {otpState.status === 'SUBMITTED' && (
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
+                  <CheckCircle2 size={12} className="text-emerald-600" />
+                  Received from citizen
+                </span>
+              )}
+              {otpState.status === 'USED' && (
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+                  Used on portal
+                </span>
+              )}
+              {otpState.status === 'FAILED' && (
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                  Did not work / Failed
+                </span>
+              )}
+              {otpState.status === 'EXPIRED' && (
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
+                  Expired
+                </span>
+              )}
+            </div>
+
+            {/* Failure Cap Blocked Notice */}
+            {otpState.is_blocked && (
+              <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-3">
+                <AlertCircle className="text-rose-600 shrink-0 mt-0.5" size={18} />
+                <div className="text-xs text-rose-800">
+                  <p className="font-bold">Maximum OTP verification attempts reached (3 failed attempts).</p>
+                  <p className="mt-0.5">Further OTP requests are blocked for this application. Please contact your Centre Manager to proceed or review the application with the citizen.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Waiting State */}
+            {otpState.status === 'PENDING' && (
+              <div className="flex flex-col sm:flex-row items-center justify-between p-4 bg-amber-50/50 rounded-xl border border-amber-100 gap-3">
+                <div className="flex items-center gap-2 text-xs text-amber-900">
+                  <Loader2 size={16} className="animate-spin text-amber-700" />
+                  <span>
+                    Citizen has been notified to enter the OTP in their application popup.
+                  </span>
+                </div>
+                {otpSecondsLeft !== null && (
+                  <div className="text-xs font-mono font-bold text-amber-800 bg-amber-100/80 px-2.5 py-1 rounded-lg">
+                    Expires in {Math.floor(otpSecondsLeft / 60)}:{(otpSecondsLeft % 60).toString().padStart(2, '0')}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Submitted State with Code & Actions */}
+            {otpState.status === 'SUBMITTED' && (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl gap-4">
+                  <div>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                      Citizen Submitted OTP
+                    </span>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-3xl font-mono font-bold tracking-widest text-slate-900 bg-white px-4 py-1.5 rounded-xl border border-slate-300 shadow-inner">
+                        {otpState.code || '------'}
+                      </span>
+                      {otpState.code && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (otpState.code) {
+                              navigator.clipboard.writeText(otpState.code);
+                              setIsCopied(true);
+                              setTimeout(() => setIsCopied(false), 2000);
+                            }
+                          }}
+                          className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+                          title="Copy to clipboard"
+                        >
+                          {isCopied ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                          {isCopied ? 'Copied' : 'Copy'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {otpSecondsLeft !== null && (
+                    <div className="text-xs font-mono font-semibold text-slate-600 bg-white px-3 py-1.5 rounded-lg border border-slate-200 self-start sm:self-auto">
+                      Expires in {Math.floor(otpSecondsLeft / 60)}:{(otpSecondsLeft % 60).toString().padStart(2, '0')}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <button
+                    onClick={() => handleResolveOtp('used')}
+                    disabled={isActionLoading}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {isActionLoading && <Loader2 size={14} className="animate-spin" />}
+                    <CheckCircle2 size={14} />
+                    Used on portal
+                  </button>
+
+                  <button
+                    onClick={() => handleResolveOtp('failed')}
+                    disabled={isActionLoading}
+                    className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {isActionLoading && <Loader2 size={14} className="animate-spin" />}
+                    <X size={14} />
+                    Didn't work, request again
+                  </button>
+
+                  <span className="text-xs text-slate-500">
+                    Marking as failed records attempt ({otpState.failed_attempts_count + 1}/3).
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Resolved or Expired State */}
+            {(otpState.status === 'USED' || otpState.status === 'FAILED' || otpState.status === 'EXPIRED') && !otpState.is_blocked && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-600 gap-2">
+                <div>
+                  {otpState.status === 'USED' && <span>Last OTP was successfully used. You can request another if needed by the portal.</span>}
+                  {otpState.status === 'FAILED' && <span>Last OTP did not work ({otpState.failed_attempts_count}/3 attempts recorded). You can request another.</span>}
+                  {otpState.status === 'EXPIRED' && <span>Last OTP expired without resolution. You can request a new OTP.</span>}
+                </div>
+                <button
+                  onClick={handleRequestOtp}
+                  disabled={isActionLoading || otpState.is_blocked}
+                  className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold text-xs transition-colors self-start sm:self-auto flex items-center gap-1.5"
+                >
+                  <KeyRound size={12} />
+                  Request new OTP
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
 
         {/* 1. Document Verification Section */}
         <div className="space-y-4">

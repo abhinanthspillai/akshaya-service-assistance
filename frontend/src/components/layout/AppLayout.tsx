@@ -8,12 +8,17 @@ import { LayoutDashboard, FileText, LogOut, FileSearch, Bell, LifeBuoy, Menu, X 
 import clsx from 'clsx';
 import { api } from '../../lib/api';
 
+import { CitizenOtpModal, PendingOtpData } from '../citizen/CitizenOtpModal';
+
 export function AppLayout({ children }: { children: ReactNode }) {
  const { user, logout } = useAuth();
  const navigate = useNavigate();
  const location = useLocation();
  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
  const [unreadCount, setUnreadCount] = useState(0);
+
+ const [pendingOtp, setPendingOtp] = useState<PendingOtpData | null>(null);
+ const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
 
  useEffect(() => {
    if (user) {
@@ -28,6 +33,54 @@ export function AppLayout({ children }: { children: ReactNode }) {
      return () => window.removeEventListener('notificationsRead', handleNotificationsRead);
    }
  }, [user]);
+
+ // Poll for pending OTP every 5 seconds for citizen
+ useEffect(() => {
+   if (!user || user.role !== 'citizen') {
+     setPendingOtp(null);
+     setIsOtpModalOpen(false);
+     return;
+   }
+
+   const checkPendingOtp = async () => {
+     try {
+       const res = await api.get('/me/pending-otp');
+       if (res.data && res.data.status === 'PENDING') {
+         setPendingOtp(res.data);
+         // Open automatically if not closed by user for this specific OTP id
+         const dismissedId = sessionStorage.getItem('dismissed_otp_id');
+         if (dismissedId !== res.data.id) {
+           setIsOtpModalOpen(true);
+         }
+       } else {
+         setPendingOtp(null);
+         setIsOtpModalOpen(false);
+         sessionStorage.removeItem('dismissed_otp_id');
+       }
+     } catch {
+       // graceful poll error handling
+     }
+   };
+
+   checkPendingOtp();
+   const pollInterval = setInterval(checkPendingOtp, 5000);
+
+   const handleOpenOtpModal = (e: Event) => {
+     const customEvent = e as CustomEvent<{ otpData?: PendingOtpData }>;
+     if (customEvent.detail?.otpData) {
+       setPendingOtp(customEvent.detail.otpData);
+     }
+     sessionStorage.removeItem('dismissed_otp_id');
+     setIsOtpModalOpen(true);
+   };
+   window.addEventListener('openOtpModal', handleOpenOtpModal);
+
+   return () => {
+     clearInterval(pollInterval);
+     window.removeEventListener('openOtpModal', handleOpenOtpModal);
+   };
+ }, [user]);
+
 
  const handleLogout = () => {
  logout();
@@ -196,6 +249,22 @@ export function AppLayout({ children }: { children: ReactNode }) {
  </div>
  {(user?.role === 'citizen' || user?.role === 'centre_employee') && (
    <ChatSidebar currentUserId={user.id} />
+ )}
+ {user?.role === 'citizen' && (
+   <CitizenOtpModal
+     otpData={pendingOtp}
+     isOpen={isOtpModalOpen}
+     onClose={() => {
+       setIsOtpModalOpen(false);
+       if (pendingOtp) {
+         sessionStorage.setItem('dismissed_otp_id', pendingOtp.id);
+       }
+     }}
+     onSuccess={() => {
+       setPendingOtp(null);
+       sessionStorage.removeItem('dismissed_otp_id');
+     }}
+   />
  )}
  </div>
  );
