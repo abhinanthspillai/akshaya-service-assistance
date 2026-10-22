@@ -2513,7 +2513,7 @@ def get_request_output(
     if not service_request:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    _verify_active_assignment(current_user, service_request, session)
+    _verify_request_access(current_user, service_request, session)
 
     output = session.scalar(select(CompletedOutput).where(CompletedOutput.request_id == request_id))
     if not output:
