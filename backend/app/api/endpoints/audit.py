@@ -9,6 +9,7 @@ from app.schemas.audit import AuditLogResponse
 
 router = APIRouter()
 
+
 @router.get("/", response_model=list[AuditLogResponse])
 def list_audit_logs(
     session: SessionDep,

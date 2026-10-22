@@ -1,11 +1,21 @@
-from uuid import uuid4, UUID
+from uuid import UUID, uuid4
+
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from app.models.request import ServiceRequest
+
 from app.models.assignment import RequestAssignment, RequestHistory
 from app.models.profile import EmployeeProfile
+from app.models.request import ServiceRequest
 
-def test_admin_reassign_request(client: TestClient, db_session: Session, admin_headers: dict[str, str], admin_id: str, normal_user_id: str, test_centre_id: str):
+
+def test_admin_reassign_request(
+    client: TestClient,
+    db_session: Session,
+    admin_headers: dict[str, str],
+    admin_id: str,
+    normal_user_id: str,
+    test_centre_id: str,
+):
     # Setup accepted request with assignment
     req_id = uuid4()
     req = ServiceRequest(
@@ -18,15 +28,25 @@ def test_admin_reassign_request(client: TestClient, db_session: Session, admin_h
         service_name_snapshot="Test",
     )
     db_session.add(req)
-    
+
     old_employee_id = uuid4()
-    old_emp = EmployeeProfile(centre_id=UUID(test_centre_id), is_available=True, user_id=old_employee_id, full_name="Old Emp")
+    old_emp = EmployeeProfile(
+        centre_id=UUID(test_centre_id),
+        is_available=True,
+        user_id=old_employee_id,
+        full_name="Old Emp",
+    )
     db_session.add(old_emp)
 
     new_employee_id = uuid4()
-    new_emp = EmployeeProfile(centre_id=UUID(test_centre_id), is_available=True, user_id=new_employee_id, full_name="New Emp")
+    new_emp = EmployeeProfile(
+        centre_id=UUID(test_centre_id),
+        is_available=True,
+        user_id=new_employee_id,
+        full_name="New Emp",
+    )
     db_session.add(new_emp)
-    
+
     assignment = RequestAssignment(
         request_id=req_id,
         employee_id=old_employee_id,
@@ -34,24 +54,29 @@ def test_admin_reassign_request(client: TestClient, db_session: Session, admin_h
     )
     db_session.add(assignment)
     db_session.commit()
-    
+
     r = client.post(
-        f"/api/v1/requests/{req_id}/reassign", 
+        f"/api/v1/requests/{req_id}/reassign",
         headers=admin_headers,
-        json={"employee_id": str(new_employee_id)}
+        json={"employee_id": str(new_employee_id)},
     )
     assert r.status_code == 200
-    
+
     # Check assignment replaced
-    old_assignment = db_session.query(RequestAssignment).filter_by(employee_id=old_employee_id).first()
+    old_assignment = (
+        db_session.query(RequestAssignment).filter_by(employee_id=old_employee_id).first()
+    )
     assert old_assignment.is_active is False
     assert old_assignment.revoked_at is not None
-    
-    new_assignment = db_session.query(RequestAssignment).filter_by(employee_id=new_employee_id).first()
+
+    new_assignment = (
+        db_session.query(RequestAssignment).filter_by(employee_id=new_employee_id).first()
+    )
     assert new_assignment.is_active is True
-    
+
     # Check history
     history = db_session.query(RequestHistory).filter_by(request_id=req_id).first()
     assert history is not None
     from app.models.enums import RequestAction
+
     assert history.action == RequestAction.REASSIGN.value

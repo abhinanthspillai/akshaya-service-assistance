@@ -1,11 +1,20 @@
 from uuid import uuid4
+
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from app.models.request import ServiceRequest
-from app.models.assignment import RequestHistory
 
-def test_citizen_cancel_allowed_state(client: TestClient, db_session: Session, normal_user_headers: dict[str, str], normal_user_id: str):
+from app.models.assignment import RequestHistory
+from app.models.request import ServiceRequest
+
+
+def test_citizen_cancel_allowed_state(
+    client: TestClient,
+    db_session: Session,
+    normal_user_headers: dict[str, str],
+    normal_user_id: str,
+):
     from uuid import UUID
+
     req = ServiceRequest(
         id=uuid4(),
         citizen_id=UUID(normal_user_id),
@@ -16,18 +25,26 @@ def test_citizen_cancel_allowed_state(client: TestClient, db_session: Session, n
     )
     db_session.add(req)
     db_session.commit()
-    
+
     r = client.post(f"/api/v1/requests/{req.id}/cancel", headers=normal_user_headers)
     assert r.status_code == 200
     data = r.json()
     assert data["status"] == "CANCELLED"
-    
+
     history = db_session.query(RequestHistory).filter_by(request_id=req.id).first()
     from app.models.enums import RequestAction
+
     assert history.action == RequestAction.CANCEL.value
 
-def test_citizen_cancel_not_allowed_state(client: TestClient, db_session: Session, normal_user_headers: dict[str, str], normal_user_id: str):
+
+def test_citizen_cancel_not_allowed_state(
+    client: TestClient,
+    db_session: Session,
+    normal_user_headers: dict[str, str],
+    normal_user_id: str,
+):
     from uuid import UUID
+
     req = ServiceRequest(
         id=uuid4(),
         citizen_id=UUID(normal_user_id),
@@ -38,11 +55,14 @@ def test_citizen_cancel_not_allowed_state(client: TestClient, db_session: Sessio
     )
     db_session.add(req)
     db_session.commit()
-    
+
     r = client.post(f"/api/v1/requests/{req.id}/cancel", headers=normal_user_headers)
     assert r.status_code == 400
 
-def test_non_owner_cannot_cancel(client: TestClient, db_session: Session, normal_user_headers: dict[str, str]):
+
+def test_non_owner_cannot_cancel(
+    client: TestClient, db_session: Session, normal_user_headers: dict[str, str]
+):
     req = ServiceRequest(
         id=uuid4(),
         citizen_id=uuid4(),
@@ -53,6 +73,6 @@ def test_non_owner_cannot_cancel(client: TestClient, db_session: Session, normal
     )
     db_session.add(req)
     db_session.commit()
-    
+
     r = client.post(f"/api/v1/requests/{req.id}/cancel", headers=normal_user_headers)
     assert r.status_code == 403

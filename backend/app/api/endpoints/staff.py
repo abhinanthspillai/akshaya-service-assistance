@@ -5,8 +5,8 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, CurrentUserSysAdmin, SessionDep
-from app.core.security import get_password_hash
 from app.core.audit import log_audit
+from app.core.security import get_password_hash
 from app.models.centre import AkshayaCentre
 from app.models.profile import CentreAdministrator, EmployeeProfile
 from app.models.user import User
@@ -19,7 +19,6 @@ from app.schemas.staff import (
     StaffStatusUpdate,
     UserStaffResponse,
 )
-
 
 router = APIRouter()
 
@@ -76,7 +75,7 @@ def create_employee(
         action="create_employee",
         target_resource_type="User",
         target_resource_id=user.id,
-        details={"email": user.email, "centre_id": str(centre_id)}
+        details={"email": user.email, "centre_id": str(centre_id)},
     )
     session.commit()
     session.refresh(user)
@@ -120,7 +119,7 @@ def create_centre_admin(
         action="create_centre_admin",
         target_resource_type="User",
         target_resource_id=user.id,
-        details={"email": user.email, "centre_id": str(centre_id)}
+        details={"email": user.email, "centre_id": str(centre_id)},
     )
     session.commit()
     session.refresh(user)
@@ -165,7 +164,7 @@ def update_user_status(
         action="update_user_status",
         target_resource_type="User",
         target_resource_id=target_user.id,
-        details={"email": target_user.email, "is_active": status_in.is_active}
+        details={"email": target_user.email, "is_active": status_in.is_active},
     )
     session.commit()
     session.refresh(target_user)
@@ -282,7 +281,9 @@ def approve_account_request(
         if not emp_profile:
             raise HTTPException(status_code=404, detail="Employee profile not found")
         if emp_profile.approval_status != "PENDING_APPROVAL":
-            raise HTTPException(status_code=409, detail=f"Request already processed ({emp_profile.approval_status})")
+            raise HTTPException(
+                status_code=409, detail=f"Request already processed ({emp_profile.approval_status})"
+            )
 
         # Check authorization
         if current_user.role == "system_administrator":
@@ -308,13 +309,18 @@ def approve_account_request(
     elif target_user.role == "centre_administrator":
         # Only System Admin can approve a Centre Administrator
         if current_user.role != "system_administrator":
-            raise HTTPException(status_code=403, detail="Only System Admin can approve Centre Manager accounts")
+            raise HTTPException(
+                status_code=403, detail="Only System Admin can approve Centre Manager accounts"
+            )
 
         admin_profile = session.get(CentreAdministrator, target_user_id)
         if not admin_profile:
             raise HTTPException(status_code=404, detail="Centre administrator profile not found")
         if admin_profile.approval_status != "PENDING_APPROVAL":
-            raise HTTPException(status_code=409, detail=f"Request already processed ({admin_profile.approval_status})")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Request already processed ({admin_profile.approval_status})",
+            )
 
         # Verify no other manager was approved in the meantime
         other_active = session.scalar(
@@ -325,7 +331,9 @@ def approve_account_request(
             )
         )
         if other_active:
-            raise HTTPException(status_code=409, detail="A manager has already been approved for this centre")
+            raise HTTPException(
+                status_code=409, detail="A manager has already been approved for this centre"
+            )
 
         admin_profile.approval_status = "APPROVED"
         session.add(admin_profile)
@@ -363,7 +371,9 @@ def reject_account_request(
         if not emp_profile:
             raise HTTPException(status_code=404, detail="Employee profile not found")
         if emp_profile.approval_status != "PENDING_APPROVAL":
-            raise HTTPException(status_code=409, detail=f"Request already processed ({emp_profile.approval_status})")
+            raise HTTPException(
+                status_code=409, detail=f"Request already processed ({emp_profile.approval_status})"
+            )
 
         if current_user.role == "system_administrator":
             pass
@@ -387,13 +397,18 @@ def reject_account_request(
 
     elif target_user.role == "centre_administrator":
         if current_user.role != "system_administrator":
-            raise HTTPException(status_code=403, detail="Only System Admin can reject Centre Manager accounts")
+            raise HTTPException(
+                status_code=403, detail="Only System Admin can reject Centre Manager accounts"
+            )
 
         admin_profile = session.get(CentreAdministrator, target_user_id)
         if not admin_profile:
             raise HTTPException(status_code=404, detail="Centre administrator profile not found")
         if admin_profile.approval_status != "PENDING_APPROVAL":
-            raise HTTPException(status_code=409, detail=f"Request already processed ({admin_profile.approval_status})")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Request already processed ({admin_profile.approval_status})",
+            )
 
         admin_profile.approval_status = "REJECTED"
         session.add(admin_profile)
@@ -410,4 +425,3 @@ def reject_account_request(
 
     session.commit()
     return {"message": "Account request rejected successfully"}
-

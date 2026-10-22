@@ -13,7 +13,6 @@ from app.models.user import User
 from app.schemas.token import Token
 from app.schemas.user import UserAuthMe, UserRead, UserRegister
 
-
 router = APIRouter()
 
 
@@ -31,7 +30,10 @@ def register(user_in: UserRegister, session: SessionDep) -> User:
     if user_in.role not in ("citizen", "centre_employee", "centre_administrator"):
         raise HTTPException(
             status_code=422,
-            detail="Invalid registration role. Only 'citizen', 'centre_employee', and 'centre_administrator' are allowed.",
+            detail=(
+                "Invalid registration role. "
+                "Only 'citizen', 'centre_employee', and 'centre_administrator' are allowed."
+            ),
         )
 
     if user_in.role in ("centre_employee", "centre_administrator"):
@@ -58,7 +60,10 @@ def register(user_in: UserRegister, session: SessionDep) -> User:
         if existing_mgr:
             raise HTTPException(
                 status_code=409,
-                detail="This Akshaya Centre already has an active manager or a pending manager request.",
+                detail=(
+                    "This Akshaya Centre already has an active manager "
+                    "or a pending manager request."
+                ),
             )
 
     user = User(
@@ -200,7 +205,6 @@ def get_auth_me(current_user: CurrentUser, session: SessionDep) -> UserAuthMe:
             response.full_name = admin_profile.full_name
             response.centre_id = admin_profile.centre_id
             response.approval_status = admin_profile.approval_status
-
 
     if current_user.profile_photo:
         # Avoid caching issues on frontend by relying on frontend suffix or add it here?

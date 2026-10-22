@@ -3,6 +3,7 @@ from uuid import UUID
 
 from app.models.audit import AuditLog
 
+
 def log_audit(
     session: Any,
     *,

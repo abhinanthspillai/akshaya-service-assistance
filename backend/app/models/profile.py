@@ -49,9 +49,7 @@ class EmployeeProfile(Base):
     photo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     max_active_requests: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    approval_status: Mapped[str] = mapped_column(
-        String(32), default="APPROVED", nullable=False
-    )
+    approval_status: Mapped[str] = mapped_column(String(32), default="APPROVED", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.now(), nullable=False
     )
@@ -79,9 +77,7 @@ class CentreAdministrator(Base):
         UUID(as_uuid=True), ForeignKey("akshaya_centres.id"), index=True, nullable=False
     )
     full_name: Mapped[str] = mapped_column(String(160), nullable=False)
-    approval_status: Mapped[str] = mapped_column(
-        String(32), default="APPROVED", nullable=False
-    )
+    approval_status: Mapped[str] = mapped_column(String(32), default="APPROVED", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.now(), nullable=False
     )
@@ -102,4 +98,3 @@ class CentreAdministrator(Base):
             postgresql_where="approval_status IN ('APPROVED', 'PENDING_APPROVAL')",
         ),
     )
-

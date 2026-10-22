@@ -32,7 +32,9 @@ def second_centre(db_session: Session) -> AkshayaCentre:
 
 
 @pytest.fixture
-def centre_b_request(db_session: Session, normal_user_id: str, second_centre: AkshayaCentre) -> ServiceRequest:
+def centre_b_request(
+    db_session: Session, normal_user_id: str, second_centre: AkshayaCentre
+) -> ServiceRequest:
     service = Service(
         id=uuid4(),
         name="Service B",
@@ -61,19 +63,26 @@ def centre_b_request(db_session: Session, normal_user_id: str, second_centre: Ak
 
 # --- 1. Parametrised cross-centre 403/404 over every action endpoint ---
 
+
 @pytest.mark.parametrize(
     "endpoint_suffix,payload",
     [
         ("accept", {}),
+        ("accept-and-start-review", {}),
         ("start-review", {}),
         ("mark-ready", {}),
+        ("mark-ready-and-start-processing", {}),
+        ("documents/approve-all", {}),
         ("start-processing", {}),
         ("unable-to-proceed", {"reason": "Not eligible"}),
         ("request-payment", {}),
         ("complete", {"collection_instructions": "Come pick up"}),
         ("reassign", {"employee_id": str(uuid4())}),
         ("require-interaction", {"requirement_id": str(uuid4()), "reason": "Meet in person"}),
-        ("schedule-interaction", {"interaction_id": str(uuid4()), "scheduled_at": "2026-09-30T10:00:00Z"}),
+        (
+            "schedule-interaction",
+            {"interaction_id": str(uuid4()), "scheduled_at": "2026-09-30T10:00:00Z"},
+        ),
         ("messages", {"body": "Cross centre message attempt"}),
     ],
 )
@@ -89,7 +98,9 @@ def test_cross_centre_action_endpoints_forbidden(
         headers=employee_headers,
         json=payload,
     )
-    assert r.status_code in (403, 404), f"Expected 403 or 404 for {endpoint_suffix}, got {r.status_code}: {r.text}"
+    assert r.status_code in (403, 404), (
+        f"Expected 403 or 404 for {endpoint_suffix}, got {r.status_code}: {r.text}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -147,24 +158,72 @@ def test_cross_centre_document_download_forbidden(
 
 
 EXPLICIT_REQUEST_ROUTE_ALLOWLIST = {
-    ("DELETE", "/api/v1/requests/{request_id}"): "Citizen draft deletion route; restricted to draft owner citizen.",
-    ("POST", "/api/v1/requests/{request_id}/select-centre"): "Citizen pre-submission routing to choose target Akshaya centre.",
-    ("POST", "/api/v1/requests/{request_id}/submit"): "Citizen submission action to submit request to selected centre.",
-    ("POST", "/api/v1/requests/{request_id}/pre-validate"): "Citizen pre-validation check against required service documents.",
-    ("POST", "/api/v1/requests/{request_id}/cancel"): "Citizen-initiated request cancellation; owner-restricted.",
-    ("POST", "/api/v1/requests/{request_id}/close"): "Citizen terminal closure after request completion.",
-    ("POST", "/api/v1/requests/{request_id}/documents"): "Citizen document upload endpoint for requirement submissions and re-uploads.",
-    ("POST", "/api/v1/requests/{request_id}/payments/{payment_id}/confirm"): "Citizen mock payment confirmation gateway endpoint.",
-    ("POST", "/api/v1/requests/{request_id}/payments/{payment_id}/fail"): "Citizen mock payment failure callback endpoint.",
-    ("POST", "/api/v1/requests/{request_id}/payments/{payment_id}/cancel"): "Citizen mock payment cancellation endpoint.",
-    ("GET", "/api/v1/requests/{request_id}/output"): "Citizen output delivery endpoint to download generated certificate/document.",
+    (
+        "DELETE",
+        "/api/v1/requests/{request_id}",
+    ): "Citizen draft deletion route; restricted to draft owner citizen.",
+    (
+        "POST",
+        "/api/v1/requests/{request_id}/select-centre",
+    ): "Citizen pre-submission routing to choose target Akshaya centre.",
+    (
+        "POST",
+        "/api/v1/requests/{request_id}/submit",
+    ): "Citizen submission action to submit request to selected centre.",
+    (
+        "POST",
+        "/api/v1/requests/{request_id}/pre-validate",
+    ): "Citizen pre-validation check against required service documents.",
+    (
+        "POST",
+        "/api/v1/requests/{request_id}/cancel",
+    ): "Citizen-initiated request cancellation; owner-restricted.",
+    (
+        "POST",
+        "/api/v1/requests/{request_id}/close",
+    ): "Citizen terminal closure after request completion.",
+    (
+        "POST",
+        "/api/v1/requests/{request_id}/documents",
+    ): "Citizen document upload endpoint for requirement submissions and re-uploads.",
+    (
+        "POST",
+        "/api/v1/requests/{request_id}/payments/{payment_id}/confirm",
+    ): "Citizen mock payment confirmation gateway endpoint.",
+    (
+        "POST",
+        "/api/v1/requests/{request_id}/payments/{payment_id}/fail",
+    ): "Citizen mock payment failure callback endpoint.",
+    (
+        "POST",
+        "/api/v1/requests/{request_id}/payments/{payment_id}/cancel",
+    ): "Citizen mock payment cancellation endpoint.",
+    (
+        "GET",
+        "/api/v1/requests/{request_id}/output",
+    ): "Citizen output delivery endpoint to download generated certificate/document.",
+    (
+        "POST",
+        "/api/v1/requests/{request_id}/payments/{payment_id}/razorpay-order",
+    ): "Citizen endpoint to generate Razorpay order for pending service fee.",
+    (
+        "POST",
+        "/api/v1/requests/{request_id}/payments/{payment_id}/razorpay-verify",
+    ): "Citizen endpoint to verify Razorpay payment signature.",
+    (
+        "GET",
+        "/api/v1/conversations/request/{request_id}",
+    ): "Participant route to fetch chat conversation thread for a service request.",
 }
 
 CROSS_CENTRE_COVERED_ROUTES = {
     # Action endpoints tested in test_cross_centre_action_endpoints_forbidden
     ("POST", "/api/v1/requests/{request_id}/accept"),
+    ("POST", "/api/v1/requests/{request_id}/accept-and-start-review"),
     ("POST", "/api/v1/requests/{request_id}/start-review"),
     ("POST", "/api/v1/requests/{request_id}/mark-ready"),
+    ("POST", "/api/v1/requests/{request_id}/mark-ready-and-start-processing"),
+    ("POST", "/api/v1/requests/{request_id}/documents/approve-all"),
     ("POST", "/api/v1/requests/{request_id}/start-processing"),
     ("POST", "/api/v1/requests/{request_id}/unable-to-proceed"),
     ("POST", "/api/v1/requests/{request_id}/request-payment"),
@@ -203,16 +262,21 @@ def test_all_request_scoped_routes_are_covered_or_allowlisted():
 
     unaccounted = []
     for route in all_request_routes:
-        if route not in CROSS_CENTRE_COVERED_ROUTES and route not in EXPLICIT_REQUEST_ROUTE_ALLOWLIST:
+        if (
+            route not in CROSS_CENTRE_COVERED_ROUTES
+            and route not in EXPLICIT_REQUEST_ROUTE_ALLOWLIST
+        ):
             unaccounted.append(f"{route[0]} {route[1]}")
 
     assert not unaccounted, (
-        f"The following request-scoped routes are neither covered by cross-centre tests "
-        f"nor present on the explicit allowlist with a written reason:\n" + "\n".join(unaccounted)
+        "The following request-scoped routes are neither covered by cross-centre tests "
+        "nor present on the explicit allowlist with a written reason:\n" + "\n".join(unaccounted)
     )
 
     for route, reason in EXPLICIT_REQUEST_ROUTE_ALLOWLIST.items():
-        assert reason and len(reason.strip()) > 10, f"Allowlisted route {route} must have a written reason."
+        assert reason and len(reason.strip()) > 10, (
+            f"Allowlisted route {route} must have a written reason."
+        )
 
 
 def test_cross_centre_document_review_forbidden(
@@ -273,6 +337,7 @@ def test_cross_centre_interaction_outcome_forbidden(
 
 
 # --- 2. Partial vs full document replacement ---
+
 
 def test_partial_vs_full_document_replacement(
     client: TestClient,
@@ -374,6 +439,7 @@ def test_partial_vs_full_document_replacement(
 
 # --- 3. Centre-first search ---
 
+
 def test_centre_first_search(
     client: TestClient,
     db_session: Session,
@@ -432,6 +498,7 @@ def test_centre_first_search(
 
 
 # --- 4. Search % and _ escaping ---
+
 
 def test_search_escaping_wildcards_and_short_id(
     client: TestClient,

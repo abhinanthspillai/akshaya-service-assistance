@@ -24,11 +24,11 @@ class UserRegister(BaseModel):
         return v
 
 
-
 class UserUpdate(BaseModel):
     full_name: str | None = Field(None, min_length=2, max_length=160)
     phone: str | None = Field(None, max_length=32)
     address_text: str | None = None
+
 
 class UserRead(BaseModel):
     id: UUID

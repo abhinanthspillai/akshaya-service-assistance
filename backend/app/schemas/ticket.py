@@ -1,11 +1,12 @@
 from datetime import datetime
 from uuid import UUID
-from typing import Optional
 
 from pydantic import BaseModel
 
+
 class TicketMessageCreate(BaseModel):
     body: str
+
 
 class TicketMessageResponse(BaseModel):
     id: UUID
@@ -17,18 +18,21 @@ class TicketMessageResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 class SupportTicketCreate(BaseModel):
-    request_id: Optional[UUID] = None
+    request_id: UUID | None = None
     subject: str
     description: str
+
 
 class SupportTicketUpdate(BaseModel):
     status: str
 
+
 class SupportTicketResponse(BaseModel):
     id: UUID
     citizen_id: UUID
-    request_id: Optional[UUID]
+    request_id: UUID | None
     subject: str
     description: str
     status: str

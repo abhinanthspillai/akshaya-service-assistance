@@ -41,6 +41,12 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    # Allow FastAPI dependency injection and File() defaults in endpoint functions
+    "B008",
+    # Allow Python str Enum subclasses for SQLAlchemy string-backed enums
+    "UP042",
+]
 
 [tool.mypy]
 python_version = "3.12"

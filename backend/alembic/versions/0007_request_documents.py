@@ -48,7 +48,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_request_documents_request_requirement_current", table_name="request_documents")
+    op.drop_index(
+        "ix_request_documents_request_requirement_current", table_name="request_documents"
+    )
     op.drop_index("ix_request_documents_uploaded_by_id", table_name="request_documents")
     op.drop_index("ix_request_documents_requirement_id", table_name="request_documents")
     op.drop_index("ix_request_documents_request_id", table_name="request_documents")

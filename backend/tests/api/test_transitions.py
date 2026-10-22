@@ -1,4 +1,5 @@
-from uuid import UUID, uuid4
+from uuid import uuid4
+
 import pytest
 from sqlalchemy.orm import Session
 
@@ -115,8 +116,16 @@ def test_all_transitions_write_exactly_one_history_and_one_notification(
     actor_role = allowed_roles[0]
     actor = users_by_role[actor_role]
 
-    reason_text = "Citizen documents do not meet statutory eligibility" if to_status == "UNABLE_TO_PROCEED" else None
-    action = RequestAction.UNABLE_TO_PROCEED if to_status == "UNABLE_TO_PROCEED" else RequestAction.SUBMIT_REQUEST
+    reason_text = (
+        "Citizen documents do not meet statutory eligibility"
+        if to_status == "UNABLE_TO_PROCEED"
+        else None
+    )
+    action = (
+        RequestAction.UNABLE_TO_PROCEED
+        if to_status == "UNABLE_TO_PROCEED"
+        else RequestAction.SUBMIT_REQUEST
+    )
 
     # 3. Perform transition through shared helper
     _perform_transition(
@@ -134,11 +143,7 @@ def test_all_transitions_write_exactly_one_history_and_one_notification(
     assert req.status == to_status
 
     # 5. Assert exactly ONE RequestHistory row written
-    history_rows = (
-        db_session.query(RequestHistory)
-        .filter_by(request_id=req.id)
-        .all()
-    )
+    history_rows = db_session.query(RequestHistory).filter_by(request_id=req.id).all()
     assert len(history_rows) == 1
     assert history_rows[0].from_status == from_status
     assert history_rows[0].to_status == to_status
@@ -147,9 +152,7 @@ def test_all_transitions_write_exactly_one_history_and_one_notification(
 
     # 6. Assert exactly ONE citizen notification written
     notifications = (
-        db_session.query(Notification)
-        .filter_by(request_id=req.id, user_id=citizen.id)
-        .all()
+        db_session.query(Notification).filter_by(request_id=req.id, user_id=citizen.id).all()
     )
     assert len(notifications) == 1
     assert notifications[0].user_id == citizen.id

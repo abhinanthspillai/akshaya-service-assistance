@@ -5,17 +5,18 @@ Revises: 0c67afc0b3d2
 Create Date: 2026-09-24 07:21:43.101130+00:00
 
 """
-from typing import Sequence, Union
 
-from alembic import op
+from collections.abc import Sequence
+
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = '6562942120d5'
-down_revision: Union[str, None] = '0c67afc0b3d2'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+revision: str = "6562942120d5"
+down_revision: str | None = "0c67afc0b3d2"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

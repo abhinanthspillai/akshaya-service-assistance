@@ -48,6 +48,7 @@ def mark_all_notifications_read(
     current_user: CurrentUser,
 ) -> Any:
     from sqlalchemy import update
+
     stmt = (
         update(Notification)
         .where(Notification.user_id == current_user.id)

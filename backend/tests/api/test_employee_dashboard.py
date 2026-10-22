@@ -1,11 +1,11 @@
 from datetime import UTC, datetime, timedelta
-from uuid import UUID, uuid4
-from zoneinfo import ZoneInfo
+from uuid import uuid4
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.core.security import get_password_hash
+from app.core.security import create_access_token, get_password_hash
 from app.models.centre import AkshayaCentre
 from app.models.document import RequestDocument
 from app.models.profile import CitizenProfile, EmployeeProfile
@@ -39,7 +39,9 @@ def dashboard_fixture(db_session: Session, client: TestClient):
     db_session.commit()
 
     # Service
-    svc = Service(name="Dashboard Test Service", code=f"DTS_{uuid4().hex[:4]}", service_type="A", base_fee=150)
+    svc = Service(
+        name="Dashboard Test Service", code=f"DTS_{uuid4().hex[:4]}", service_type="A", base_fee=150
+    )
     db_session.add(svc)
     db_session.commit()
 
@@ -57,7 +59,9 @@ def dashboard_fixture(db_session: Session, client: TestClient):
     db_session.commit()
 
     # Employee Centre A - Approved
-    emp_a_user = User(email=f"emp_a_{uuid4().hex[:6]}@test.com", password_hash=pwd, role="centre_employee")
+    emp_a_user = User(
+        email=f"emp_a_{uuid4().hex[:6]}@test.com", password_hash=pwd, role="centre_employee"
+    )
     db_session.add(emp_a_user)
     db_session.commit()
     emp_a_prof = EmployeeProfile(
@@ -70,7 +74,9 @@ def dashboard_fixture(db_session: Session, client: TestClient):
     db_session.commit()
 
     # Employee Centre A - Pending Approval
-    emp_pending_user = User(email=f"emp_pend_{uuid4().hex[:6]}@test.com", password_hash=pwd, role="centre_employee")
+    emp_pending_user = User(
+        email=f"emp_pend_{uuid4().hex[:6]}@test.com", password_hash=pwd, role="centre_employee"
+    )
     db_session.add(emp_pending_user)
     db_session.commit()
     emp_pending_prof = EmployeeProfile(
@@ -83,15 +89,18 @@ def dashboard_fixture(db_session: Session, client: TestClient):
     db_session.commit()
 
     # Logins
-    res_a = client.post("/api/v1/auth/login", data={"username": emp_a_user.email, "password": "testpass123"})
+    res_a = client.post(
+        "/api/v1/auth/login", data={"username": emp_a_user.email, "password": "testpass123"}
+    )
     token_a = res_a.json()["access_token"]
     headers_a = {"Authorization": f"Bearer {token_a}"}
 
-    res_pend = client.post("/api/v1/auth/login", data={"username": emp_pending_user.email, "password": "testpass123"})
-    token_pend = res_pend.json()["access_token"]
+    token_pend = create_access_token(subject=str(emp_pending_user.id))
     headers_pend = {"Authorization": f"Bearer {token_pend}"}
 
-    res_cit = client.post("/api/v1/auth/login", data={"username": cit_user.email, "password": "testpass123"})
+    res_cit = client.post(
+        "/api/v1/auth/login", data={"username": cit_user.email, "password": "testpass123"}
+    )
     token_cit = res_cit.json()["access_token"]
     headers_cit = {"Authorization": f"Bearer {token_cit}"}
 
@@ -133,56 +142,115 @@ def test_dashboard_bucket_counts_and_exclusions(
 
     # Centre A requests
     req_draft = ServiceRequest(
-        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_a.id,
-        status="DRAFT", service_name_snapshot="Svc", service_type_snapshot="A", fee_snapshot=100
+        citizen_id=cit.id,
+        service_id=svc.id,
+        selected_centre_id=centre_a.id,
+        status="DRAFT",
+        service_name_snapshot="Svc",
+        service_type_snapshot="A",
+        fee_snapshot=100,
     )
     req_submitted = ServiceRequest(
-        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_a.id,
-        status="SUBMITTED", service_name_snapshot="Svc", service_type_snapshot="A", fee_snapshot=100
+        citizen_id=cit.id,
+        service_id=svc.id,
+        selected_centre_id=centre_a.id,
+        status="SUBMITTED",
+        service_name_snapshot="Svc",
+        service_type_snapshot="A",
+        fee_snapshot=100,
     )
     req_waiting = ServiceRequest(
-        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_a.id,
-        status="WAITING_FOR_CENTRE", service_name_snapshot="Svc", service_type_snapshot="A", fee_snapshot=100
+        citizen_id=cit.id,
+        service_id=svc.id,
+        selected_centre_id=centre_a.id,
+        status="WAITING_FOR_CENTRE",
+        service_name_snapshot="Svc",
+        service_type_snapshot="A",
+        fee_snapshot=100,
     )
     req_accepted = ServiceRequest(
-        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_a.id,
-        status="ACCEPTED", service_name_snapshot="Svc", service_type_snapshot="A", fee_snapshot=100
+        citizen_id=cit.id,
+        service_id=svc.id,
+        selected_centre_id=centre_a.id,
+        status="ACCEPTED",
+        service_name_snapshot="Svc",
+        service_type_snapshot="A",
+        fee_snapshot=100,
     )
     req_review = ServiceRequest(
-        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_a.id,
-        status="UNDER_REVIEW", service_name_snapshot="Svc", service_type_snapshot="A", fee_snapshot=100
+        citizen_id=cit.id,
+        service_id=svc.id,
+        selected_centre_id=centre_a.id,
+        status="UNDER_REVIEW",
+        service_name_snapshot="Svc",
+        service_type_snapshot="A",
+        fee_snapshot=100,
     )
     req_payment = ServiceRequest(
-        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_a.id,
-        status="PAYMENT_PENDING", service_name_snapshot="Svc", service_type_snapshot="A", fee_snapshot=100
+        citizen_id=cit.id,
+        service_id=svc.id,
+        selected_centre_id=centre_a.id,
+        status="PAYMENT_PENDING",
+        service_name_snapshot="Svc",
+        service_type_snapshot="A",
+        fee_snapshot=100,
     )
     req_completed_today = ServiceRequest(
-        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_a.id,
-        status="COMPLETED", service_name_snapshot="Svc", service_type_snapshot="A", fee_snapshot=100,
-        completed_at=now
+        citizen_id=cit.id,
+        service_id=svc.id,
+        selected_centre_id=centre_a.id,
+        status="COMPLETED",
+        service_name_snapshot="Svc",
+        service_type_snapshot="A",
+        fee_snapshot=100,
+        completed_at=now,
     )
     req_completed_yesterday = ServiceRequest(
-        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_a.id,
-        status="COMPLETED", service_name_snapshot="Svc", service_type_snapshot="A", fee_snapshot=100,
-        completed_at=now - timedelta(days=2)
+        citizen_id=cit.id,
+        service_id=svc.id,
+        selected_centre_id=centre_a.id,
+        status="COMPLETED",
+        service_name_snapshot="Svc",
+        service_type_snapshot="A",
+        fee_snapshot=100,
+        completed_at=now - timedelta(days=2),
     )
     req_unable = ServiceRequest(
-        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_a.id,
-        status="UNABLE_TO_PROCEED", service_name_snapshot="Svc", service_type_snapshot="A", fee_snapshot=100,
-        updated_at=now - timedelta(days=5)
+        citizen_id=cit.id,
+        service_id=svc.id,
+        selected_centre_id=centre_a.id,
+        status="UNABLE_TO_PROCEED",
+        service_name_snapshot="Svc",
+        service_type_snapshot="A",
+        fee_snapshot=100,
+        updated_at=now - timedelta(days=5),
     )
 
     # Centre B request (must NOT bleed into Centre A)
     req_centre_b = ServiceRequest(
-        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_b.id,
-        status="WAITING_FOR_CENTRE", service_name_snapshot="Svc", service_type_snapshot="A", fee_snapshot=100
+        citizen_id=cit.id,
+        service_id=svc.id,
+        selected_centre_id=centre_b.id,
+        status="WAITING_FOR_CENTRE",
+        service_name_snapshot="Svc",
+        service_type_snapshot="A",
+        fee_snapshot=100,
     )
 
-    db_session.add_all([
-        req_draft, req_submitted, req_waiting, req_accepted,
-        req_review, req_payment, req_completed_today, req_completed_yesterday,
-        req_unable, req_centre_b
-    ])
+    db_session.add_all(
+        [
+            req_draft,
+            req_submitted,
+            req_waiting,
+            req_accepted,
+            req_review,
+            req_payment,
+            req_completed_today,
+            req_completed_yesterday,
+            req_unable,
+            req_centre_b,
+        ]
+    )
     db_session.commit()
 
     res = client.get("/api/v1/requests/dashboard/stats", headers=dashboard_fixture["headers_a"])
@@ -206,18 +274,28 @@ def test_dashboard_needs_attention_ranking(
 
     # 1. Normal WAITING_FOR_CENTRE
     req_normal = ServiceRequest(
-        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_a.id,
-        status="WAITING_FOR_CENTRE", service_name_snapshot="Svc", service_type_snapshot="A", fee_snapshot=100,
-        created_at=now - timedelta(hours=2)
+        citizen_id=cit.id,
+        service_id=svc.id,
+        selected_centre_id=centre_a.id,
+        status="WAITING_FOR_CENTRE",
+        service_name_snapshot="Svc",
+        service_type_snapshot="A",
+        fee_snapshot=100,
+        created_at=now - timedelta(hours=2),
     )
     db_session.add(req_normal)
     db_session.commit()
 
     # 2. Request with re-uploaded document (version 2)
     req_reuploaded = ServiceRequest(
-        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_a.id,
-        status="UNDER_REVIEW", service_name_snapshot="Svc", service_type_snapshot="A", fee_snapshot=100,
-        created_at=now - timedelta(hours=1)
+        citizen_id=cit.id,
+        service_id=svc.id,
+        selected_centre_id=centre_a.id,
+        status="UNDER_REVIEW",
+        service_name_snapshot="Svc",
+        service_type_snapshot="A",
+        fee_snapshot=100,
+        created_at=now - timedelta(hours=1),
     )
     db_session.add(req_reuploaded)
     db_session.commit()
@@ -247,14 +325,19 @@ def test_dashboard_needs_attention_ranking(
     db_session.add(doc)
     db_session.commit()
 
-    res = client.get("/api/v1/requests/dashboard/needs-attention", headers=dashboard_fixture["headers_a"])
+    res = client.get(
+        "/api/v1/requests/dashboard/needs-attention", headers=dashboard_fixture["headers_a"]
+    )
     assert res.status_code == 200
     needs_attention = res.json()
     assert len(needs_attention) >= 2
     # Re-uploaded doc request must be ranked first (Priority 1)
     assert needs_attention[0]["id"] == str(req_reuploaded.id)
 
-def test_dashboard_recent_activity(client: TestClient, db_session: Session, dashboard_fixture: dict):
+
+def test_dashboard_recent_activity(
+    client: TestClient, db_session: Session, dashboard_fixture: dict
+):
     from app.models.assignment import RequestHistory
 
     centre_a = dashboard_fixture["centre_a"]
@@ -264,14 +347,21 @@ def test_dashboard_recent_activity(client: TestClient, db_session: Session, dash
     now = datetime.now(UTC)
 
     # Empty state test
-    res = client.get("/api/v1/requests/dashboard/recent-activity", headers=dashboard_fixture["headers_a"])
+    res = client.get(
+        "/api/v1/requests/dashboard/recent-activity", headers=dashboard_fixture["headers_a"]
+    )
     assert res.status_code == 200
     assert res.json() == []
 
     # Add activity in Centre A
     req_a = ServiceRequest(
-        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_a.id,
-        status="DRAFT", service_name_snapshot="Svc A", service_type_snapshot="A", fee_snapshot=100
+        citizen_id=cit.id,
+        service_id=svc.id,
+        selected_centre_id=centre_a.id,
+        status="DRAFT",
+        service_name_snapshot="Svc A",
+        service_type_snapshot="A",
+        fee_snapshot=100,
     )
     db_session.add(req_a)
     db_session.commit()
@@ -281,15 +371,20 @@ def test_dashboard_recent_activity(client: TestClient, db_session: Session, dash
         actor_id=cit.id,
         action="submit_request",
         note="Test Note",
-        created_at=now
+        created_at=now,
     )
     db_session.add(hist_a)
     db_session.commit()
 
     # Add activity in Centre B
     req_b = ServiceRequest(
-        citizen_id=cit.id, service_id=svc.id, selected_centre_id=centre_b.id,
-        status="DRAFT", service_name_snapshot="Svc B", service_type_snapshot="A", fee_snapshot=100
+        citizen_id=cit.id,
+        service_id=svc.id,
+        selected_centre_id=centre_b.id,
+        status="DRAFT",
+        service_name_snapshot="Svc B",
+        service_type_snapshot="A",
+        fee_snapshot=100,
     )
     db_session.add(req_b)
     db_session.commit()
@@ -299,16 +394,17 @@ def test_dashboard_recent_activity(client: TestClient, db_session: Session, dash
         actor_id=cit.id,
         action="submit_request",
         note="Test Note B",
-        created_at=now
+        created_at=now,
     )
     db_session.add(hist_b)
     db_session.commit()
 
     # Verify Employee A only sees Centre A activity
-    res_a = client.get("/api/v1/requests/dashboard/recent-activity", headers=dashboard_fixture["headers_a"])
+    res_a = client.get(
+        "/api/v1/requests/dashboard/recent-activity", headers=dashboard_fixture["headers_a"]
+    )
     assert res_a.status_code == 200
     data_a = res_a.json()
     assert len(data_a) == 1
     assert data_a[0]["request_id"] == str(req_a.id)
     assert data_a[0]["request_service_name"] == "Svc A"
-

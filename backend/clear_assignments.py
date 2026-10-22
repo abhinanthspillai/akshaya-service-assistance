@@ -4,9 +4,11 @@ import sys
 # Ensure backend directory is in path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+from sqlalchemy import update
+
 from app.core.database import SessionLocal
 from app.models.assignment import RequestAssignment
-from sqlalchemy import update
+
 
 def main():
     session = SessionLocal()
@@ -19,6 +21,7 @@ def main():
         session.rollback()
     finally:
         session.close()
+
 
 if __name__ == "__main__":
     main()

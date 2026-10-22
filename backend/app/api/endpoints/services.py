@@ -1,3 +1,4 @@
+import math
 from typing import Any
 from uuid import UUID
 
@@ -54,6 +55,7 @@ def get_popular_services(
     limit: int = Query(4, ge=1, le=10),
 ) -> Any:
     from sqlalchemy import func
+
     from app.models.request import ServiceRequest
 
     # Count requests per service and order by count descending
@@ -66,7 +68,7 @@ def get_popular_services(
         .limit(limit)
     )
     popular_services = session.scalars(stmt).all()
-    
+
     # Fallback to random/first active services if there are no requests yet
     if len(popular_services) < limit:
         remaining = limit - len(popular_services)
@@ -76,9 +78,8 @@ def get_popular_services(
             fallback_stmt = fallback_stmt.where(Service.id.not_in(existing_ids))
         fallback_stmt = fallback_stmt.limit(remaining)
         popular_services.extend(session.scalars(fallback_stmt).all())
-        
-    return popular_services
 
+    return popular_services
 
 
 @router.get("/{service_id}", response_model=ServiceDetailResponse)
@@ -133,20 +134,20 @@ def update_service(
         raise HTTPException(status_code=404, detail="Service not found")
 
     update_data = service_in.model_dump(exclude_unset=True)
-    
+
     if update_data.get("is_active") is True:
         has_centre = session.scalar(
             select(CentreSupportedService)
             .where(
                 CentreSupportedService.service_id == service_id,
-                CentreSupportedService.is_active.is_(True)
+                CentreSupportedService.is_active.is_(True),
             )
             .limit(1)
         )
         if not has_centre:
             raise HTTPException(
                 status_code=400,
-                detail="Cannot activate a service without at least one active supporting centre"
+                detail="Cannot activate a service without at least one active supporting centre",
             )
 
     for field, value in update_data.items():
@@ -220,17 +221,16 @@ def update_interaction_requirements(
     return requirements_in
 
 
-import math
-
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    R = 6371.0 # Earth radius in kilometers
+    R = 6371.0  # Earth radius in kilometers
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    a = (math.sin(dlat / 2) * math.sin(dlat / 2) +
-         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
-         math.sin(dlon / 2) * math.sin(dlon / 2))
+    a = math.sin(dlat / 2) * math.sin(dlat / 2) + math.cos(math.radians(lat1)) * math.cos(
+        math.radians(lat2)
+    ) * math.sin(dlon / 2) * math.sin(dlon / 2)
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
+
 
 @router.get("/{service_id}/centres", response_model=list[AkshayaCentreResponse])
 def get_service_centres(
@@ -252,15 +252,23 @@ def get_service_centres(
         .where(CentreSupportedService.is_active)
     )
     centres = session.scalars(stmt).all()
-    
+
     if lat is not None and lng is not None:
         for centre in centres:
             if centre.latitude is not None and centre.longitude is not None:
-                centre.distance_km = haversine_distance(lat, lng, float(centre.latitude), float(centre.longitude))
+                centre.distance_km = haversine_distance(
+                    lat, lng, float(centre.latitude), float(centre.longitude)
+                )
             else:
                 centre.distance_km = None
-                
+
         # Sort by distance, putting those with distance first
-        centres.sort(key=lambda c: c.distance_km if hasattr(c, 'distance_km') and c.distance_km is not None else float('inf'))
+        centres.sort(
+            key=lambda c: (
+                c.distance_km
+                if hasattr(c, "distance_km") and c.distance_km is not None
+                else float("inf")
+            )
+        )
 
     return centres

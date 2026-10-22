@@ -4,15 +4,16 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.models.assignment import RequestAssignment
-from app.models.centre import AkshayaCentre
-from app.models.message import Conversation, RequestMessage
+from app.models.message import Conversation
 from app.models.profile import EmployeeProfile
 from app.models.request import ServiceRequest
 from app.models.service import Service
 from app.models.user import User
 
 
-def setup_chat_fixtures(db_session: Session, normal_user_id: str, employee_id: str, test_centre_id: str):
+def setup_chat_fixtures(
+    db_session: Session, normal_user_id: str, employee_id: str, test_centre_id: str
+):
     """Helper to set up service, request, and assignment."""
     service = Service(
         id=uuid4(),
@@ -106,7 +107,9 @@ def test_non_participant_cannot_read_or_send(
     employee_id: str,
     test_centre_id: str,
 ):
-    """A user who is neither the owner citizen nor the assigned staff cannot read or send messages."""
+    """A user who is neither the owner citizen nor the assigned staff
+    cannot read or send messages.
+    """
     _, req, _, conv = setup_chat_fixtures(db_session, normal_user_id, employee_id, test_centre_id)
 
     # Create another citizen
@@ -121,6 +124,7 @@ def test_non_participant_cannot_read_or_send(
     db_session.commit()
 
     from app.core.security import create_access_token
+
     token = create_access_token(other_citizen.id)
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -250,7 +254,9 @@ def test_reassignment_gives_access_to_new_staff_and_removes_old(
     employee_id: str,
     test_centre_id: str,
 ):
-    """Reassignment hands over conversation to the new staff and revokes access for the old staff."""
+    """Reassignment hands over conversation to the new staff
+    and revokes access for the old staff.
+    """
     _, req, _, conv = setup_chat_fixtures(db_session, normal_user_id, employee_id, test_centre_id)
 
     # Create new employee in the same centre
@@ -276,6 +282,7 @@ def test_reassignment_gives_access_to_new_staff_and_removes_old(
     db_session.commit()
 
     from app.core.security import create_access_token
+
     new_emp_token = create_access_token(new_emp_user.id)
     new_emp_headers = {"Authorization": f"Bearer {new_emp_token}"}
 

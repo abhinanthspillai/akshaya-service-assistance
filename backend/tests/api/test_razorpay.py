@@ -1,8 +1,11 @@
-from decimal import Decimal
+import hashlib
+import hmac
 from uuid import uuid4
+
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.security import get_password_hash
 from app.models.centre import AkshayaCentre
 from app.models.profile import CitizenProfile, EmployeeProfile
@@ -10,9 +13,7 @@ from app.models.service import CentreSupportedService, Service
 from app.models.user import User
 
 
-def test_razorpay_order_creation_and_verification(
-    client: TestClient, db_session: Session
-) -> None:
+def test_razorpay_order_creation_and_verification(client: TestClient, db_session: Session) -> None:
     # 1. Setup Service and Centre
     service = Service(
         name="Razorpay Test Service",
@@ -155,12 +156,19 @@ def test_razorpay_order_creation_and_verification(
     assert bad_verify.status_code == 400
 
     # 10. Verify valid signature succeeds
+    settings = get_settings()
+    valid_sig = hmac.new(
+        settings.razorpay_key_secret.encode(),
+        f"{order_data['order_id']}|pay_rzp_test_success_123".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
     good_verify = client.post(
         f"/api/v1/requests/{req_id}/payments/{payment_id}/razorpay-verify",
         json={
             "razorpay_order_id": order_data["order_id"],
             "razorpay_payment_id": "pay_rzp_test_success_123",
-            "razorpay_signature": "mock_signature_valid",
+            "razorpay_signature": valid_sig,
         },
         headers=cit_headers,
     )
@@ -177,7 +185,7 @@ def test_razorpay_order_creation_and_verification(
         json={
             "razorpay_order_id": order_data["order_id"],
             "razorpay_payment_id": "pay_rzp_test_success_123",
-            "razorpay_signature": "mock_signature_valid",
+            "razorpay_signature": valid_sig,
         },
         headers=cit_headers,
     )

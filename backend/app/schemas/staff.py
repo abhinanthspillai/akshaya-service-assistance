@@ -67,4 +67,3 @@ class AccountRequestResponse(BaseModel):
 
 class AccountRejectRequest(BaseModel):
     reason: str | None = None
-

@@ -1,5 +1,6 @@
 import os
 import sys
+
 from sqlalchemy import select
 
 from app.core.config import get_settings
@@ -20,7 +21,10 @@ def main() -> None:
     env = (os.environ.get("ENVIRONMENT") or settings.app_env or "").lower()
     allowed_envs = {"dev", "local", "test", "development"}
     if env not in allowed_envs:
-        print(f"Error: approve_employee.py can only run in dev, local, or test environments (current: '{env}'). Refusing execution.")
+        print(
+            f"Error: approve_employee.py can only run in dev, local, or test environments "
+            f"(current: '{env}'). Refusing execution."
+        )
         sys.exit(1)
 
     session = SessionLocal()

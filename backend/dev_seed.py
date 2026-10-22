@@ -4,11 +4,11 @@ Seeds test users, centres, employee profiles, and sample requests across all
 lifecycle states for manual testing, evaluation, and end-to-end flow validation.
 """
 
-from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 import os
 import sys
-from uuid import UUID, uuid4
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -43,7 +43,8 @@ def verify_dev_environment() -> None:
     allowed_envs = {"dev", "local", "test", "development"}
     if env not in allowed_envs:
         print(
-            f"ERROR: dev_seed.py is fail-closed and only runs in dev/local/test environments. Current environment: '{env}'."
+            "ERROR: dev_seed.py is fail-closed and only runs in dev/local/test environments. "
+            f"Current environment: '{env}'."
         )
         sys.exit(1)
 
@@ -139,7 +140,7 @@ def seed_database():
         print("\n[3/5] Seeding System Users & Roles...")
 
         # System Administrator
-        admin_user = get_or_create_user(
+        get_or_create_user(
             db,
             email="admin@akshaya.test",
             full_name="System Administrator",
@@ -283,8 +284,12 @@ def seed_database():
 
         service_map = {s.name: s for s in services}
         income_cert = service_map.get("Income Certificate") or services[0]
-        caste_cert = service_map.get("Community Certificate") or (services[1] if len(services) > 1 else services[0])
-        ration_card = service_map.get("Ration Card Application") or (services[2] if len(services) > 2 else services[0])
+        caste_cert = service_map.get("Community Certificate") or (
+            services[1] if len(services) > 1 else services[0]
+        )
+        ration_card = service_map.get("Ration Card Application") or (
+            services[2] if len(services) > 2 else services[0]
+        )
 
         for s in [income_cert, caste_cert, ration_card]:
             for c in [centre_a, centre_b]:
@@ -470,7 +475,9 @@ def seed_database():
                         requested_by_id=assigned_employee.id if assigned_employee else emp1_a.id,
                         status="SCHEDULED" if status == "INTERACTION_SCHEDULED" else "REQUESTED",
                         reason="Citizen must appear in-person for iris & fingerprint verification.",
-                        scheduled_at=now + timedelta(days=2) if status == "INTERACTION_SCHEDULED" else None,
+                        scheduled_at=now + timedelta(days=2)
+                        if status == "INTERACTION_SCHEDULED"
+                        else None,
                         created_at=now - timedelta(hours=2),
                     )
                 )
@@ -488,7 +495,11 @@ def seed_database():
                             original_filename="income_certificate_signed.pdf",
                             content_type="application/pdf",
                             storage_key=f"outputs/{req.id}/cert.pdf",
-                            collection_instructions="Digital copy signed by Tahsildar. Physical attested printout can be collected from Kaloor Akshaya Centre during working hours (9 AM - 5 PM).",
+                            collection_instructions=(
+                                "Digital copy signed by Tahsildar. Physical attested printout can "
+                                "be collected from Kaloor Akshaya Centre during working hours "
+                                "(9 AM - 5 PM)."
+                            ),
                             created_at=completed_at or now,
                         )
                     )
@@ -502,7 +513,10 @@ def seed_database():
                         action=RequestAction.UNABLE_TO_PROCEED,
                         from_status="UNDER_REVIEW",
                         to_status="UNABLE_TO_PROCEED",
-                        note="Applicant residential address does not fall within Ernakulam Taluk jurisdiction. Please apply through your local centre.",
+                        note=(
+                            "Applicant residential address does not fall within Ernakulam Taluk "
+                            "jurisdiction. Please apply through your local centre."
+                        ),
                         created_at=updated_at,
                     )
                 )
@@ -512,43 +526,135 @@ def seed_database():
 
         # Create all states
         print("  - Creating WAITING_FOR_CENTRE request...")
-        create_seed_request("WFC", cit1, income_cert, centre_a, "WAITING_FOR_CENTRE", created_offset_hours=24)
+        create_seed_request(
+            "WFC", cit1, income_cert, centre_a, "WAITING_FOR_CENTRE", created_offset_hours=24
+        )
 
         print("  - Creating ACCEPTED request...")
-        create_seed_request("ACC", cit2, caste_cert, centre_a, "ACCEPTED", assigned_employee=emp1_a, created_offset_hours=18)
+        create_seed_request(
+            "ACC",
+            cit2,
+            caste_cert,
+            centre_a,
+            "ACCEPTED",
+            assigned_employee=emp1_a,
+            created_offset_hours=18,
+        )
 
         print("  - Creating UNDER_REVIEW request (with re-uploaded doc v2)...")
-        create_seed_request("REV_REUP", cit3, income_cert, centre_a, "UNDER_REVIEW", assigned_employee=emp1_a, created_offset_hours=12, reuploaded_doc=True)
+        create_seed_request(
+            "REV_REUP",
+            cit3,
+            income_cert,
+            centre_a,
+            "UNDER_REVIEW",
+            assigned_employee=emp1_a,
+            created_offset_hours=12,
+            reuploaded_doc=True,
+        )
 
         print("  - Creating CORRECTION_REQUIRED request...")
-        create_seed_request("CORR", cit1, caste_cert, centre_a, "CORRECTION_REQUIRED", assigned_employee=emp1_a, created_offset_hours=16)
+        create_seed_request(
+            "CORR",
+            cit1,
+            caste_cert,
+            centre_a,
+            "CORRECTION_REQUIRED",
+            assigned_employee=emp1_a,
+            created_offset_hours=16,
+        )
 
         print("  - Creating READY_FOR_PROCESSING request...")
-        create_seed_request("READY", cit2, income_cert, centre_a, "READY_FOR_PROCESSING", assigned_employee=emp2_a, created_offset_hours=8)
+        create_seed_request(
+            "READY",
+            cit2,
+            income_cert,
+            centre_a,
+            "READY_FOR_PROCESSING",
+            assigned_employee=emp2_a,
+            created_offset_hours=8,
+        )
 
         print("  - Creating PROCESSING request...")
-        create_seed_request("PROC", cit3, ration_card, centre_a, "PROCESSING", assigned_employee=emp2_a, created_offset_hours=6)
+        create_seed_request(
+            "PROC",
+            cit3,
+            ration_card,
+            centre_a,
+            "PROCESSING",
+            assigned_employee=emp2_a,
+            created_offset_hours=6,
+        )
 
         print("  - Creating PAYMENT_PENDING request...")
-        create_seed_request("PAY", cit1, ration_card, centre_a, "PAYMENT_PENDING", assigned_employee=emp1_a, created_offset_hours=5)
+        create_seed_request(
+            "PAY",
+            cit1,
+            ration_card,
+            centre_a,
+            "PAYMENT_PENDING",
+            assigned_employee=emp1_a,
+            created_offset_hours=5,
+        )
 
         print("  - Creating INTERACTION_REQUIRED request...")
-        create_seed_request("INT_REQ", cit2, ration_card, centre_a, "INTERACTION_REQUIRED", assigned_employee=emp1_a, created_offset_hours=4)
+        create_seed_request(
+            "INT_REQ",
+            cit2,
+            ration_card,
+            centre_a,
+            "INTERACTION_REQUIRED",
+            assigned_employee=emp1_a,
+            created_offset_hours=4,
+        )
 
         print("  - Creating INTERACTION_SCHEDULED request...")
-        create_seed_request("INT_SCHED", cit3, ration_card, centre_a, "INTERACTION_SCHEDULED", assigned_employee=emp1_a, created_offset_hours=3)
+        create_seed_request(
+            "INT_SCHED",
+            cit3,
+            ration_card,
+            centre_a,
+            "INTERACTION_SCHEDULED",
+            assigned_employee=emp1_a,
+            created_offset_hours=3,
+        )
 
         print("  - Creating COMPLETED request (Completed Today)...")
-        create_seed_request("COMPL", cit1, income_cert, centre_a, "COMPLETED", assigned_employee=emp1_a, completed_today=True)
+        create_seed_request(
+            "COMPL",
+            cit1,
+            income_cert,
+            centre_a,
+            "COMPLETED",
+            assigned_employee=emp1_a,
+            completed_today=True,
+        )
 
         print("  - Creating UNABLE_TO_PROCEED request (Rejected last 5 days)...")
-        create_seed_request("REJ", cit2, income_cert, centre_a, "UNABLE_TO_PROCEED", assigned_employee=emp1_a, rejected_days_ago=5)
+        create_seed_request(
+            "REJ",
+            cit2,
+            income_cert,
+            centre_a,
+            "UNABLE_TO_PROCEED",
+            assigned_employee=emp1_a,
+            rejected_days_ago=5,
+        )
 
         print("  - Creating CANCELLED request...")
-        create_seed_request("CANC", cit3, caste_cert, centre_a, "CANCELLED", created_offset_hours=30)
+        create_seed_request(
+            "CANC", cit3, caste_cert, centre_a, "CANCELLED", created_offset_hours=30
+        )
 
         print("  - Creating Centre B request (Isolation test)...")
-        create_seed_request("CENTRE_B_WFC", cit1, income_cert, centre_b, "WAITING_FOR_CENTRE", created_offset_hours=10)
+        create_seed_request(
+            "CENTRE_B_WFC",
+            cit1,
+            income_cert,
+            centre_b,
+            "WAITING_FOR_CENTRE",
+            created_offset_hours=10,
+        )
 
         print("\n[SUCCESS] All seed data created successfully!")
 
@@ -563,13 +669,27 @@ def seed_database():
 
         print("ADMINISTRATORS:")
         print("  [System Admin]       email: admin@akshaya.test")
-        print(f"  [Centre Admin (A)]   email: admin.kaloor@akshaya.test (Centre: {centre_a.name})\n")
+        print(
+            f"  [Centre Admin (A)]   email: admin.kaloor@akshaya.test (Centre: {centre_a.name})\n"
+        )
 
         print("CENTRE EMPLOYEES:")
-        print(f"  [Emp 1 Approved (A)] email: employee1.ernakulam@akshaya.test (Centre: {centre_a.name})")
-        print(f"  [Emp 2 Approved (A)] email: employee2.ernakulam@akshaya.test (Centre: {centre_a.name})")
-        print(f"  [Emp 1 Approved (B)] email: employee1.tvm@akshaya.test       (Centre: {centre_b.name})")
-        print(f"  [Emp Pending (A)]    email: employee.pending@akshaya.test   (Status: PENDING_APPROVAL)\n")
+        print(
+            "  [Emp 1 Approved (A)] email: employee1.ernakulam@akshaya.test "
+            f"(Centre: {centre_a.name})"
+        )
+        print(
+            "  [Emp 2 Approved (A)] email: employee2.ernakulam@akshaya.test "
+            f"(Centre: {centre_a.name})"
+        )
+        print(
+            "  [Emp 1 Approved (B)] email: employee1.tvm@akshaya.test       "
+            f"(Centre: {centre_b.name})"
+        )
+        print(
+            "  [Emp Pending (A)]    email: employee.pending@akshaya.test   "
+            "(Status: PENDING_APPROVAL)\n"
+        )
 
         print("CITIZENS:")
         print("  [Citizen 1]          email: citizen.anand@test.com  (Anand Chandran)")
@@ -577,9 +697,12 @@ def seed_database():
         print("  [Citizen 3]          email: citizen.gopika@test.com (Gopika Suresh)\n")
 
         print("REQUESTS SUMMARY:")
-        print("  Centre A Requests: 12 requests across all states (Waiting, Accepted, In-Review with")
+        print(
+            "  Centre A Requests: 12 requests across all states (Waiting, Accepted, In-Review with"
+        )
         print("                     re-uploaded v2 doc, Correction, Ready, Processing, Payment,")
-        print("                     Interaction Req/Sched, Completed Today, Rejected last 30d, Cancelled)")
+        print("                     Interaction Req/Sched, Completed Today, Rejected last 30d,")
+        print("                     Cancelled)")
         print("  Centre B Requests: 1 WAITING_FOR_CENTRE (isolated from Centre A dashboard)")
         print("=" * 70 + "\n")
 

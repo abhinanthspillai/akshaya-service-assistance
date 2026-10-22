@@ -1,12 +1,11 @@
 from uuid import UUID, uuid4
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.models.centre import AkshayaCentre
 from app.models.profile import EmployeeProfile
-from app.models.request import ServiceRequest
-from app.models.service import Service
 
 
 @pytest.fixture
@@ -25,7 +24,9 @@ def approval_test_centre(db_session: Session) -> AkshayaCentre:
 
 
 def test_role_tampering_rejected_at_registration(client: TestClient):
-    """Registration endpoint strictly rejects unauthorized administrative roles like system_administrator."""
+    """Registration endpoint strictly rejects unauthorized administrative roles
+    like system_administrator.
+    """
     for forbidden_role in ["system_administrator", "admin", "superuser", "root"]:
         r = client.post(
             "/api/v1/auth/register",
@@ -36,8 +37,9 @@ def test_role_tampering_rejected_at_registration(client: TestClient):
                 "role": forbidden_role,
             },
         )
-        assert r.status_code == 422, f"Expected 422 for role '{forbidden_role}', got {r.status_code}"
-
+        assert r.status_code == 422, (
+            f"Expected 422 for role '{forbidden_role}', got {r.status_code}"
+        )
 
 
 def test_employee_registration_validation(client: TestClient, approval_test_centre: AkshayaCentre):
@@ -88,9 +90,8 @@ def test_pending_employee_gets_403_and_approved_employee_works(
     db_session: Session,
     approval_test_centre: AkshayaCentre,
 ):
-    """Pending employees can log in and view /auth/me, but receive 403 on all employee-only endpoints
-
-    until approved.
+    """Pending employees can log in and view /auth/me, but receive 403 on all
+    employee-only endpoints until approved.
     """
     # 1. Register employee
     email = f"pending_emp_{uuid4().hex[:6]}@test.com"
@@ -144,7 +145,6 @@ def test_pending_employee_gets_403_and_approved_employee_works(
     # 7. Employee queue access is now permitted
     resp_after = client.get("/api/v1/requests/", headers=headers)
     assert resp_after.status_code == 200
-
 
 
 def test_citizen_registration_and_login_unaffected(client: TestClient):
@@ -281,7 +281,9 @@ def test_manager_account_flow_and_approval_routing(
         },
     )
     assert r_dup_mgr.status_code == 409
-    assert "already has an active manager or a pending manager request" in r_dup_mgr.json()["detail"]
+    assert (
+        "already has an active manager or a pending manager request" in r_dup_mgr.json()["detail"]
+    )
 
     # 5. Register Manager for Centre Beta (no manager yet) -> succeeds with PENDING_APPROVAL
     mgr_b_email = f"mgr_b_{uuid4().hex[:6]}@test.com"
@@ -344,4 +346,3 @@ def test_manager_account_flow_and_approval_routing(
         data={"username": mgr_b_email, "password": "Password123!"},
     )
     assert mgr_b_login.status_code == 200
-

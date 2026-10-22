@@ -1,11 +1,12 @@
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.api.api import api_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
-from fastapi.staticfiles import StaticFiles
-from pathlib import Path
 
 
 class HealthResponse(BaseModel):
