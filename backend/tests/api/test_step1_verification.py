@@ -214,6 +214,22 @@ EXPLICIT_REQUEST_ROUTE_ALLOWLIST = {
         "GET",
         "/api/v1/conversations/request/{request_id}",
     ): "Participant route to fetch chat conversation thread for a service request.",
+    (
+        "GET",
+        "/api/v1/requests/{request_id}/otp",
+    ): "Participant route to check active OTP relay state for request.",
+    (
+        "POST",
+        "/api/v1/requests/{request_id}/otp/request",
+    ): "Staff route to request relay OTP from citizen during government portal processing.",
+    (
+        "POST",
+        "/api/v1/requests/{request_id}/otp/submit",
+    ): "Citizen route to submit government portal OTP code.",
+    (
+        "POST",
+        "/api/v1/requests/{request_id}/otp/resolve",
+    ): "Staff route to resolve/mark relayed OTP as consumed or expired.",
 }
 
 CROSS_CENTRE_COVERED_ROUTES = {
