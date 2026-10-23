@@ -8,7 +8,6 @@ import {
   FileText,
   CalendarClock,
   MessageSquare,
-  Download,
   Send,
   AlertCircle,
   CreditCard,
@@ -563,24 +562,6 @@ export function RequestWorkspace() {
     }
   };
 
-  const handleDownloadDocument = async (docId: string, filename: string) => {
-    if (!request) return;
-    try {
-      const res = await api.get(`/requests/${request.id}/documents/${docId}/download`, {
-        responseType: 'blob',
-      });
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch {
-      setError('Failed to download document file.');
-    }
-  };
-
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!request || !newMessage.trim()) return;
@@ -1034,9 +1015,18 @@ export function RequestWorkspace() {
 
                     <div className="flex flex-col gap-4">
                       {documentUrls[doc.id] ? (
-                        <div className="w-full bg-white border border-slate-200 rounded-xl overflow-hidden shadow-inner h-[500px]">
+                        <div 
+                          className="w-full bg-white border border-slate-200 rounded-xl overflow-hidden shadow-inner h-[500px] select-none"
+                          onContextMenu={(e) => e.preventDefault()}
+                        >
                           {documentUrls[doc.id].type.startsWith('image/') ? (
-                            <img src={documentUrls[doc.id].url} alt={doc.original_filename} className="w-full h-full object-contain bg-slate-100" />
+                            <img 
+                              src={documentUrls[doc.id].url} 
+                              alt={doc.original_filename} 
+                              className="w-full h-full object-contain bg-slate-100 select-none pointer-events-none"
+                              draggable={false}
+                              onDragStart={(e) => e.preventDefault()}
+                            />
                           ) : (
                             <iframe src={documentUrls[doc.id].url} className="w-full h-full" title={doc.original_filename} />
                           )}
@@ -1047,17 +1037,8 @@ export function RequestWorkspace() {
                         </div>
                       )}
 
-                      <div className="flex items-center gap-2 shrink-0 bg-white p-3 rounded-xl border border-slate-200 shadow-sm self-start">
-                        <button
-                          onClick={() => handleDownloadDocument(doc.id, doc.original_filename)}
-                          className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm"
-                        >
-                        <Download size={13} />
-                        Download
-                      </button>
-
                       {request.status === 'UNDER_REVIEW' && (
-                        <>
+                        <div className="flex items-center gap-2 shrink-0 bg-white p-3 rounded-xl border border-slate-200 shadow-sm self-start">
                           <button
                             onClick={() => handleDocumentApproval(doc.id)}
                             disabled={isActionLoading}
@@ -1086,9 +1067,8 @@ export function RequestWorkspace() {
                             <X size={13} />
                             Request Correction
                           </button>
-                        </>
+                        </div>
                       )}
-                    </div>
                   </div>
                 </div>
               </div>

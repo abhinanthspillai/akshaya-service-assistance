@@ -920,10 +920,14 @@ def download_request_document(
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Document file not found")
 
+    # Employees can only preview documents inline, not download as attachment
+    disposition = "inline" if current_user.role in ("centre_employee", "centre_admin") else "attachment"
+
+    headers = {"Content-Disposition": f'{disposition}; filename="{document.original_filename}"'}
     return FileResponse(
         path,
         media_type=document.content_type,
-        filename=document.original_filename,
+        headers=headers,
     )
 
 
