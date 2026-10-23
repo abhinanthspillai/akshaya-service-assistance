@@ -311,7 +311,14 @@ def list_requests(
     pages = math.ceil(total / page_size) if total > 0 else 1
 
     skip = (page - 1) * page_size
-    stmt = stmt.order_by(ServiceRequest.created_at.desc()).offset(skip).limit(page_size)
+    stmt = (
+        stmt.order_by(
+            func.coalesce(ServiceRequest.submitted_at, ServiceRequest.created_at).desc(),
+            ServiceRequest.id.desc(),
+        )
+        .offset(skip)
+        .limit(page_size)
+    )
     items = session.scalars(stmt).all()
 
     return {
