@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { Loader2, Search, Plus, ChevronLeft, ChevronRight, FileText, Users, Home, AlertCircle, Trash2 } from 'lucide-react';
@@ -55,6 +55,37 @@ export function MyRequests() {
  fetchRequests();
  }, []);
 
+  const [serviceFilter, setServiceFilter] = useState('All Services');
+  const [statusFilter, setStatusFilter] = useState('All Statuses');
+  const [timeFilter, setTimeFilter] = useState('All Time');
+
+  const availableServices = useMemo(() => {
+    const services = new Set<string>();
+    requests.forEach(r => {
+      if (r.service_name_snapshot) services.add(r.service_name_snapshot);
+    });
+    return Array.from(services).sort();
+  }, [requests]);
+
+  const availableStatuses = useMemo(() => {
+    const statuses = new Set<string>();
+    requests.forEach(r => {
+      if (r.status) statuses.add(r.status);
+    });
+    return Array.from(statuses).sort();
+  }, [requests]);
+
+  const isFilterActive = searchQuery !== '' || serviceFilter !== 'All Services' || statusFilter !== 'All Statuses' || timeFilter !== 'All Time' || activeTab !== 'All';
+
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    setServiceFilter('All Services');
+    setStatusFilter('All Statuses');
+    setTimeFilter('All Time');
+    setActiveTab('All');
+    setCurrentPage(1);
+  };
+
  const getFilteredRequests = () => {
  const needsAttentionStates = ['CORRECTION_REQUIRED', 'INTERACTION_REQUIRED', 'PAYMENT_PENDING'];
  const inProgressStates = ['SUBMITTED', 'WAITING_FOR_CENTRE', 'ACCEPTED', 'UNDER_REVIEW', 'INTERACTION_SCHEDULED', 'READY_FOR_PROCESSING', 'PROCESSING'];
@@ -75,14 +106,35 @@ export function MyRequests() {
  });
  }
 
- if (searchQuery) {
- const query = searchQuery.toLowerCase();
- filtered = filtered.filter(r => 
- r.service_name_snapshot.toLowerCase().includes(query) || 
- r.id.toLowerCase().includes(query)
- );
- }
+    if (serviceFilter !== 'All Services') {
+      filtered = filtered.filter(r => r.service_name_snapshot === serviceFilter);
+    }
 
+    if (statusFilter !== 'All Statuses') {
+      filtered = filtered.filter(r => r.status === statusFilter);
+    }
+
+    if (timeFilter !== 'All Time') {
+      const now = new Date().getTime();
+      filtered = filtered.filter(r => {
+        const dateStr = r.submitted_at || r.created_at;
+        if (!dateStr) return false;
+        const itemDate = new Date(dateStr).getTime();
+        const diffDays = (now - itemDate) / (1000 * 3600 * 24);
+        if (timeFilter === 'Last 7 Days') return diffDays <= 7;
+        if (timeFilter === 'Last 30 Days') return diffDays <= 30;
+        if (timeFilter === 'Last 90 Days') return diffDays <= 90;
+        return true;
+      });
+    }
+
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(r => 
+        r.service_name_snapshot.toLowerCase().includes(query) || 
+        r.id.toLowerCase().includes(query)
+      );
+    }
  return filtered;
  };
 
@@ -209,26 +261,49 @@ export function MyRequests() {
  icon={<Search size={18} />}
  />
  </div>
- <div className="flex gap-4 flex-1">
- <div className="flex-1 max-w-[200px]">
- <Select>
- <option>All Services</option>
- </Select>
- </div>
- <div className="flex-1 max-w-[200px]">
- <Select>
- <option>All Statuses</option>
- </Select>
- </div>
- <div className="flex-1 max-w-[200px]">
- <Select>
- <option>All Time</option>
- </Select>
- </div>
- </div>
- <Button variant="secondary" className="px-5">
- Reset
- </Button>
+        <div className="flex gap-4 flex-1">
+          <div className="flex-1 max-w-[200px]">
+            <Select
+              value={serviceFilter}
+              onChange={(e) => { setServiceFilter(e.target.value); setCurrentPage(1); }}
+            >
+              <option value="All Services">All Services</option>
+              {availableServices.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex-1 max-w-[200px]">
+            <Select
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+            >
+              <option value="All Statuses">All Statuses</option>
+              {availableStatuses.map((st) => (
+                <option key={st} value={st}>{getStatusDisplay(st)}</option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex-1 max-w-[200px]">
+            <Select
+              value={timeFilter}
+              onChange={(e) => { setTimeFilter(e.target.value); setCurrentPage(1); }}
+            >
+              <option value="All Time">All Time</option>
+              <option value="Last 7 Days">Last 7 Days</option>
+              <option value="Last 30 Days">Last 30 Days</option>
+              <option value="Last 90 Days">Last 90 Days</option>
+            </Select>
+          </div>
+        </div>
+        <Button
+          variant="secondary"
+          className="px-5"
+          onClick={handleResetFilters}
+          disabled={!isFilterActive}
+        >
+          Reset
+        </Button>
  </div>
 
  {/* Table */}
