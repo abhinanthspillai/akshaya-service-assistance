@@ -8,6 +8,7 @@ from app.models.interaction import RequestInteraction
 from app.models.message import Conversation, RequestMessage
 from app.models.notification import Notification
 from app.models.output import CompletedOutput
+from app.models.otp import OTP_REQUEST_STATUS_VALUES, OtpRequest
 from app.models.payment import RequestPayment
 from app.models.profile import CentreAdministrator, CitizenProfile, EmployeeProfile
 from app.models.request import ServiceRequest
@@ -47,5 +48,7 @@ __all__ = [
     "SupportTicket",
     "TicketMessage",
     "CompletedOutput",
+    "OtpRequest",
+    "OTP_REQUEST_STATUS_VALUES",
     "AuditLog",
 ]

@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.api.deps import CurrentUser, SessionDep
 from app.core.config import get_settings
 from app.models.profile import CitizenProfile, EmployeeProfile
+from app.schemas.otp import PendingCitizenOtpResponse
 from app.schemas.user import UserAuthMe, UserUpdate
 
 router = APIRouter()
@@ -137,3 +138,75 @@ def update_profile(
     from app.api.endpoints.auth import get_auth_me
 
     return get_auth_me(current_user, session)
+
+
+@router.get("/me/pending-otp", response_model=PendingCitizenOtpResponse | None)
+def get_pending_otp(
+    current_user: CurrentUser,
+    session: SessionDep,
+):
+    from datetime import UTC, datetime
+
+    from app.models.assignment import RequestHistory
+    from app.models.enums import RequestAction
+    from app.models.otp import OtpRequest
+    from app.models.request import ServiceRequest
+    from app.schemas.otp import PendingCitizenOtpResponse
+
+    if current_user.role != "citizen":
+        return None
+
+    now = datetime.now(tz=UTC)
+
+    # Find pending OTP requests owned by citizen
+    pending_otps = session.scalars(
+        select(OtpRequest)
+        .join(ServiceRequest, OtpRequest.request_id == ServiceRequest.id)
+        .where(
+            ServiceRequest.citizen_id == current_user.id,
+            OtpRequest.status == "PENDING",
+        )
+        .order_by(OtpRequest.created_at.desc())
+    ).all()
+
+    any_expired = False
+    valid_pending = None
+    for otp in pending_otps:
+        if otp.expires_at <= now:
+            otp.status = "EXPIRED"
+            otp.code = None
+            otp.resolved_at = now
+            session.add(otp)
+            history = RequestHistory(
+                request_id=otp.request_id,
+                actor_id=None,
+                action=RequestAction.OTP_EXPIRED.value,
+                from_status=None,
+                to_status=None,
+                note="OTP expired without resolution.",
+            )
+            session.add(history)
+            any_expired = True
+        elif valid_pending is None:
+            valid_pending = otp
+
+    if any_expired:
+        session.commit()
+
+    if not valid_pending:
+        return None
+
+    req = session.get(ServiceRequest, valid_pending.request_id)
+    service_name = req.service_name_snapshot if req else "Government Service"
+    short_id = str(valid_pending.request_id)[:8]
+
+    return PendingCitizenOtpResponse(
+        id=valid_pending.id,
+        request_id=valid_pending.request_id,
+        service_name=service_name,
+        request_short_id=short_id,
+        status=valid_pending.status,
+        expires_at=valid_pending.expires_at,
+        created_at=valid_pending.created_at,
+    )
+

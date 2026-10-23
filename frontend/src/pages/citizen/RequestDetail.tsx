@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
-import { Loader2, ArrowLeft, MapPin, Upload, FileText, CalendarClock, MessageSquare, Trash2 } from 'lucide-react';
+import { Loader2, ArrowLeft, MapPin, Upload, FileText, CalendarClock, MessageSquare, Trash2, KeyRound } from 'lucide-react';
 import { formatStatus } from '../../utils/format';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 
@@ -109,6 +109,7 @@ export function RequestDetail() {
  const [messages, setMessages] = useState<RequestMessage[]>([]);
  const [payments, setPayments] = useState<RequestPayment[]>([]);
  const [output, setOutput] = useState<CompletedOutput | null>(null);
+ const [otpState, setOtpState] = useState<{ id: string; status: string; expires_at: string } | null>(null);
  const [newMessage, setNewMessage] = useState('');
  const [scheduleValues, setScheduleValues] = useState<Record<string, string>>({});
  const [preValidation, setPreValidation] = useState<PreValidationResult | null>(null);
@@ -202,6 +203,14 @@ export function RequestDetail() {
          setOutput(outRes.data);
        } catch {
          // ignore
+       }
+     }
+     if (currentReq.status === 'PROCESSING') {
+       try {
+         const otpRes = await api.get('/requests/' + currentReq.id + '/otp');
+         setOtpState(otpRes.data);
+       } catch {
+         setOtpState(null);
        }
      }
      if (currentReq.status === 'DRAFT' && currentReq.service_id) {
@@ -579,6 +588,42 @@ export function RequestDetail() {
  </div>
  )}
  </div>
+
+ {otpState && otpState.status === 'PENDING' && (
+   <div className="mx-8 mt-4 p-4 bg-blue-50 border border-blue-200 rounded-[16px] flex items-center justify-between">
+     <div className="flex items-center gap-3">
+       <div className="p-2 bg-blue-600 text-white rounded-xl">
+         <KeyRound size={18} />
+       </div>
+       <div>
+         <p className="text-sm font-bold text-slate-900">OTP Requested for Portal Processing</p>
+         <p className="text-xs text-slate-600">The Akshaya staff member needs the OTP sent to your phone to continue.</p>
+       </div>
+     </div>
+     <button
+       onClick={() => {
+         window.dispatchEvent(
+           new CustomEvent('openOtpModal', {
+             detail: {
+               otpData: {
+                 id: otpState.id,
+                 request_id: request.id,
+                 service_name: request.service_name_snapshot,
+                 request_short_id: request.id.slice(0, 8),
+                 status: otpState.status,
+                 expires_at: otpState.expires_at,
+                 created_at: '',
+               },
+             },
+           })
+         );
+       }}
+       className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
+     >
+       Enter OTP Now
+     </button>
+   </div>
+ )}
 
  {error && (
  <div className="mx-8 mt-4 p-4 bg-red-600/10 text-red-600 rounded-[16px] border border-red-600/20 text-sm">

@@ -43,3 +43,10 @@ To enable end-to-end evaluation of employee workflows prior to dedicated centre-
 - To reduce clicks in the employee workflow, clicking a request row automatically triggers `Accept` (if `WAITING_FOR_CENTRE`) and `Start Document Review` transitions before opening the workspace.
 - Replaced document downloads with an inline file viewer (`iframe` or `img`) for PDFs and images to save processing time.
 - Added a `photo_url` field to `employee_profiles` and an `Avatar` component for employees to upload a profile photo.
+
+### OTP Relay Workflow (No Per-Service Flag)
+- Government portals send an OTP directly to the citizen's phone, which staff need to proceed on the portal. SAHAYA does not generate or send the OTP; it only relays it from citizen to staff.
+- There is NO per-service flag and NO admin setting. The "Request OTP" action is universally available across all services while the request is in the `PROCESSING` state.
+- OTP requests do not introduce a new top-level request status; "Awaiting OTP" is modeled as a sub-state inside `PROCESSING`.
+- Security & Expiry: Stored code is never returned to the citizen, never logged, and cleared immediately upon resolution (`USED` or `FAILED`) or lazy expiry (5-minute TTL). After 3 consecutive `FAILED` attempts on a request, further OTP requests are blocked.
+

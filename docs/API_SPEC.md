@@ -253,3 +253,44 @@ Upload a profile photo.
 Authenticated.
 Remove current user's profile photo.
 - Response: 204 No Content
+
+## OTP Relay (Government Portal Assistance)
+
+### POST /requests/{id}/otp/request
+Staff only (assigned employee or Centre Manager).
+Creates a PENDING OTP request with 5-minute expiry.
+- Preconditions: Request must be in `PROCESSING`. Reject if another OTP is already PENDING or SUBMITTED.
+- Rate/Failure Cap: Blocked after 3 consecutive `FAILED` attempts on this request (409 Conflict).
+- Notifications & Timeline: In-app notification to citizen: "OTP requested for your request #<short id>. Please enter it now." Timeline entry logged without code.
+- Response 200: OtpCreateResponse (`id`, `request_id`, `status`, `expires_at`, `created_at`).
+
+### GET /requests/{id}/otp
+Citizen (owner) or Staff (assigned employee or Centre Manager).
+Returns current OTP state for the request.
+- Security: The 6-digit code is returned ONLY to staff and ONLY when status is `SUBMITTED`. Never returned to citizen.
+- Lazy Expiry: If active OTP has expired past `expires_at`, marks `EXPIRED` and clears code.
+- Response 200: OtpStateResponse (`id`, `request_id`, `status`, `code`, `expires_at`, `created_at`, `submitted_at`, `resolved_at`, `is_awaiting_otp`, `failed_attempts_count`, `is_blocked`).
+
+### GET /me/pending-otp
+Citizen only.
+Returns the citizen's active PENDING OTP request (if any) across all their requests so that the entry pop-up can be rendered from any page.
+- Lazy Expiry: Expired pending OTPs are automatically resolved to `EXPIRED`.
+- Response 200: PendingCitizenOtpResponse or `null`.
+
+### POST /requests/{id}/otp/submit
+Citizen owner only.
+Submits the 6-digit code received from the government portal.
+- Body: `{"code": "123456"}` (exactly 6 numeric digits).
+- Preconditions: Must have an active `PENDING` OTP request that is not expired.
+- Status transition: Sets status to `SUBMITTED`.
+- Notifications: In-app notification to staff: "Citizen submitted the OTP." Timeline entry recorded without code.
+- Response 200: OtpCreateResponse.
+
+### POST /requests/{id}/otp/resolve
+Staff only (assigned employee or Centre Manager).
+Resolves an active OTP (`PENDING` or `SUBMITTED`).
+- Body: `{"outcome": "used" | "failed"}`.
+- Logic: "used" marks status as `USED`. "failed" marks status as `FAILED` (increments failure attempt count toward the 3-attempt cap).
+- Security: Stored code is immediately set to NULL upon resolution. Timeline entry recorded without code.
+- Response 200: OtpCreateResponse.
+

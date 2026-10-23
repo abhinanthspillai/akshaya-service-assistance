@@ -133,7 +133,47 @@ def test_razorpay_order_creation_and_verification(client: TestClient, db_session
     req_check = client.get(f"/api/v1/requests/{req_id}", headers=cit_headers)
     assert req_check.json()["status"] == "PAYMENT_PENDING"
 
-    # 8. Citizen creates Razorpay order
+    # 8. Negative check: Mark Complete is blocked while payment is pending
+    comp_blocked = client.post(
+        f"/api/v1/requests/{req_id}/complete",
+        json={"remarks": "Attempting complete before payment"},
+        headers=emp_headers,
+    )
+    assert comp_blocked.status_code == 409
+    assert "pending payments" in comp_blocked.json()["detail"].lower()
+
+    # 8b. Negative check: Different citizen attempting to pay receives 403
+    other_cit_email = f"other.{uuid4().hex[:8]}@akshaya.test"
+    other_cit_user = User(
+        email=other_cit_email,
+        password_hash=get_password_hash("Password123!"),
+        role="citizen",
+        is_active=True,
+    )
+    db_session.add(other_cit_user)
+    db_session.commit()
+
+    other_cit_tok = client.post(
+        "/api/v1/auth/login",
+        data={"username": other_cit_email, "password": "Password123!"},
+    ).json()["access_token"]
+    other_cit_headers = {"Authorization": f"Bearer {other_cit_tok}"}
+
+    diff_cit_order = client.post(
+        f"/api/v1/requests/{req_id}/payments/{payment_id}/razorpay-order",
+        headers=other_cit_headers,
+    )
+    assert diff_cit_order.status_code == 403
+
+    # 8c. Negative check: Employee attempting to create order for citizen receives 403 (Not enough permissions)
+    emp_order_blocked = client.post(
+        f"/api/v1/requests/{req_id}/payments/{payment_id}/razorpay-order",
+        headers=emp_headers,
+    )
+    assert emp_order_blocked.status_code == 403
+    assert emp_order_blocked.json()["detail"] == "Not enough permissions"
+
+    # 8d. Citizen creates Razorpay order
     order_res = client.post(
         f"/api/v1/requests/{req_id}/payments/{payment_id}/razorpay-order",
         headers=cit_headers,
@@ -142,6 +182,10 @@ def test_razorpay_order_creation_and_verification(client: TestClient, db_session
     order_data = order_res.json()
     assert order_data["order_id"].startswith("order_")
     assert order_data["amount"] == 15000  # 150 INR in paise
+    # Confirm Razorpay key secret is never sent or exposed in order response
+    assert "key_secret" not in order_data
+    assert "razorpay_key_secret" not in order_data
+    assert "secret" not in order_data
 
     # 9. Verify invalid signature fails
     bad_verify = client.post(
@@ -154,6 +198,18 @@ def test_razorpay_order_creation_and_verification(client: TestClient, db_session
         headers=cit_headers,
     )
     assert bad_verify.status_code == 400
+
+    # 9b. Different citizen attempting verify receives 403
+    diff_cit_verify = client.post(
+        f"/api/v1/requests/{req_id}/payments/{payment_id}/razorpay-verify",
+        json={
+            "razorpay_order_id": order_data["order_id"],
+            "razorpay_payment_id": "pay_fake_000",
+            "razorpay_signature": "invalid_sig",
+        },
+        headers=other_cit_headers,
+    )
+    assert diff_cit_verify.status_code == 403
 
     # 10. Verify valid signature succeeds
     settings = get_settings()

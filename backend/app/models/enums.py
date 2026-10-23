@@ -37,3 +37,12 @@ class RequestAction(str, Enum):
     PAYMENT_CONFIRMED = "payment_confirmed"
     PAYMENT_FAILED = "payment_failed"
     PAYMENT_CANCELLED = "payment_cancelled"
+
+    # OTP Relay
+    OTP_REQUESTED = "otp_requested"
+    OTP_SUBMITTED = "otp_submitted"
+    OTP_USED = "otp_used"
+    OTP_FAILED = "otp_failed"
+    OTP_EXPIRED = "otp_expired"
+    OTP_CANCELLED = "otp_cancelled"
+

@@ -540,3 +540,81 @@ def test_freshly_submitted_request_details_and_sub_endpoints(
     payments_res = client.get(f"/api/v1/requests/{req_id}/payments", headers=citizen_headers)
     assert payments_res.status_code == 200
     assert messages_res.json() == []
+
+
+def test_get_request_output_access_control(client: TestClient, db_session: Session) -> None:
+    # 1. Setup request with citizen owner and centre A
+    req_id, centre_a_id, citizen_headers = setup_request_waiting_for_centre(client, db_session)
+    employee_a_headers = get_employee_headers(
+        client, db_session, centre_a_id, email="emp_a_output@example.com"
+    )
+
+    # 2. Advance to PROCESSING and complete with output
+    client.post(f"/api/v1/requests/{req_id}/accept", headers=employee_a_headers)
+    client.post(f"/api/v1/requests/{req_id}/start-review", headers=employee_a_headers)
+    client.post(f"/api/v1/requests/{req_id}/mark-ready", headers=employee_a_headers)
+    client.post(f"/api/v1/requests/{req_id}/start-processing", headers=employee_a_headers)
+    pay_res = client.post(f"/api/v1/requests/{req_id}/request-payment", headers=employee_a_headers)
+    payment_id = pay_res.json()["id"]
+    client.post(f"/api/v1/requests/{req_id}/payments/{payment_id}/confirm", headers=citizen_headers)
+
+    comp_res = client.post(
+        f"/api/v1/requests/{req_id}/complete",
+        json={
+            "collection_instructions": "Collect from counter 1",
+            "note": "Internal verification completed",
+        },
+        headers=employee_a_headers,
+    )
+    assert comp_res.status_code == 200
+
+    # 3. Create a different citizen -> 403
+    other_citizen_headers = get_citizen_headers(
+        client, db_session, email="other_citizen_output@example.com"
+    )
+    res_other_cit = client.get(f"/api/v1/requests/{req_id}/output", headers=other_citizen_headers)
+    assert res_other_cit.status_code == 403
+
+    # 4. Create another centre B and staff of centre B -> 403
+    centre_b = AkshayaCentre(
+        name="Centre B Output",
+        code="CBO001",
+        district="Ernakulam",
+        locality="Kochi",
+        address_text="Addr B",
+    )
+    db_session.add(centre_b)
+    db_session.commit()
+    employee_b_headers = get_employee_headers(
+        client, db_session, str(centre_b.id), email="emp_b_output@example.com"
+    )
+    res_other_emp = client.get(f"/api/v1/requests/{req_id}/output", headers=employee_b_headers)
+    assert res_other_emp.status_code == 403
+
+    # 5. Owner citizen -> 200
+    res_owner = client.get(f"/api/v1/requests/{req_id}/output", headers=citizen_headers)
+    assert res_owner.status_code == 200
+    owner_data = res_owner.json()
+    assert owner_data["collection_instructions"] == "Collect from counter 1"
+
+    # 6. Staff of centre A -> 200
+    res_staff = client.get(f"/api/v1/requests/{req_id}/output", headers=employee_a_headers)
+    assert res_staff.status_code == 200
+
+    # 7. System administrator -> 200
+    from app.models.user import User
+
+    admin_user = User(
+        email="sysadmin_output@example.com",
+        password_hash=get_password_hash("password123"),
+        role="system_administrator",
+    )
+    db_session.add(admin_user)
+    db_session.commit()
+    login_adm = client.post(
+        "/api/v1/auth/login",
+        data={"username": "sysadmin_output@example.com", "password": "password123"},
+    )
+    admin_headers = {"Authorization": f"Bearer {login_adm.json()['access_token']}"}
+    res_admin = client.get(f"/api/v1/requests/{req_id}/output", headers=admin_headers)
+    assert res_admin.status_code == 200
