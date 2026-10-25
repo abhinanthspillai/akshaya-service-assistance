@@ -1,17 +1,19 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, SessionDep
+from app.core.audit import log_audit
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.models.centre import AkshayaCentre
 from app.models.notification import Notification
 from app.models.profile import CentreAdministrator, CitizenProfile, EmployeeProfile
 from app.models.user import User
 from app.schemas.token import Token
-from app.schemas.user import UserAuthMe, UserRead, UserRegister
+from app.schemas.user import ResetPasswordRequest, UserAuthMe, UserRead, UserRegister
 
 router = APIRouter()
 
@@ -77,16 +79,16 @@ def register(user_in: UserRegister, session: SessionDep) -> User:
 
     if user_in.role == "centre_employee":
         # Always set approval_status to PENDING_APPROVAL on self-registration
-        profile = EmployeeProfile(
+        emp_profile = EmployeeProfile(
             user_id=user.id,
             centre_id=user_in.centre_id,
             full_name=user_in.full_name,
             approval_status="PENDING_APPROVAL",
         )
-        session.add(profile)
+        session.add(emp_profile)
 
         # In-app notification to Centre Manager(s) of this centre and System Admin(s)
-        approver_ids = set()
+        approver_ids: set[UUID] = set()
         active_managers = session.scalars(
             select(CentreAdministrator.user_id).where(
                 CentreAdministrator.centre_id == user_in.centre_id,
@@ -111,13 +113,13 @@ def register(user_in: UserRegister, session: SessionDep) -> User:
             )
 
     elif user_in.role == "centre_administrator":
-        profile = CentreAdministrator(
+        admin_profile = CentreAdministrator(
             user_id=user.id,
             centre_id=user_in.centre_id,
             full_name=user_in.full_name,
             approval_status="PENDING_APPROVAL",
         )
-        session.add(profile)
+        session.add(admin_profile)
 
         # Manager signup request -> shown to System Admin ONLY
         sysadmins = session.scalars(
@@ -133,12 +135,12 @@ def register(user_in: UserRegister, session: SessionDep) -> User:
                 )
             )
     else:
-        profile = CitizenProfile(
+        citizen_profile = CitizenProfile(
             user_id=user.id,
             full_name=user_in.full_name,
             phone=user_in.phone,
         )
-        session.add(profile)
+        session.add(citizen_profile)
 
     session.commit()
     session.refresh(user)
@@ -212,3 +214,35 @@ def get_auth_me(current_user: CurrentUser, session: SessionDep) -> UserAuthMe:
         response.photo_url = f"/api/v1/avatars/{current_user.profile_photo}"
 
     return response
+
+
+@router.post("/reset-password")
+@router.post("/forgot-password")
+def reset_password(payload: ResetPasswordRequest, session: SessionDep) -> dict[str, str]:
+    clean_email = payload.email.strip().lower()
+    user = session.scalar(select(User).where(User.email == clean_email))
+    if not user:
+        user = session.scalar(select(User).where(User.email == payload.email.strip()))
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="No account registered with this email address.",
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=400,
+            detail="This account is deactivated. Please contact support.",
+        )
+
+    user.password_hash = get_password_hash(payload.new_password)
+    session.add(user)
+    log_audit(
+        session,
+        actor_id=user.id,
+        action="self_service_password_reset",
+        target_resource_type="User",
+        target_resource_id=str(user.id),
+        details={"email": clean_email},
+    )
+    session.commit()
+    return {"message": "Password successfully updated. You can now sign in with your new password."}

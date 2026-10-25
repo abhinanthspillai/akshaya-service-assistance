@@ -2,10 +2,12 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class OtpCreateResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     request_id: UUID
     status: str
@@ -14,11 +16,10 @@ class OtpCreateResponse(BaseModel):
     submitted_at: datetime | None = None
     resolved_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
-
 
 class OtpStateResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     request_id: UUID
     status: str
@@ -31,11 +32,10 @@ class OtpStateResponse(BaseModel):
     failed_attempts_count: int = 0
     is_blocked: bool = False
 
-    class Config:
-        from_attributes = True
-
 
 class PendingCitizenOtpResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     request_id: UUID
     service_name: str
@@ -43,9 +43,6 @@ class PendingCitizenOtpResponse(BaseModel):
     status: str
     expires_at: datetime
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class OtpSubmitRequest(BaseModel):

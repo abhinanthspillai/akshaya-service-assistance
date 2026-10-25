@@ -70,7 +70,9 @@ def test_centre_employees_crud(client: TestClient, db_session: Session) -> None:
     assert r_patch.json()["max_active_requests"] == 15
 
 
-def test_employee_capacity_excludes_completed_requests(client: TestClient, db_session: Session) -> None:
+def test_employee_capacity_excludes_completed_requests(
+    client: TestClient, db_session: Session
+) -> None:
     from app.models.assignment import RequestAssignment
     from app.models.request import ServiceRequest
     from app.models.service import Service

@@ -553,6 +553,15 @@ export function RequestDetail() {
  Cancel Request
  </button>
  )}
+ {request.status === 'COMPLETED' && (
+ <button
+ onClick={handleCloseRequest}
+ disabled={isSubmitting}
+ className="text-sm text-green-700 hover:text-green-800 bg-white border border-green-200 hover:bg-green-50 hover:border-green-300 font-semibold px-4 py-2 rounded-xl transition-all shadow-xs disabled:opacity-50"
+ >
+ Confirm & Close
+ </button>
+ )}
  {(request.status === 'DRAFT' || request.status === 'COMPLETED' || request.status === 'CANCELLED') && (
  <button
  onClick={handleDeleteRequest}

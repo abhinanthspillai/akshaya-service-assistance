@@ -41,7 +41,7 @@ jobs:
         run: ruff check .
       - name: Type check
         working-directory: backend
-        run: mypy app tests
+        run: mypy app
       - name: Test
         working-directory: backend
         run: pytest

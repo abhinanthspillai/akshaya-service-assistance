@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { 
   Search, 
-  Loader2, 
   FileSearch, 
   LayoutGrid, 
   FileText, 
@@ -149,7 +148,7 @@ export function ServiceCatalogue() {
             <div className="w-40">
               <Select
                 value={sortBy}
-                onChange={(e) => { setSortBy(e.target.value as any); setCurrentPage(1); }}
+                onChange={(e) => { setSortBy(e.target.value as typeof sortBy); setCurrentPage(1); }}
               >
                 <option value="popular">Popular</option>
                 <option value="name-asc">Name (A-Z)</option>

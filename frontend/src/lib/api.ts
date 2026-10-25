@@ -1,17 +1,19 @@
 import axios from 'axios';
 
+const rawApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim().replace(/\/+$/, '') || '';
+
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL
-    ? `${import.meta.env.VITE_API_URL}/api/v1`
+  baseURL: rawApiUrl
+    ? (rawApiUrl.endsWith('/api/v1') ? rawApiUrl : `${rawApiUrl}/api/v1`)
     : '/api/v1',
 });
 
 // In-memory cache for GET requests to eliminate navigation buffer and make route switching instant
 interface CacheEntry {
-  data: any;
+  data: unknown;
   status: number;
   statusText: string;
-  headers: any;
+  headers: Record<string, unknown>;
   timestamp: number;
 }
 

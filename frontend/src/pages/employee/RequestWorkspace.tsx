@@ -639,7 +639,6 @@ export function RequestWorkspace() {
   const hasConfirmedPayment = payments.some(
     (p) => p.status === 'CONFIRMED' || p.status === 'PAID'
   );
-  const pendingPayment = payments.find((p) => p.status === 'PENDING');
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12">

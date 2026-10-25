@@ -68,10 +68,6 @@ export function NewRequest() {
   const [stagedFiles, setStagedFiles] = useState<Record<string, File>>({});
   const [docStatuses, setDocStatuses] = useState<Record<string, DocumentUploadStatus>>({});
   const [docErrors, setDocErrors] = useState<Record<string, string>>({});
-  
-  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
-  const [locationDenied, setLocationDenied] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -257,13 +253,6 @@ export function NewRequest() {
       setCurrentStep('review');
     }
   };
-
-  const filteredCentres = centres.filter(c => 
-    !searchQuery || 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    c.district.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (c.pincode && c.pincode.includes(searchQuery))
-  );
 
   return (
     <div className="max-w-4xl mx-auto pb-12">

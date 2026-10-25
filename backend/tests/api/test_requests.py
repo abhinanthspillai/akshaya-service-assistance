@@ -620,14 +620,14 @@ def test_get_request_output_access_control(client: TestClient, db_session: Sessi
     assert res_admin.status_code == 200
 
 
-def test_accept_request_not_blocked_by_completed_requests(client: TestClient, db_session: Session) -> None:
+def test_accept_request_not_blocked_by_completed_requests(
+    client: TestClient, db_session: Session
+) -> None:
     from app.models.assignment import RequestAssignment
     from app.models.profile import EmployeeProfile
     from app.models.request import ServiceRequest
 
-    centre = AkshayaCentre(
-        name="Cap Centre", code="CAP002", district="Kottayam", address_text="x"
-    )
+    centre = AkshayaCentre(name="Cap Centre", code="CAP002", district="Kottayam", address_text="x")
     service = Service(name="Cap Svc", code="CAP002", service_type="A")
     db_session.add_all([centre, service])
     db_session.commit()

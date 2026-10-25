@@ -6,8 +6,6 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from urllib.parse import urlparse
 
-from sqlalchemy import update
-
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.models.assignment import RequestAssignment
@@ -28,7 +26,6 @@ def main():
     assert_local_database()
     session = SessionLocal()
     try:
-
         # Clean up ephemeral e2e test accounts and requests to prevent FK conflicts
         from app.models.assignment import RequestHistory
         from app.models.document import RequestDocument, RequestDocumentReview

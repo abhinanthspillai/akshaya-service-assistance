@@ -5,17 +5,9 @@ import {
   Users,
   AlertTriangle,
   FileText,
-  LifeBuoy,
-  TrendingUp,
-  Clock,
   ArrowRight,
-  ExternalLink,
   MapPin,
-  CheckCircle2,
   UserCheck,
-  Plus,
-  RefreshCw,
-  Inbox
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Avatar } from '../../components/ui/Avatar';
@@ -44,13 +36,6 @@ interface CentreInfo {
   is_active: boolean;
 }
 
-interface ServiceRequest {
-  id: string;
-  status: string;
-  service_name_snapshot: string;
-  updated_at: string;
-}
-
 export function CentreAdminDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -61,8 +46,6 @@ export function CentreAdminDashboard() {
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const [escalationsCount, setEscalationsCount] = useState<number>(0);
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState<number>(0);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   // Chart hover state
   const [hoveredDayIndex, setHoveredDayIndex] = useState<number | null>(null);
@@ -121,10 +104,7 @@ export function CentreAdminDashboard() {
   const compAreaPath = `${compLinePath} L ${lastX} ${baselineY} L ${firstX} ${baselineY} Z`;
   const totalWeeklyVolume = weeklyTrend.reduce((acc, d) => acc + d.intake, 0);
 
-  const fetchData = async (showRefresh = false) => {
-    if (showRefresh) setIsRefreshing(true);
-    else setIsLoading(true);
-
+  const fetchData = async () => {
     try {
       // 1. Fetch Centre info if centre_id is known or from /auth/me
       let cId = user?.centre_id;
@@ -170,9 +150,8 @@ export function CentreAdminDashboard() {
       } catch {
         // ignore
       }
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+    } catch {
+      // ignore
     }
   };
 

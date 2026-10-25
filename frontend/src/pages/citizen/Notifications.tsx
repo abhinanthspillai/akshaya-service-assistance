@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Loader2, CheckSquare, Settings, FileText, Clock, Users, Info, ChevronRight, HelpCircle, ExternalLink, ArrowRight } from 'lucide-react';
+import { Bell, CheckSquare, FileText, Clock, Users, Info, ChevronRight, HelpCircle, ExternalLink, ArrowRight } from 'lucide-react';
 import { api } from '../../lib/api';
 import clsx from 'clsx';
 import { PageHeader } from '../../components/ui/PageHeader';

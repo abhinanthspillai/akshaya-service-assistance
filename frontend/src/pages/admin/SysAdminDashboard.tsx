@@ -37,8 +37,6 @@ export function SysAdminDashboard() {
   const [openTicketsCount, setOpenTicketsCount] = useState<number>(0);
   const [recentAudits, setRecentAudits] = useState<AuditItem[]>([]);
   const [totalApplications, setTotalApplications] = useState<number>(0);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [selectedTimeframe, setSelectedTimeframe] = useState<'7d' | '30d'>('7d');
 
   // Chart hover state
   const [hoveredDayIndex, setHoveredDayIndex] = useState<number | null>(null);
@@ -72,54 +70,49 @@ export function SysAdminDashboard() {
   ];
 
   const fetchDashboardStats = async () => {
-    setIsLoading(true);
+    // 1. Fetch centres
     try {
-      // 1. Fetch centres
-      try {
-        const centresRes = await api.get('/centres/?active=false&limit=200');
-        const cList = centresRes.data || [];
-        setTotalCentres(cList.length);
-        setActiveCentres(cList.filter((c: { is_active: boolean }) => c.is_active).length);
-      } catch {
-        // graceful fallback
-      }
+      const centresRes = await api.get('/centres/?active=false&limit=200');
+      const cList = centresRes.data || [];
+      setTotalCentres(cList.length);
+      setActiveCentres(cList.filter((c: { is_active: boolean }) => c.is_active).length);
+    } catch {
+      // graceful fallback
+    }
 
-      // 2. Fetch services
-      try {
-        const servicesRes = await api.get('/services/?active=false&limit=200');
-        setTotalServices(servicesRes.data?.length || 0);
-      } catch {
-        // graceful fallback
-      }
+    // 2. Fetch services
+    try {
+      const servicesRes = await api.get('/services/?active=false&limit=200');
+      setTotalServices(servicesRes.data?.length || 0);
+    } catch {
+      // graceful fallback
+    }
 
-      // 3. Fetch tickets
-      try {
-        const ticketsRes = await api.get('/tickets/');
-        const tList = ticketsRes.data || [];
-        const open = tList.filter((t: { status: string }) => t.status !== 'RESOLVED' && t.status !== 'CLOSED').length;
-        setOpenTicketsCount(open || tList.length);
-      } catch {
-        // graceful fallback
-      }
+    // 3. Fetch tickets
+    try {
+      const ticketsRes = await api.get('/tickets/');
+      const tList = ticketsRes.data || [];
+      const open = tList.filter((t: { status: string }) => t.status !== 'RESOLVED' && t.status !== 'CLOSED').length;
+      setOpenTicketsCount(open || tList.length);
+    } catch {
+      // graceful fallback
+    }
 
-      // 4. Fetch recent audit logs
-      try {
-        const auditRes = await api.get('/audit/');
-        setRecentAudits((auditRes.data || []).slice(0, 5));
-      } catch {
-        // graceful fallback
-      }
+    // 4. Fetch recent audit logs
+    try {
+      const auditRes = await api.get('/audit/');
+      setRecentAudits((auditRes.data || []).slice(0, 5));
+    } catch {
+      // graceful fallback
+    }
 
-      // 5. Fetch citizen requests count
-      try {
-        const reqRes = await api.get('/requests/?limit=100');
-        const total = reqRes.data?.total || reqRes.data?.items?.length || 0;
-        setTotalApplications(total > 0 ? total : 3224);
-      } catch {
-        setTotalApplications(3224);
-      }
-    } finally {
-      setIsLoading(false);
+    // 5. Fetch citizen requests count
+    try {
+      const reqRes = await api.get('/requests/?limit=100');
+      const total = reqRes.data?.total || reqRes.data?.items?.length || 0;
+      setTotalApplications(total > 0 ? total : 3224);
+    } catch {
+      setTotalApplications(3224);
     }
   };
 

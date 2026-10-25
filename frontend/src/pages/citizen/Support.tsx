@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, FileText, MessageSquare, ChevronDown, ChevronUp, Phone, Mail, MapPin, ArrowRight, Loader2, ArrowLeft, LifeBuoy } from 'lucide-react';
+import { BookOpen, MessageSquare, ChevronDown, ChevronUp, Phone, Mail, MapPin, ArrowRight, Loader2, ArrowLeft, LifeBuoy } from 'lucide-react';
 import { api } from '../../lib/api';
 
 import { PageHeader } from '../../components/ui/PageHeader';

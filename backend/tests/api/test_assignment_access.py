@@ -44,9 +44,7 @@ def test_assigned_employee_and_admin_request_workspace_access(
     # 2. Setup Users
     cit_user = _create_user(db_session, f"cit_{uuid4().hex[:6]}@akshaya.test", "citizen")
     emp_user = _create_user(db_session, f"emp_{uuid4().hex[:6]}@akshaya.test", "centre_employee")
-    emp_other = _create_user(
-        db_session, f"other_{uuid4().hex[:6]}@akshaya.test", "centre_employee"
-    )
+    emp_other = _create_user(db_session, f"other_{uuid4().hex[:6]}@akshaya.test", "centre_employee")
     admin_user = _create_user(
         db_session, f"admin_{uuid4().hex[:6]}@akshaya.test", "centre_administrator"
     )

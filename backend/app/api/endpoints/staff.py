@@ -130,7 +130,7 @@ def get_centre_employees(
         )
         .group_by(RequestAssignment.employee_id)
     )
-    counts = dict(session.execute(counts_stmt).all())
+    counts: dict[UUID, int] = {row[0]: int(row[1]) for row in session.execute(counts_stmt).all()}
 
     items = []
     for emp, usr in rows:
@@ -186,7 +186,9 @@ def get_employees(
             )
             .group_by(RequestAssignment.employee_id)
         )
-        counts = dict(session.execute(counts_stmt).all())
+        counts: dict[UUID, int] = {
+            row[0]: int(row[1]) for row in session.execute(counts_stmt).all()
+        }
 
         items = []
         for emp, usr in rows:
@@ -238,7 +240,7 @@ def update_centre_employee(
     if not usr:
         raise HTTPException(status_code=404, detail="User not found")
 
-    details = {}
+    details: dict[str, Any] = {}
     if update_in.is_available is not None:
         emp.is_available = update_in.is_available
         details["is_available"] = emp.is_available

@@ -3,19 +3,15 @@ import { api } from '../../lib/api';
 import {
   Inbox,
   Search,
-  Filter,
   CheckCircle2,
   AlertCircle,
   Loader2,
   RefreshCw,
   UserCheck,
-  UserPlus,
   X,
-  ArrowRight,
   Clock,
-  ChevronRight
 } from 'lucide-react';
-import { formatStatus, formatRelativeTime } from '../../utils/format';
+import { formatStatus } from '../../utils/format';
 import clsx from 'clsx';
 
 interface ServiceRequest {

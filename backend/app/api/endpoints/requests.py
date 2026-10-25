@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path, PurePath
@@ -7,6 +8,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from app.api.deps import (
     CurrentUser,
@@ -132,9 +134,9 @@ TERMINAL_REQUEST_STATUSES = ("COMPLETED", "CLOSED", "CANCELLED", "UNABLE_TO_PROC
 
 
 def _perform_transition(
-    session,
-    service_request,
-    current_user,
+    session: Session,
+    service_request: ServiceRequest,
+    current_user: User,
     to_status: str,
     action: str | RequestAction,
     note: str | None = None,
@@ -459,7 +461,7 @@ def get_dashboard_needs_attention(
         .distinct()
     ).all()
 
-    reuploaded_requests = []
+    reuploaded_requests: Sequence[ServiceRequest] = []
     if reuploaded_req_ids:
         reuploaded_requests = session.scalars(
             select(ServiceRequest)
@@ -869,7 +871,7 @@ async def upload_request_document(
                     title="Document Re-uploaded",
                     body=f"A rejected document for request {request_id} has been re-uploaded.",
                 )
-        else:
+        elif service_request.selected_centre_id:
             _notify_centre_employees(
                 session,
                 centre_id=service_request.selected_centre_id,
@@ -1426,7 +1428,7 @@ def cancel_request(
                 title="Request cancelled",
                 body=f"Request {request_id} was cancelled by the citizen.",
             )
-    else:
+    elif service_request.selected_centre_id:
         _notify_centre_employees(
             session,
             centre_id=service_request.selected_centre_id,
@@ -1601,6 +1603,8 @@ def list_request_payments(
     current_user: CurrentUser,
 ) -> Any:
     service_request = session.get(ServiceRequest, request_id)
+    if not service_request:
+        raise HTTPException(status_code=404, detail="Service request not found")
     if current_user.role == "citizen":
         if service_request.citizen_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized")
@@ -1753,7 +1757,7 @@ def create_razorpay_order(
         and settings.razorpay_key_id != "rzp_test_placeholder"
     ):
         try:
-            import razorpay
+            import razorpay  # type: ignore[import-untyped]
 
             client = razorpay.Client(auth=(settings.razorpay_key_id, settings.razorpay_key_secret))
             rzp_order = client.order.create(
@@ -2492,7 +2496,7 @@ def _safe_add_notification(
     session: Any,
     *,
     user_id: UUID,
-    request_id: UUID,
+    request_id: UUID | None = None,
     event_type: str,
     title: str,
     body: str | None = None,
@@ -2567,7 +2571,7 @@ def complete_request(
             .select_from(RequestPayment)
             .where(RequestPayment.request_id == request_id, RequestPayment.status == "PENDING")
         )
-        if has_pending > 0:
+        if (has_pending or 0) > 0:
             raise HTTPException(
                 status_code=409, detail="Cannot complete request with pending payments"
             )
@@ -2579,7 +2583,7 @@ def complete_request(
             .select_from(RequestPayment)
             .where(RequestPayment.request_id == request_id, RequestPayment.status == "CONFIRMED")
         )
-        if has_confirmed == 0:
+        if (has_confirmed or 0) == 0:
             raise HTTPException(
                 status_code=409, detail="Cannot complete paid request without confirmed payment"
             )

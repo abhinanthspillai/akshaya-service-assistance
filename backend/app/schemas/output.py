@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CompletedOutputCreate(BaseModel):
@@ -12,6 +12,8 @@ class CompletedOutputCreate(BaseModel):
 
 
 class CompletedOutputResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     request_id: UUID
     created_by_id: UUID
@@ -22,6 +24,3 @@ class CompletedOutputResponse(BaseModel):
     amount: float | None
     note: str | None
     created_at: datetime
-
-    class Config:
-        from_attributes = True

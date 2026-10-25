@@ -8,15 +8,11 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
-  UserCheck,
-  UserX,
   Loader2,
   RefreshCw,
   X,
   Sliders,
   Mail,
-  Shield,
-  Briefcase
 } from 'lucide-react';
 import { Avatar } from '../../components/ui/Avatar';
 import clsx from 'clsx';

@@ -67,7 +67,7 @@ def get_popular_services(
         .order_by(func.count(ServiceRequest.id).desc())
         .limit(limit)
     )
-    popular_services = session.scalars(stmt).all()
+    popular_services = list(session.scalars(stmt).all())
 
     # Fallback to random/first active services if there are no requests yet
     if len(popular_services) < limit:
@@ -77,7 +77,7 @@ def get_popular_services(
         if existing_ids:
             fallback_stmt = fallback_stmt.where(Service.id.not_in(existing_ids))
         fallback_stmt = fallback_stmt.limit(remaining)
-        popular_services.extend(session.scalars(fallback_stmt).all())
+        popular_services.extend(list(session.scalars(fallback_stmt).all()))
 
     return popular_services
 
@@ -251,24 +251,21 @@ def get_service_centres(
         .where(AkshayaCentre.is_active)
         .where(CentreSupportedService.is_active)
     )
-    centres = session.scalars(stmt).all()
+    centres = list(session.scalars(stmt).all())
 
     if lat is not None and lng is not None:
         for centre in centres:
             if centre.latitude is not None and centre.longitude is not None:
-                centre.distance_km = haversine_distance(
-                    lat, lng, float(centre.latitude), float(centre.longitude)
-                )
+                dist = haversine_distance(lat, lng, float(centre.latitude), float(centre.longitude))
+                centre.distance_km = dist  # type: ignore[attr-defined]
             else:
-                centre.distance_km = None
+                centre.distance_km = None  # type: ignore[attr-defined]
 
         # Sort by distance, putting those with distance first
-        centres.sort(
-            key=lambda c: (
-                c.distance_km
-                if hasattr(c, "distance_km") and c.distance_km is not None
-                else float("inf")
-            )
-        )
+        def _distance_key(c: AkshayaCentre) -> float:
+            val = getattr(c, "distance_km", None)
+            return float(val) if val is not None else float("inf")
+
+        centres.sort(key=_distance_key)
 
     return centres

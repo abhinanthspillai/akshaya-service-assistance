@@ -92,7 +92,8 @@ def seed_services():
             "code": "INC_CERT",
             "service_type": "A",
             "description": (
-                "Official state certificate verifying annual household income for scholarship, tax, and government benefits."
+                "Official state certificate verifying annual household income "
+                "for scholarship, tax, and government benefits."
             ),
             "base_fee": Decimal("50.00"),
             "docs": [
@@ -107,7 +108,10 @@ def seed_services():
             "name": "Residence Certificate",
             "code": "RES_CERT",
             "service_type": "A",
-            "description": "Proof of residence certificate issued by the Revenue Department for official and administrative purposes.",
+            "description": (
+                "Proof of residence certificate issued by the Revenue Department "
+                "for official and administrative purposes."
+            ),
             "base_fee": Decimal("50.00"),
             "docs": [
                 {"name": "Aadhaar Card", "type": "REQUIRED"},
@@ -119,7 +123,10 @@ def seed_services():
             "name": "Community Certificate",
             "code": "COM_CERT",
             "service_type": "A",
-            "description": "Authorized caste and community verification certificate for educational admissions and welfare schemes.",
+            "description": (
+                "Authorized caste and community verification certificate for "
+                "educational admissions and welfare schemes."
+            ),
             "base_fee": Decimal("50.00"),
             "docs": [
                 {"name": "Ration Card", "type": "REQUIRED"},
@@ -130,7 +137,10 @@ def seed_services():
             "name": "Nativity Certificate",
             "code": "NAT_CERT",
             "service_type": "A",
-            "description": "Official certification proving birth, domicile, and nativity origin in the State of Kerala.",
+            "description": (
+                "Official certification proving birth, domicile, and nativity origin "
+                "in the State of Kerala."
+            ),
             "base_fee": Decimal("50.00"),
             "docs": [
                 {"name": "Birth Certificate", "type": "REQUIRED"},
@@ -142,7 +152,10 @@ def seed_services():
             "name": "PAN Card Services",
             "code": "PAN_SRV",
             "service_type": "A",
-            "description": "Application for new Permanent Account Number (PAN) card and correction of taxpayer records.",
+            "description": (
+                "Application for new Permanent Account Number (PAN) card "
+                "and correction of taxpayer records."
+            ),
             "base_fee": Decimal("100.00"),
             "docs": [
                 {"name": "Proof of Identity", "type": "REQUIRED"},
@@ -158,7 +171,8 @@ def seed_services():
             "code": "PASS_SRV",
             "service_type": "A",
             "description": (
-                "Online passport application processing, document pre-validation, and Seva Kendra appointment assistance."
+                "Online passport application processing, document pre-validation, "
+                "and Seva Kendra appointment assistance."
             ),
             "base_fee": Decimal("150.00"),
             "docs": [
@@ -174,7 +188,8 @@ def seed_services():
             "code": "VOTER_REG",
             "service_type": "A",
             "description": (
-                "Electoral roll voter registration, electoral photo identity card (EPIC) issuance, and address updates."
+                "Electoral roll voter registration, electoral photo identity card "
+                "(EPIC) issuance, and address updates."
             ),
             "base_fee": Decimal("0.00"),
             "docs": [
@@ -187,7 +202,10 @@ def seed_services():
             "name": "Birth Certificate",
             "code": "BIRTH_CERT",
             "service_type": "A",
-            "description": "Official vital registration and digital certificate issuance for births in local self-governments.",
+            "description": (
+                "Official vital registration and digital certificate issuance for "
+                "births in local self-governments."
+            ),
             "base_fee": Decimal("50.00"),
             "docs": [
                 {"name": "Applicant/Parent Identity Proof", "type": "REQUIRED"},
@@ -198,7 +216,10 @@ def seed_services():
             "name": "Death Certificate",
             "code": "DEATH_CERT",
             "service_type": "A",
-            "description": "Official vital registration and legal certificate issuance for deaths registered with local authorities.",
+            "description": (
+                "Official vital registration and legal certificate issuance for "
+                "deaths registered with local authorities."
+            ),
             "base_fee": Decimal("50.00"),
             "docs": [
                 {"name": "Applicant Identity Proof", "type": "REQUIRED"},
@@ -209,7 +230,10 @@ def seed_services():
             "name": "Marriage Certificate",
             "code": "MARRIAGE_CERT",
             "service_type": "A",
-            "description": "Formal legal registration and certificate issuance for marriages under statutory registration rules.",
+            "description": (
+                "Formal legal registration and certificate issuance for marriages "
+                "under statutory registration rules."
+            ),
             "base_fee": Decimal("100.00"),
             "docs": [
                 {"name": "Identity Proof of Applicant(s)", "type": "REQUIRED"},
@@ -223,7 +247,8 @@ def seed_services():
             "code": "AADHAAR_ENR",
             "service_type": "A",
             "description": (
-                "New 12-digit Aadhaar unique identification enrollment and biometric capture assistance."
+                "New 12-digit Aadhaar unique identification enrollment and biometric "
+                "capture assistance."
             ),
             "base_fee": Decimal("0.00"),
             "docs": [
@@ -235,7 +260,10 @@ def seed_services():
             "name": "Aadhaar Updation",
             "code": "AADHAAR_UPD",
             "service_type": "A",
-            "description": "Update mobile number, address, photograph, and demographic records in the UIDAI database.",
+            "description": (
+                "Update mobile number, address, photograph, and demographic records "
+                "in the UIDAI database."
+            ),
             "base_fee": Decimal("50.00"),
             "docs": [
                 {"name": "Name Update Proof", "type": "CONDITIONAL"},
@@ -248,7 +276,8 @@ def seed_services():
             "code": "JEEVAN_PRAMAAN",
             "service_type": "A",
             "description": (
-                "Digital biometric life certificate generation and submission for state and central pensioners."
+                "Digital biometric life certificate generation and submission for "
+                "state and central pensioners."
             ),
             "base_fee": Decimal("70.00"),
             "docs": [

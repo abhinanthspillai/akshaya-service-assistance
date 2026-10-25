@@ -38,3 +38,4 @@ backend/file
 diff*.txt
 scratch/
 file
+pytest_temp/

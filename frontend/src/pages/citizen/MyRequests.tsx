@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
-import { Loader2, Search, Plus, ChevronLeft, ChevronRight, FileText, Users, Home, AlertCircle, Trash2 } from 'lucide-react';
+import { Search, Plus, ChevronLeft, ChevronRight, FileText, Users, Home, AlertCircle, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Button } from '../../components/ui/Button';
