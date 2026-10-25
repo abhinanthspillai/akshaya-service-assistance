@@ -209,4 +209,3 @@ def get_pending_otp(
         expires_at=valid_pending.expires_at,
         created_at=valid_pending.created_at,
     )
-

@@ -141,7 +141,18 @@ describe('RequestWorkspace.tsx', () => {
       if (url === '/services/serv-1') return Promise.resolve({ data: mockServiceData });
       if (url === '/requests/req-uuid-1234/interactions') return Promise.resolve({ data: [] });
       if (url === '/requests/req-uuid-1234/messages') return Promise.resolve({ data: [] });
-      if (url === '/requests/req-uuid-1234/payments') return Promise.resolve({ data: [] });
+      if (url === '/requests/req-uuid-1234/payments')
+        return Promise.resolve({
+          data: [
+            {
+              id: 'pay-1',
+              request_id: 'req-uuid-1234',
+              amount: 150,
+              status: 'CONFIRMED',
+              provider: 'mock',
+            },
+          ],
+        });
       if (url === '/requests/req-uuid-1234/citizen') return Promise.resolve({ data: { full_name: 'John Doe', phone: '1234567890', address_text: 'Test Address' } });
       return Promise.reject(new Error(`Unhandled URL: ${url}`));
     });
@@ -283,5 +294,47 @@ describe('RequestWorkspace.tsx', () => {
     expect(screen.getByRole('button', { name: /Mark ready and start processing/i })).toBeInTheDocument();
     // Must NOT show "Request payment"
     expect(screen.queryByRole('button', { name: /^Request payment$/i })).not.toBeInTheDocument();
+  });
+
+  it('displays "Awaiting Citizen Payment" and "Message Citizen" in PAYMENT_PENDING state', async () => {
+    const paymentPendingRequest = {
+      ...mockRequestData,
+      status: 'PAYMENT_PENDING',
+      fee_snapshot: 150,
+    };
+
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === '/requests/req-uuid-1234') return Promise.resolve({ data: paymentPendingRequest });
+      if (url === '/requests/req-uuid-1234/history') return Promise.resolve({ data: mockHistoryData });
+      if (url === '/requests/req-uuid-1234/documents') return Promise.resolve({ data: [] });
+      if (url === '/requests/req-uuid-1234/document-reviews') return Promise.resolve({ data: [] });
+      if (url === '/services/serv-1') return Promise.resolve({ data: mockServiceData });
+      if (url === '/requests/req-uuid-1234/interactions') return Promise.resolve({ data: [] });
+      if (url === '/requests/req-uuid-1234/messages') return Promise.resolve({ data: [] });
+      if (url === '/requests/req-uuid-1234/payments') return Promise.resolve({ data: [] });
+      if (url === '/requests/req-uuid-1234/citizen') return Promise.resolve({ data: { full_name: 'John Doe' } });
+      return Promise.reject(new Error(`Unhandled URL: ${url}`));
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/employee/requests/req-uuid-1234']}>
+        <Routes>
+          <Route path="/employee/requests/:id" element={<RequestWorkspace />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Income Certificate Service')).toBeInTheDocument();
+    });
+
+    // Awaiting Citizen Payment should be displayed
+    expect(screen.getByText(/Awaiting Citizen Payment/i)).toBeInTheDocument();
+
+    // Message Citizen button should be available
+    expect(screen.getByRole('button', { name: /Message Citizen/i })).toBeInTheDocument();
+
+    // Staff cannot manually confirm payment
+    expect(screen.queryByRole('button', { name: /Confirm.*Payment/i })).not.toBeInTheDocument();
   });
 });

@@ -17,11 +17,17 @@ import { EmployeeDashboard } from './pages/employee/EmployeeDashboard';
 import { EmployeeRequests } from './pages/employee/EmployeeRequests';
 import { RequestWorkspace } from './pages/employee/RequestWorkspace';
 import { Escalations } from './pages/admin/Escalations';
+import { CentreAdminDashboard } from './pages/admin/CentreAdminDashboard';
+import { CentreEmployees } from './pages/admin/CentreEmployees';
+import { CentreQueue } from './pages/admin/CentreQueue';
 import { SupportAdmin } from './pages/admin/SupportAdmin';
 import { AuditLogs } from './pages/admin/AuditLogs';
 import { SysAdminDashboard } from './pages/admin/SysAdminDashboard';
+import { CentresManagement } from './pages/admin/CentresManagement';
+import { ServiceManagement } from './pages/admin/ServiceManagement';
 import { PendingApproval } from './pages/auth/PendingApproval';
 import { LandingPage } from './pages/LandingPage';
+import { AboutPage } from './pages/AboutPage';
 import { Loader2 } from 'lucide-react';
 
 
@@ -119,6 +125,7 @@ export default function App() {
  <Route path="/forgot-password" element={<PublicOnlyRoute><ForgotPassword /></PublicOnlyRoute>} />
 
  <Route path="/" element={<RootRedirect />} />
+ <Route path="/about" element={<AboutPage />} />
  
  {/* Citizen Routes */}
  <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['citizen']}><Dashboard /></ProtectedRoute>} />
@@ -133,16 +140,22 @@ export default function App() {
  <Route path="/profile" element={<ProtectedRoute allowedRoles={['citizen', 'centre_employee', 'centre_administrator', 'system_administrator']}><Profile /></ProtectedRoute>} />
 
  {/* Employee Routes */}
- <Route path="/queue" element={<ProtectedRoute allowedRoles={['centre_employee']}><EmployeeDashboard /></ProtectedRoute>} />
+ <Route path="/queue" element={<ProtectedRoute allowedRoles={['centre_employee', 'centre_administrator']}><EmployeeDashboard /></ProtectedRoute>} />
  <Route path="/employee/requests" element={<ProtectedRoute allowedRoles={['centre_employee']}><EmployeeRequests /></ProtectedRoute>} />
  <Route path="/employee/requests/:id" element={<ProtectedRoute allowedRoles={['centre_employee']}><RequestWorkspace /></ProtectedRoute>} />
 
- {/* Admin Routes */}
- <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['centre_administrator']}><Escalations /></ProtectedRoute>} />
+ {/* Centre Admin Routes */}
+ <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['centre_administrator']}><CentreAdminDashboard /></ProtectedRoute>} />
+ <Route path="/admin/queue" element={<ProtectedRoute allowedRoles={['centre_administrator']}><CentreQueue /></ProtectedRoute>} />
+ <Route path="/admin/employees" element={<ProtectedRoute allowedRoles={['centre_administrator', 'system_administrator']}><CentreEmployees /></ProtectedRoute>} />
  <Route path="/admin/escalations" element={<ProtectedRoute allowedRoles={['centre_administrator']}><Escalations /></ProtectedRoute>} />
  <Route path="/admin/support" element={<ProtectedRoute allowedRoles={['centre_administrator', 'system_administrator']}><SupportAdmin /></ProtectedRoute>} />
  <Route path="/admin/audit" element={<ProtectedRoute allowedRoles={['centre_administrator', 'system_administrator']}><AuditLogs /></ProtectedRoute>} />
  <Route path="/sysadmin/dashboard" element={<ProtectedRoute allowedRoles={['system_administrator']}><SysAdminDashboard /></ProtectedRoute>} />
+ <Route path="/sysadmin/centres" element={<ProtectedRoute allowedRoles={['system_administrator']}><CentresManagement /></ProtectedRoute>} />
+ <Route path="/sysadmin/services" element={<ProtectedRoute allowedRoles={['system_administrator']}><ServiceManagement /></ProtectedRoute>} />
+ <Route path="/sysadmin/support" element={<ProtectedRoute allowedRoles={['system_administrator', 'centre_administrator']}><SupportAdmin /></ProtectedRoute>} />
+ <Route path="/sysadmin/audit" element={<ProtectedRoute allowedRoles={['system_administrator', 'centre_administrator']}><AuditLogs /></ProtectedRoute>} />
  </Routes>
  </BrowserRouter>
  </AuthProvider>

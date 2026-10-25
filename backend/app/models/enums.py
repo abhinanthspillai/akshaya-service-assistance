@@ -45,4 +45,3 @@ class RequestAction(str, Enum):
     OTP_FAILED = "otp_failed"
     OTP_EXPIRED = "otp_expired"
     OTP_CANCELLED = "otp_cancelled"
-

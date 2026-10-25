@@ -37,14 +37,21 @@ export function MyRequests() {
  
  const [deleteConfirm, setDeleteConfirm] = useState<{isOpen: boolean; id: string; status: string}>({isOpen: false, id: '', status: ''});
  const [isDeleting, setIsDeleting] = useState(false);
+ const [catalogueServices, setCatalogueServices] = useState<string[]>([]);
 
  useEffect(() => {
  const fetchRequests = async () => {
  try {
- const res = await api.get('/requests/', { params: { limit: 100 } });
+ const [res, servicesRes] = await Promise.all([
+ api.get('/requests/', { params: { limit: 100 } }),
+ api.get('/services/').catch(() => ({ data: [] }))
+ ]);
  setRequests(res.data.items || (Array.isArray(res.data) ? res.data : []));
  if (res.data.status_counts) {
  setStatusCounts(res.data.status_counts);
+ }
+ if (Array.isArray(servicesRes.data)) {
+ setCatalogueServices(servicesRes.data.map((s: { name: string }) => s.name));
  }
  } catch {
  setError('Failed to load requests. Please try again later.');
@@ -60,20 +67,24 @@ export function MyRequests() {
   const [timeFilter, setTimeFilter] = useState('All Time');
 
   const availableServices = useMemo(() => {
-    const services = new Set<string>();
+    const services = new Set<string>(catalogueServices);
     requests.forEach(r => {
       if (r.service_name_snapshot) services.add(r.service_name_snapshot);
     });
     return Array.from(services).sort();
-  }, [requests]);
+  }, [requests, catalogueServices]);
 
-  const availableStatuses = useMemo(() => {
-    const statuses = new Set<string>();
-    requests.forEach(r => {
-      if (r.status) statuses.add(r.status);
-    });
-    return Array.from(statuses).sort();
-  }, [requests]);
+  const STATUS_OPTIONS = [
+    { value: 'DRAFT', label: 'Draft' },
+    { value: 'SUBMITTED', label: 'Submitted' },
+    { value: 'WAITING_FOR_CENTRE', label: 'Waiting for Centre' },
+    { value: 'ACCEPTED', label: 'Accepted' },
+    { value: 'UNDER_REVIEW', label: 'Under Review' },
+    { value: 'PROCESSING', label: 'Processing' },
+    { value: 'CORRECTION_REQUIRED', label: 'Correction Required' },
+    { value: 'COMPLETED', label: 'Completed' },
+    { value: 'CANCELLED', label: 'Cancelled' },
+  ];
 
   const isFilterActive = searchQuery !== '' || serviceFilter !== 'All Services' || statusFilter !== 'All Statuses' || timeFilter !== 'All Time' || activeTab !== 'All';
 
@@ -177,13 +188,7 @@ export function MyRequests() {
  return <FileText size={18} strokeWidth={2} />;
  };
 
- if (isLoading) {
- return (
- <div className="flex justify-center items-center h-64">
- <Loader2 className="animate-spin text-mono-text" size={32} />
- </div>
- );
- }
+
 
  const tabs: Tab[] = ['All', 'Needs Action', 'In Progress', 'Completed', 'Drafts', 'Cancelled'];
 
@@ -279,8 +284,8 @@ export function MyRequests() {
               onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
             >
               <option value="All Statuses">All Statuses</option>
-              {availableStatuses.map((st) => (
-                <option key={st} value={st}>{getStatusDisplay(st)}</option>
+              {STATUS_OPTIONS.map((st) => (
+                <option key={st.value} value={st.value}>{st.label}</option>
               ))}
             </Select>
           </div>
@@ -320,14 +325,26 @@ export function MyRequests() {
  <th className="px-6 py-4 text-[13px] font-semibold text-mono-muted tracking-wide text-right">Actions</th>
  </tr>
  </thead>
- <tbody className="divide-y divide-mono-border/50">
- {paginatedRequests.length === 0 ? (
- <tr>
- <td colSpan={7} className="px-6 py-16 text-center text-mono-muted text-[14px] font-medium">
- No requests found matching your filters.
- </td>
- </tr>
- ) : (
+              <tbody className="divide-y divide-mono-border/50">
+                {isLoading && requests.length === 0 ? (
+                  [...Array(5)].map((_, i) => (
+                    <tr key={i} className="animate-pulse">
+                      <td className="px-6 py-4"><div className="h-4 bg-mono-surface rounded w-4" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-mono-surface rounded w-32" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-mono-surface rounded w-20" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-mono-surface rounded w-24" /></td>
+                      <td className="px-6 py-4"><div className="h-5 bg-mono-surface rounded w-20" /></td>
+                      <td className="px-6 py-4"><div className="h-4 bg-mono-surface rounded w-24" /></td>
+                      <td className="px-6 py-4 text-right"><div className="h-8 bg-mono-surface rounded w-16 ml-auto" /></td>
+                    </tr>
+                  ))
+                ) : paginatedRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-16 text-center text-mono-muted text-[14px] font-medium">
+                      No requests found matching your filters.
+                    </td>
+                  </tr>
+                ) : (
  paginatedRequests.map((req, idx) => (
  <tr key={req.id} className="hover:bg-mono-surface/30 transition-colors">
  <td className="px-6 py-4 whitespace-nowrap text-[14px] font-medium text-mono-muted">

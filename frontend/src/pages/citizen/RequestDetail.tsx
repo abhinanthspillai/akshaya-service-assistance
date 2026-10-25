@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
-import { Loader2, ArrowLeft, MapPin, Upload, FileText, CalendarClock, MessageSquare, Trash2, KeyRound } from 'lucide-react';
+import { Loader2, ArrowLeft, MapPin, Upload, FileText, CalendarClock, MessageSquare, Trash2, KeyRound, CheckCircle2 } from 'lucide-react';
 import { formatStatus } from '../../utils/format';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 
@@ -529,7 +529,6 @@ export function RequestDetail() {
  <span className={('px-3 py-1 rounded-full text-sm font-medium ' + statusColor)}>
  {formatStatus(request.status)}
  </span>
- <span className="text-sm text-mono-muted">Type {request.service_type_snapshot}</span>
  </div>
  <div className="flex items-center gap-2">
  {!['DRAFT', 'SUBMITTED', 'WAITING_FOR_CENTRE'].includes(request.status) && (
@@ -549,7 +548,7 @@ export function RequestDetail() {
  <button
  onClick={handleCancelRequest}
  disabled={isSubmitting}
- className="text-sm text-red-600 hover:text-red-800 font-medium px-3 py-1 rounded-[16px] hover:bg-red-600/10 transition-colors disabled:opacity-50"
+ className="text-sm text-red-600 hover:text-red-700 bg-white border border-red-200 hover:bg-red-50 hover:border-red-300 font-semibold px-4 py-2 rounded-xl transition-all shadow-xs disabled:opacity-50"
  >
  Cancel Request
  </button>
@@ -576,15 +575,17 @@ export function RequestDetail() {
  </div>
  )}
  
- {request.status === 'COMPLETED' && (
- <div className="mt-6 flex gap-3">
- <button
- onClick={handleCloseRequest}
- disabled={isSubmitting}
- className="bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-2 rounded-[16px] transition-colors disabled:opacity-50"
- >
- Close Request
- </button>
+ {output && (
+ <div className="mt-6 p-4 rounded-[16px] border border-green-200 bg-green-50 flex items-start gap-3">
+   <div className="p-2 bg-green-600 text-white rounded-xl shrink-0 mt-0.5">
+     <CheckCircle2 size={18} />
+   </div>
+   <div>
+     <h3 className="font-semibold text-green-900 mb-1">Request Completed</h3>
+     <p className="text-green-800 text-sm leading-relaxed">
+       {output.collection_instructions || "Physical signed document available for collection from the Akshaya Centre during office hours (9 AM - 5 PM). Bring original Aadhaar for verification."}
+     </p>
+   </div>
  </div>
  )}
  </div>
@@ -814,9 +815,7 @@ export function RequestDetail() {
  {payment.currency} {payment.amount}
  </div>
  <div className="flex items-center gap-2">
- <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-mono-surface border border-mono-border text-mono-muted font-medium">
- Test Mode
- </span>
+
  <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
  payment.status === 'CONFIRMED'
  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
@@ -842,7 +841,7 @@ export function RequestDetail() {
  disabled={isProcessingPayment}
  className="mt-4 rounded-xl bg-mono-text text-mono-bg px-5 py-2.5 text-xs font-bold hover:bg-black transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
  >
- {isProcessingPayment ? 'Initiating Checkout...' : 'Pay Now (Razorpay Test Mode)'}
+ {isProcessingPayment ? 'Initiating Checkout...' : 'Pay Now'}
  </button>
  )}
  </div>
@@ -898,16 +897,8 @@ export function RequestDetail() {
  )}
 
 
- {request.status !== 'DRAFT' && (
+ {request.status !== 'DRAFT' && request.status !== 'COMPLETED' && (
  <div className="p-8 border-t border-mono-muted/20">
- {output && (
- <div className="mb-6 p-4 rounded-[16px] border border-green-200 bg-green-50">
- <h3 className="font-semibold text-green-900 mb-2">Request Completed</h3>
- <p className="text-green-800 text-sm">
- {output.collection_instructions || "Your request has been processed successfully. Please collect your output from the centre."}
- </p>
- </div>
- )}
  <div className="text-mono-muted text-sm">
  Your request has been submitted and is being processed.
  </div>

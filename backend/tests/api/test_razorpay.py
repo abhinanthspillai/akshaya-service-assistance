@@ -165,13 +165,13 @@ def test_razorpay_order_creation_and_verification(client: TestClient, db_session
     )
     assert diff_cit_order.status_code == 403
 
-    # 8c. Negative check: Employee attempting to create order for citizen receives 403 (Not enough permissions)
-    emp_order_blocked = client.post(
+    # 8c. Centre staff or citizen can create order for the request
+    emp_order = client.post(
         f"/api/v1/requests/{req_id}/payments/{payment_id}/razorpay-order",
         headers=emp_headers,
     )
-    assert emp_order_blocked.status_code == 403
-    assert emp_order_blocked.json()["detail"] == "Not enough permissions"
+    assert emp_order.status_code == 200
+    assert emp_order.json()["order_id"].startswith("order_")
 
     # 8d. Citizen creates Razorpay order
     order_res = client.post(

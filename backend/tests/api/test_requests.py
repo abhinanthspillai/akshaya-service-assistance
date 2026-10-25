@@ -618,3 +618,80 @@ def test_get_request_output_access_control(client: TestClient, db_session: Sessi
     admin_headers = {"Authorization": f"Bearer {login_adm.json()['access_token']}"}
     res_admin = client.get(f"/api/v1/requests/{req_id}/output", headers=admin_headers)
     assert res_admin.status_code == 200
+
+
+def test_accept_request_not_blocked_by_completed_requests(client: TestClient, db_session: Session) -> None:
+    from app.models.assignment import RequestAssignment
+    from app.models.profile import EmployeeProfile
+    from app.models.request import ServiceRequest
+
+    centre = AkshayaCentre(
+        name="Cap Centre", code="CAP002", district="Kottayam", address_text="x"
+    )
+    service = Service(name="Cap Svc", code="CAP002", service_type="A")
+    db_session.add_all([centre, service])
+    db_session.commit()
+
+    css = CentreSupportedService(centre_id=centre.id, service_id=service.id, is_active=True)
+    db_session.add(css)
+
+    emp_user = User(
+        email="emp_cap_test@example.com",
+        password_hash=get_password_hash("password123"),
+        role="centre_employee",
+    )
+    db_session.add(emp_user)
+    db_session.commit()
+
+    emp_profile = EmployeeProfile(
+        user_id=emp_user.id,
+        centre_id=centre.id,
+        full_name="Cap Test Emp",
+        max_active_requests=1,
+        approval_status="APPROVED",
+    )
+    db_session.add(emp_profile)
+    db_session.commit()
+
+    # Create 5 completed requests assigned to this employee
+    for _ in range(5):
+        completed_req = ServiceRequest(
+            citizen_id=emp_user.id,
+            service_id=service.id,
+            selected_centre_id=centre.id,
+            status="COMPLETED",
+            service_type_snapshot="A",
+            service_name_snapshot="Cap Svc",
+        )
+        db_session.add(completed_req)
+        db_session.commit()
+        assign = RequestAssignment(
+            request_id=completed_req.id,
+            employee_id=emp_user.id,
+            is_active=True,
+        )
+        db_session.add(assign)
+    db_session.commit()
+
+    # Now create a new request in WAITING_FOR_CENTRE
+    new_req = ServiceRequest(
+        citizen_id=emp_user.id,
+        service_id=service.id,
+        selected_centre_id=centre.id,
+        status="WAITING_FOR_CENTRE",
+        service_type_snapshot="A",
+        service_name_snapshot="Cap Svc",
+    )
+    db_session.add(new_req)
+    db_session.commit()
+
+    emp_login = client.post(
+        "/api/v1/auth/login",
+        data={"username": "emp_cap_test@example.com", "password": "password123"},
+    )
+    emp_headers = {"Authorization": f"Bearer {emp_login.json()['access_token']}"}
+
+    # Should succeed because employee has 0 active requests (max_active_requests = 1)
+    res_accept = client.post(f"/api/v1/requests/{new_req.id}/accept", headers=emp_headers)
+    assert res_accept.status_code == 200
+    assert res_accept.json()["status"] == "ACCEPTED"

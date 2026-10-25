@@ -18,6 +18,8 @@ import {
   ChevronDown,
   KeyRound,
   Copy,
+  Maximize2,
+  ShieldCheck,
 } from 'lucide-react';
 import { formatStatus } from '../../utils/format';
 
@@ -166,6 +168,7 @@ export function RequestWorkspace() {
   const [messages, setMessages] = useState<RequestMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [documentUrls, setDocumentUrls] = useState<Record<string, {url: string, type: string}>>({});
+  const [previewModalDoc, setPreviewModalDoc] = useState<{ url: string; name: string; type: string } | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isActionLoading, setIsActionLoading] = useState(false);
@@ -209,7 +212,7 @@ export function RequestWorkspace() {
 
       try {
         const [docsRes, reviewsRes, serviceRes, interactionsRes, messagesRes, paymentsRes] =
-          await Promise.all([
+          await Promise.allSettled([
             api.get(`/requests/${id}/documents`),
             api.get(`/requests/${id}/document-reviews`),
             api.get(`/services/${reqRes.data.service_id}`),
@@ -217,12 +220,25 @@ export function RequestWorkspace() {
             api.get(`/requests/${id}/messages`),
             api.get(`/requests/${id}/payments`),
           ]);
-        setDocuments(docsRes.data || []);
-        setReviews(reviewsRes.data || []);
-        setInteractionRequirements(serviceRes.data.interaction_requirements || []);
-        setInteractions(interactionsRes.data || []);
-        setMessages(messagesRes.data || []);
-        setPayments(paymentsRes.data || []);
+
+        if (docsRes.status === 'fulfilled') {
+          setDocuments(docsRes.value.data || []);
+        }
+        if (reviewsRes.status === 'fulfilled') {
+          setReviews(reviewsRes.value.data || []);
+        }
+        if (serviceRes.status === 'fulfilled') {
+          setInteractionRequirements(serviceRes.value.data?.interaction_requirements || []);
+        }
+        if (interactionsRes.status === 'fulfilled') {
+          setInteractions(interactionsRes.value.data || []);
+        }
+        if (messagesRes.status === 'fulfilled') {
+          setMessages(messagesRes.value.data || []);
+        }
+        if (paymentsRes.status === 'fulfilled') {
+          setPayments(paymentsRes.value.data || []);
+        }
 
         if (reqRes.data.status === 'COMPLETED') {
           try {
@@ -233,10 +249,14 @@ export function RequestWorkspace() {
           }
         }
 
-        try {
-          const otpRes = await api.get(`/requests/${id}/otp`);
-          setOtpState(otpRes.data);
-        } catch {
+        if (reqRes.data.status === 'PROCESSING') {
+          try {
+            const otpRes = await api.get(`/requests/${id}/otp`);
+            setOtpState(otpRes.data);
+          } catch {
+            setOtpState(null);
+          }
+        } else {
           setOtpState(null);
         }
       } catch {
@@ -255,10 +275,10 @@ export function RequestWorkspace() {
     fetchWorkspace();
   }, [fetchWorkspace]);
 
-  // Poll OTP state if awaiting OTP
+  // Poll OTP state only while actively awaiting citizen OTP input
   useEffect(() => {
     if (!id || !request || request.status !== 'PROCESSING') return;
-    if (otpState && !otpState.is_awaiting_otp) return;
+    if (!otpState || !otpState.is_awaiting_otp) return;
 
     const interval = setInterval(async () => {
       try {
@@ -298,6 +318,7 @@ export function RequestWorkspace() {
 
   useEffect(() => {
     if (!request || documents.length === 0) return;
+    if (['COMPLETED', 'CLOSED'].includes(request.status)) return;
     const currentDocs = documents.filter((d) => d.is_current);
     
     currentDocs.forEach(async (doc) => {
@@ -536,7 +557,8 @@ export function RequestWorkspace() {
       await fetchWorkspace();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
-      setError(err.response?.data?.detail || 'Failed to complete request.');
+      const msg = err.response?.data?.detail || 'Failed to complete request.';
+      setError(msg);
     } finally {
       setIsActionLoading(false);
     }
@@ -617,6 +639,7 @@ export function RequestWorkspace() {
   const hasConfirmedPayment = payments.some(
     (p) => p.status === 'CONFIRMED' || p.status === 'PAID'
   );
+  const pendingPayment = payments.find((p) => p.status === 'PENDING');
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12">
@@ -649,6 +672,7 @@ export function RequestWorkspace() {
         </div>
       )}
 
+
       {/* Main Workspace Header Card */}
       <div className="bg-white rounded-3xl border border-slate-200 p-6 md:p-8 shadow-sm space-y-6">
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 pb-6 border-b border-slate-100">
@@ -658,9 +682,6 @@ export function RequestWorkspace() {
                 className={`px-3 py-1 rounded-full text-xs font-bold border ${badge.bg} ${badge.text} ${badge.border}`}
               >
                 {formatStatus(request.status)}
-              </span>
-              <span className="px-2.5 py-0.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-700">
-                Service Type {request.service_type_snapshot}
               </span>
               <span className="text-xs font-medium text-slate-500">
                 Fee: {request.fee_snapshot ? `₹${request.fee_snapshot}` : 'Free'}
@@ -729,6 +750,13 @@ export function RequestWorkspace() {
                 {isActionLoading && <Loader2 size={14} className="animate-spin" />}
                 Mark ready and start processing
               </button>
+            )}
+
+            {request.status === 'PAYMENT_PENDING' && (
+              <div className="flex items-center gap-2 px-3.5 py-2 bg-purple-50 text-purple-700 border border-purple-200 rounded-xl text-xs font-semibold">
+                <CreditCard size={14} className="text-purple-600" />
+                <span>Awaiting Citizen Payment (₹{request.fee_snapshot})</span>
+              </div>
             )}
 
             {request.status === 'PROCESSING' && (
@@ -943,140 +971,170 @@ export function RequestWorkspace() {
 
 
         {/* 1. Document Verification Section */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-              <FileText size={16} className="text-slate-700" />
-              Applicant Documents ({currentDocs.length})
-            </h2>
-            {request.status === 'UNDER_REVIEW' && (
-              <span className="text-xs text-slate-500">
-                Verify each submitted document below to proceed.
-              </span>
-            )}
-          </div>
-
-          {currentDocs.length === 0 ? (
-            <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200/80 text-center text-xs text-slate-500">
-              No documents submitted for this request.
+        {['COMPLETED', 'CLOSED'].includes(request.status) ? (
+          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-8 text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-slate-200/80 text-slate-600 flex items-center justify-center mx-auto shadow-inner">
+              <ShieldCheck size={24} />
             </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-3">
-              {currentDocs.map((doc) => {
-                const review = reviews.find((r) => r.document_id === doc.id);
-                const isReupload = doc.version > 1;
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold text-slate-800">Applicant Documents Archived</h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                In compliance with citizen data privacy standards, applicant uploaded documents are no longer accessible to centre staff once the request has been completed.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                <FileText size={16} className="text-slate-700" />
+                Applicant Documents ({currentDocs.length})
+              </h2>
+              {request.status === 'UNDER_REVIEW' && (
+                <span className="text-xs text-slate-500">
+                  Verify each submitted document below to proceed. Click any document to enlarge.
+                </span>
+              )}
+            </div>
 
-                return (
-                  <div
-                    key={doc.id}
-                    className="p-4 bg-slate-50/70 border border-slate-200 rounded-2xl flex flex-col gap-4"
-                  >
-                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-bold text-slate-900">{doc.original_filename}</span>
-                        {isReupload && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                            Re-uploaded (v{doc.version})
-                          </span>
-                        )}
-                        {!isReupload && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-200 text-slate-700">
-                            v{doc.version}
-                          </span>
-                        )}
-                        {review && (
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${
-                              review.decision === 'APPROVED'
-                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                : 'bg-rose-50 text-rose-800 border-rose-200'
-                            }`}
-                          >
-                            {review.decision === 'APPROVED' ? 'Approved' : 'Correction Requested'}
-                          </span>
-                        )}
-                      </div>
+            {currentDocs.length === 0 ? (
+              <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200/80 text-center text-xs text-slate-500">
+                No documents submitted for this request.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3">
+                {currentDocs.map((doc) => {
+                  const review = reviews.find((r) => r.document_id === doc.id);
+                  const isReupload = doc.version > 1;
 
-                      <div className="text-xs text-slate-500 flex items-center gap-3">
-                        <span>{doc.content_type}</span>
-                        <span>•</span>
-                        <span>{Math.round(doc.size_bytes / 1024)} KB</span>
-                        <span>•</span>
-                        <span>Uploaded {new Date(doc.uploaded_at).toLocaleString()}</span>
-                      </div>
-
-                      {review?.reason && (
-                        <div className="text-xs text-rose-700 bg-rose-50 p-2 rounded-lg border border-rose-100 mt-1">
-                          <strong>Note:</strong> {review.reason}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex flex-col gap-4">
-                      {documentUrls[doc.id] ? (
-                        <div 
-                          className="w-full bg-white border border-slate-200 rounded-xl overflow-hidden shadow-inner h-[500px] select-none"
-                          onContextMenu={(e) => e.preventDefault()}
-                        >
-                          {documentUrls[doc.id].type.startsWith('image/') ? (
-                            <img 
-                              src={documentUrls[doc.id].url} 
-                              alt={doc.original_filename} 
-                              className="w-full h-full object-contain bg-slate-100 select-none pointer-events-none"
-                              draggable={false}
-                              onDragStart={(e) => e.preventDefault()}
-                            />
-                          ) : (
-                            <iframe src={documentUrls[doc.id].url} className="w-full h-full" title={doc.original_filename} />
+                  return (
+                    <div
+                      key={doc.id}
+                      className="p-4 bg-slate-50/70 border border-slate-200 rounded-2xl flex flex-col gap-4"
+                    >
+                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-bold text-slate-900">{doc.original_filename}</span>
+                          {isReupload && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                              Re-uploaded (v{doc.version})
+                            </span>
+                          )}
+                          {!isReupload && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-200 text-slate-700">
+                              v{doc.version}
+                            </span>
+                          )}
+                          {review && (
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${
+                                review.decision === 'APPROVED'
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                  : 'bg-rose-50 text-rose-800 border-rose-200'
+                              }`}
+                            >
+                              {review.decision === 'APPROVED' ? 'Approved' : 'Correction Requested'}
+                            </span>
                           )}
                         </div>
-                      ) : (
-                        <div className="w-full h-32 bg-slate-100 border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 text-sm font-medium">
-                          <Loader2 className="animate-spin mr-2" size={16} /> Loading preview...
+
+                        <div className="text-xs text-slate-500 flex items-center gap-3">
+                          <span>{doc.content_type}</span>
+                          <span>•</span>
+                          <span>{Math.round(doc.size_bytes / 1024)} KB</span>
+                          <span>•</span>
+                          <span>Uploaded {new Date(doc.uploaded_at).toLocaleString()}</span>
                         </div>
-                      )}
 
-                      {request.status === 'UNDER_REVIEW' && (
-                        <div className="flex items-center gap-2 shrink-0 bg-white p-3 rounded-xl border border-slate-200 shadow-sm self-start">
-                          <button
-                            onClick={() => handleDocumentApproval(doc.id)}
-                            disabled={isActionLoading}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
-                              review?.decision === 'APPROVED'
-                                ? 'bg-emerald-600 text-white shadow-sm'
-                                : 'bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50'
-                            }`}
-                          >
-                            <Check size={13} />
-                            Approve
-                          </button>
+                        {review?.reason && (
+                          <div className="text-xs text-rose-700 bg-rose-50 p-2 rounded-lg border border-rose-100 mt-1">
+                            <strong>Note:</strong> {review.reason}
+                          </div>
+                        )}
+                      </div>
 
-                          <button
+                      <div className="flex flex-col gap-4">
+                        {documentUrls[doc.id] ? (
+                          <div 
+                            className="w-full bg-white border border-slate-200 rounded-xl overflow-hidden shadow-inner h-[500px] select-none relative group cursor-pointer"
                             onClick={() => {
-                              setTargetDocId(doc.id);
-                              setActiveModal('correction');
+                              setPreviewModalDoc({
+                                url: documentUrls[doc.id].url,
+                                name: doc.original_filename,
+                                type: documentUrls[doc.id].type,
+                              });
                             }}
-                            disabled={isActionLoading}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
-                              review?.decision === 'REPLACEMENT_REQUESTED'
-                                ? 'bg-rose-600 text-white shadow-sm'
-                                : 'bg-white border border-rose-300 text-rose-700 hover:bg-rose-50'
-                            }`}
+                            title="Click to enlarge preview"
+                            onContextMenu={(e) => e.preventDefault()}
                           >
-                            <X size={13} />
-                            Request Correction
-                          </button>
-                        </div>
-                      )}
+                            <div className="absolute inset-0 bg-slate-950/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none z-10">
+                              <span className="px-3.5 py-2 bg-slate-900/90 text-white text-xs font-semibold rounded-xl shadow-lg flex items-center gap-2 backdrop-blur-sm">
+                                <Maximize2 size={14} /> Click to enlarge & preview
+                              </span>
+                            </div>
+
+                            {documentUrls[doc.id].type.startsWith('image/') ? (
+                              <img 
+                                src={documentUrls[doc.id].url} 
+                                alt={doc.original_filename} 
+                                className="w-full h-full object-contain bg-slate-100 select-none pointer-events-none"
+                                draggable={false}
+                                onDragStart={(e) => e.preventDefault()}
+                              />
+                            ) : (
+                              <iframe src={documentUrls[doc.id].url} className="w-full h-full" title={doc.original_filename} />
+                            )}
+                          </div>
+                        ) : (
+                          <div className="w-full h-32 bg-slate-100 border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 text-sm font-medium">
+                            <Loader2 className="animate-spin mr-2" size={16} /> Loading preview...
+                          </div>
+                        )}
+
+                        {request.status === 'UNDER_REVIEW' && (
+                          <div className="flex items-center gap-2 shrink-0 bg-white p-3 rounded-xl border border-slate-200 shadow-sm self-start">
+                            <button
+                              onClick={() => handleDocumentApproval(doc.id)}
+                              disabled={isActionLoading || review?.decision === 'REPLACEMENT_REQUESTED'}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed ${
+                                review?.decision === 'APPROVED'
+                                  ? 'bg-emerald-600 text-white shadow-sm'
+                                  : 'bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50'
+                              }`}
+                              title={review?.decision === 'REPLACEMENT_REQUESTED' ? 'Correction already requested' : 'Approve document'}
+                            >
+                              <Check size={13} />
+                              Approve
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setTargetDocId(doc.id);
+                                setActiveModal('correction');
+                              }}
+                              disabled={isActionLoading || review?.decision === 'APPROVED'}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed ${
+                                review?.decision === 'REPLACEMENT_REQUESTED'
+                                  ? 'bg-rose-600 text-white shadow-sm'
+                                  : 'bg-white border border-rose-300 text-rose-700 hover:bg-rose-50'
+                              }`}
+                              title={review?.decision === 'APPROVED' ? 'Document already approved' : 'Request correction for document'}
+                            >
+                              <X size={13} />
+                              Request Correction
+                            </button>
+                          </div>
+                        )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-          )}
-        </div>
+              );
+            })}
+          </div>
+            )}
+          </div>
+        )}
 
                 {/* Secondary Sections */}
         <details className="group [&_summary::-webkit-details-marker]:hidden border-t border-slate-100 pt-6 mt-6">
@@ -1567,6 +1625,7 @@ export function RequestWorkspace() {
             <p className="text-xs text-slate-500">
               Mark this request as completed and provide collection instructions or delivery information for the citizen.
             </p>
+
             <form onSubmit={submitCompleteModal} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-700">Collection Instructions</label>
@@ -1607,6 +1666,52 @@ export function RequestWorkspace() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Document Enlarged Preview Lightbox with Blurred Backdrop */}
+      {previewModalDoc && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-fadeIn"
+          onClick={() => setPreviewModalDoc(null)}
+        >
+          <div
+            className="relative max-w-5xl max-h-[92vh] w-full bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+              <div className="flex items-center gap-2 overflow-hidden">
+                <FileText size={18} className="text-slate-600 shrink-0" />
+                <span className="font-bold text-sm text-slate-800 truncate max-w-md">
+                  {previewModalDoc.name}
+                </span>
+                <span className="text-xs text-slate-500 shrink-0">({previewModalDoc.type})</span>
+              </div>
+              <button
+                onClick={() => setPreviewModalDoc(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
+                title="Close preview"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto bg-slate-900/5 p-4 flex items-center justify-center min-h-[450px]">
+              {previewModalDoc.type.startsWith('image/') ? (
+                <img
+                  src={previewModalDoc.url}
+                  alt={previewModalDoc.name}
+                  className="max-h-[80vh] max-w-full object-contain rounded-lg shadow-sm"
+                  onContextMenu={(e) => e.preventDefault()}
+                />
+              ) : (
+                <iframe
+                  src={previewModalDoc.url}
+                  className="w-full h-[80vh] rounded-lg border-0"
+                  title={previewModalDoc.name}
+                />
+              )}
+            </div>
           </div>
         </div>
       )}

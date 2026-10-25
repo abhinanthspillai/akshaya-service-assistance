@@ -1,5 +1,6 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -62,7 +63,7 @@ def test_employee_queue_latest_first_order(client: TestClient, db_session: Sessi
     db_session.commit()
 
     # 5. Create 3 requests with differing submission / creation timestamps
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     t_old = now - timedelta(hours=3)
     t_mid = now - timedelta(hours=2)
     t_new = now - timedelta(hours=1)

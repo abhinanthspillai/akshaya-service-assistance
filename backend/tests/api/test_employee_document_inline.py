@@ -1,4 +1,5 @@
 import uuid
+
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -77,6 +78,7 @@ def test_employee_document_download_inline_only(
     db_session.flush()
 
     from app.models.assignment import RequestAssignment
+
     assignment = RequestAssignment(
         request_id=req.id,
         employee_id=emp_user.id,
@@ -85,6 +87,7 @@ def test_employee_document_download_inline_only(
     db_session.add(assignment)
 
     from app.models.service import ServiceDocumentRequirement
+
     req_doc_req = ServiceDocumentRequirement(
         service_id=service.id,
         name="ID Proof",
@@ -95,6 +98,7 @@ def test_employee_document_download_inline_only(
 
     # Create dummy storage file in local uploads
     from app.api.endpoints.requests import _write_private_upload
+
     storage_key = _write_private_upload(
         request_id=req.id,
         original_filename="sample_id_card.pdf",

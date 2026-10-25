@@ -101,7 +101,7 @@ export function Support() {
  />
 
  {/* Top Cards */}
- <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+ <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
  <button 
  onClick={() => setView('faq')}
  className="bg-mono-bg p-6 rounded-xl border border-mono-border shadow-sm hover:border-mono-text/30 transition-all text-left flex items-start justify-between group"
@@ -113,19 +113,6 @@ export function Support() {
  <div>
  <h3 className="font-semibold text-[15px] text-mono-text mb-1">FAQs</h3>
  <p className="text-[13px] font-medium text-mono-muted">Find answers to common questions.</p>
- </div>
- </div>
- <ArrowRight size={18} className="text-mono-muted group-hover:text-mono-text transition-colors mt-3" />
- </button>
-
- <button className="bg-mono-bg p-6 rounded-xl border border-mono-border shadow-sm hover:border-mono-text/30 transition-all text-left flex items-start justify-between group">
- <div className="flex gap-4">
- <div className="w-12 h-12 rounded-xl bg-mono-surface flex items-center justify-center text-mono-text shrink-0">
- <FileText size={20} />
- </div>
- <div>
- <h3 className="font-semibold text-[15px] text-mono-text mb-1">User Guide</h3>
- <p className="text-[13px] font-medium text-mono-muted">Learn how to use SAHAYA step by step.</p>
  </div>
  </div>
  <ArrowRight size={18} className="text-mono-muted group-hover:text-mono-text transition-colors mt-3" />
@@ -155,9 +142,6 @@ export function Support() {
  <Card>
  <div className="flex items-center justify-between mb-6">
  <h2 className="text-[18px] font-semibold text-mono-text">Popular Questions</h2>
- <button className="text-[14px] font-semibold text-mono-text flex items-center gap-1 hover:underline">
- View all <ArrowRight size={14} />
- </button>
  </div>
  
  <div className="divide-y divide-mono-border/50 border border-mono-border rounded-lg overflow-hidden">

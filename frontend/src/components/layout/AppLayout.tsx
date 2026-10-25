@@ -4,7 +4,7 @@ import { Avatar } from '../ui/Avatar';
 import { ChatSidebar } from './ChatSidebar';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, LogOut, FileSearch, Bell, LifeBuoy, Menu, X } from 'lucide-react';
+import { LayoutDashboard, FileText, LogOut, FileSearch, Bell, LifeBuoy, Menu, X, Building2, Layers, ShieldCheck, Users, Inbox, AlertTriangle } from 'lucide-react';
 import clsx from 'clsx';
 import { api } from '../../lib/api';
 
@@ -63,7 +63,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
    };
 
    checkPendingOtp();
-   const pollInterval = setInterval(checkPendingOtp, 5000);
+   const pollInterval = setInterval(checkPendingOtp, 2500);
+
+   const onActivity = () => {
+     checkPendingOtp();
+   };
+   window.addEventListener('focus', onActivity);
+   document.addEventListener('visibilitychange', onActivity);
 
    const handleOpenOtpModal = (e: Event) => {
      const customEvent = e as CustomEvent<{ otpData?: PendingOtpData }>;
@@ -77,6 +83,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
    return () => {
      clearInterval(pollInterval);
+     window.removeEventListener('focus', onActivity);
+     document.removeEventListener('visibilitychange', onActivity);
      window.removeEventListener('openOtpModal', handleOpenOtpModal);
    };
  }, [user]);
@@ -107,15 +115,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
  } else if (user?.role === 'centre_administrator') {
  navItems = [
  { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
- { name: 'Queue', path: '/queue', icon: FileText },
- { name: 'Escalations', path: '/admin/escalations', icon: Bell },
- { name: 'Support Tickets', path: '/support', icon: LifeBuoy },
+ { name: 'Work Queue', path: '/admin/queue', icon: Inbox },
+ { name: 'Employees', path: '/admin/employees', icon: Users },
+ { name: 'Escalations', path: '/admin/escalations', icon: AlertTriangle },
+ { name: 'Support Tickets', path: '/admin/support', icon: LifeBuoy },
  ];
  } else if (user?.role === 'system_administrator') {
  navItems = [
  { name: 'Dashboard', path: '/sysadmin/dashboard', icon: LayoutDashboard },
- { name: 'Centres', path: '/sysadmin/centres', icon: FileText },
- { name: 'Audit Logs', path: '/sysadmin/audit', icon: FileSearch },
+ { name: 'Centres & Staff', path: '/sysadmin/centres', icon: Building2 },
+ { name: 'Service Catalogue', path: '/sysadmin/services', icon: Layers },
+ { name: 'Support Tickets', path: '/sysadmin/support', icon: LifeBuoy },
+ { name: 'Audit Logs', path: '/sysadmin/audit', icon: ShieldCheck },
  ];
  }
 

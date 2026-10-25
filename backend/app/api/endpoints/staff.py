@@ -9,16 +9,21 @@ from app.core.audit import log_audit
 from app.core.security import get_password_hash
 from app.models.centre import AkshayaCentre
 from app.models.profile import CentreAdministrator, EmployeeProfile
+from app.models.request import ServiceRequest
 from app.models.user import User
 from app.schemas.staff import (
     AccountRejectRequest,
     AccountRequestResponse,
     CentreAdminResponse,
+    CentreEmployeeItem,
+    EmployeeProfileUpdate,
     EmployeeResponse,
     StaffCreate,
     StaffStatusUpdate,
     UserStaffResponse,
 )
+
+TERMINAL_REQUEST_STATUSES = ("COMPLETED", "CLOSED", "CANCELLED", "UNABLE_TO_PROCEED")
 
 router = APIRouter()
 
@@ -82,6 +87,210 @@ def create_employee(
     session.refresh(profile)
 
     return {"user": user, "profile": profile}
+
+
+@router.get("/centres/{centre_id}/employees", response_model=list[CentreEmployeeItem])
+def get_centre_employees(
+    *,
+    session: SessionDep,
+    centre_id: UUID,
+    current_user: CurrentUser,
+) -> Any:
+    if current_user.role == "system_administrator":
+        pass
+    elif current_user.role == "centre_administrator":
+        admin_prof = session.get(CentreAdministrator, current_user.id)
+        if not admin_prof or admin_prof.centre_id != centre_id:
+            raise HTTPException(
+                status_code=403, detail="Not authorized to view this centre's employees"
+            )
+    else:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    _ensure_centre_exists(session, centre_id)
+
+    stmt = (
+        select(EmployeeProfile, User)
+        .join(User, EmployeeProfile.user_id == User.id)
+        .where(EmployeeProfile.centre_id == centre_id)
+        .order_by(EmployeeProfile.created_at.asc())
+    )
+    rows = session.execute(stmt).all()
+
+    from sqlalchemy import func
+
+    from app.models.assignment import RequestAssignment
+
+    counts_stmt = (
+        select(RequestAssignment.employee_id, func.count(RequestAssignment.id))
+        .join(ServiceRequest, ServiceRequest.id == RequestAssignment.request_id)
+        .where(
+            RequestAssignment.is_active.is_(True),
+            ServiceRequest.status.notin_(TERMINAL_REQUEST_STATUSES),
+        )
+        .group_by(RequestAssignment.employee_id)
+    )
+    counts = dict(session.execute(counts_stmt).all())
+
+    items = []
+    for emp, usr in rows:
+        items.append(
+            CentreEmployeeItem(
+                user_id=usr.id,
+                full_name=emp.full_name,
+                email=usr.email,
+                role=usr.role,
+                centre_id=emp.centre_id,
+                is_active=usr.is_active,
+                is_available=emp.is_available,
+                max_active_requests=emp.max_active_requests,
+                approval_status=emp.approval_status,
+                created_at=emp.created_at,
+                active_requests_count=counts.get(usr.id, 0),
+            )
+        )
+    return items
+
+
+@router.get("/employees", response_model=list[CentreEmployeeItem])
+def get_employees(
+    *,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> Any:
+    if current_user.role == "centre_administrator":
+        admin_prof = session.get(CentreAdministrator, current_user.id)
+        if not admin_prof:
+            raise HTTPException(status_code=403, detail="Not an active centre administrator")
+        return get_centre_employees(
+            session=session, centre_id=admin_prof.centre_id, current_user=current_user
+        )
+    elif current_user.role == "system_administrator":
+        stmt = (
+            select(EmployeeProfile, User)
+            .join(User, EmployeeProfile.user_id == User.id)
+            .order_by(EmployeeProfile.created_at.asc())
+        )
+        rows = session.execute(stmt).all()
+
+        from sqlalchemy import func
+
+        from app.models.assignment import RequestAssignment
+
+        counts_stmt = (
+            select(RequestAssignment.employee_id, func.count(RequestAssignment.id))
+            .join(ServiceRequest, ServiceRequest.id == RequestAssignment.request_id)
+            .where(
+                RequestAssignment.is_active.is_(True),
+                ServiceRequest.status.notin_(TERMINAL_REQUEST_STATUSES),
+            )
+            .group_by(RequestAssignment.employee_id)
+        )
+        counts = dict(session.execute(counts_stmt).all())
+
+        items = []
+        for emp, usr in rows:
+            items.append(
+                CentreEmployeeItem(
+                    user_id=usr.id,
+                    full_name=emp.full_name,
+                    email=usr.email,
+                    role=usr.role,
+                    centre_id=emp.centre_id,
+                    is_active=usr.is_active,
+                    is_available=emp.is_available,
+                    max_active_requests=emp.max_active_requests,
+                    approval_status=emp.approval_status,
+                    created_at=emp.created_at,
+                    active_requests_count=counts.get(usr.id, 0),
+                )
+            )
+        return items
+    else:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+
+@router.patch("/centres/{centre_id}/employees/{employee_id}", response_model=CentreEmployeeItem)
+def update_centre_employee(
+    *,
+    session: SessionDep,
+    centre_id: UUID,
+    employee_id: UUID,
+    update_in: EmployeeProfileUpdate,
+    current_user: CurrentUser,
+) -> Any:
+    if current_user.role == "system_administrator":
+        pass
+    elif current_user.role == "centre_administrator":
+        admin_prof = session.get(CentreAdministrator, current_user.id)
+        if not admin_prof or admin_prof.centre_id != centre_id:
+            raise HTTPException(
+                status_code=403, detail="Not authorized to manage this centre's employees"
+            )
+    else:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    emp = session.get(EmployeeProfile, employee_id)
+    if not emp or emp.centre_id != centre_id:
+        raise HTTPException(status_code=404, detail="Employee not found in this centre")
+
+    usr = session.get(User, employee_id)
+    if not usr:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    details = {}
+    if update_in.is_available is not None:
+        emp.is_available = update_in.is_available
+        details["is_available"] = emp.is_available
+    if update_in.max_active_requests is not None:
+        emp.max_active_requests = update_in.max_active_requests
+        details["max_active_requests"] = emp.max_active_requests
+    if update_in.full_name is not None:
+        emp.full_name = update_in.full_name
+        details["full_name"] = emp.full_name
+
+    session.add(emp)
+    log_audit(
+        session,
+        actor_id=current_user.id,
+        action="update_employee_profile",
+        target_resource_type="EmployeeProfile",
+        target_resource_id=str(employee_id),
+        details=details,
+    )
+    session.commit()
+    session.refresh(emp)
+
+    from sqlalchemy import func
+
+    from app.models.assignment import RequestAssignment
+
+    active_count = (
+        session.scalar(
+            select(func.count(RequestAssignment.id))
+            .join(ServiceRequest, ServiceRequest.id == RequestAssignment.request_id)
+            .where(
+                RequestAssignment.employee_id == employee_id,
+                RequestAssignment.is_active.is_(True),
+                ServiceRequest.status.notin_(TERMINAL_REQUEST_STATUSES),
+            )
+        )
+        or 0
+    )
+
+    return CentreEmployeeItem(
+        user_id=usr.id,
+        full_name=emp.full_name,
+        email=usr.email,
+        role=usr.role,
+        centre_id=emp.centre_id,
+        is_active=usr.is_active,
+        is_available=emp.is_available,
+        max_active_requests=emp.max_active_requests,
+        approval_status=emp.approval_status,
+        created_at=emp.created_at,
+        active_requests_count=active_count,
+    )
 
 
 @router.post(

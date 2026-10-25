@@ -69,12 +69,13 @@ export function LoginForm() {
  </div>
  )}
 
- <form onSubmit={handleSubmit} className="space-y-5">
+ <form onSubmit={handleSubmit} className="space-y-5" data-testid="login-form">
  <div>
  <label className="block text-sm font-semibold text-ink-900 mb-2">Your email</label>
  <input
  type="email"
  required
+ data-testid="login-email-input"
  value={email}
  onChange={(e) => setEmail(e.target.value)}
  className="w-full px-4 py-3 bg-ink-50/50 rounded-2xl border border-ink-100 focus:bg-white focus:border-ink-900 focus:ring-4 focus:ring-ink-900/10 outline-none transition-all placeholder:text-ink-400 text-ink-900"
@@ -88,6 +89,7 @@ export function LoginForm() {
  <input
  type={showPassword ? "text" : "password"}
  required
+ data-testid="login-password-input"
  value={password}
  onChange={(e) => setPassword(e.target.value)}
  className="w-full px-4 py-3 bg-ink-50/50 rounded-2xl border border-ink-100 focus:bg-white focus:border-ink-900 focus:ring-4 focus:ring-ink-900/10 outline-none transition-all placeholder:text-ink-400 text-ink-900 pr-10"
@@ -111,12 +113,14 @@ export function LoginForm() {
  <button
  type="submit"
  disabled={isLoading}
+ data-testid="login-submit-button"
  className="w-full bg-ink-900 hover:bg-ink-800 text-white font-semibold py-3.5 rounded-2xl transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-4"
  >
  {isLoading && <Loader2 size={18} className="animate-spin" />}
  {isLoading ? 'Signing in...' : 'Sign in'}
  </button>
  </form>
+
  </div>
  );
 }

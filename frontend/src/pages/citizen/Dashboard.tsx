@@ -69,13 +69,7 @@ export function Dashboard() {
     fetchDashboardData();
   }, []);
 
-  if (isLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="animate-spin text-mono-text" size={32} />
-      </div>
-    );
-  }
+
 
   // Calculate summaries using status counts from backend
   const getCount = (statuses: string[]) => {

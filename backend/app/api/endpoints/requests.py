@@ -22,8 +22,8 @@ from app.models.enums import RequestAction
 from app.models.interaction import RequestInteraction
 from app.models.message import Conversation, RequestMessage
 from app.models.notification import Notification
-from app.models.output import CompletedOutput
 from app.models.otp import OtpRequest
+from app.models.output import CompletedOutput
 from app.models.payment import RequestPayment
 from app.models.profile import EmployeeProfile
 from app.models.request import ServiceRequest
@@ -47,14 +47,13 @@ from app.schemas.interaction import (
     ScheduleInteractionRequest,
 )
 from app.schemas.message import RequestMessageCreate, RequestMessageResponse
-from app.schemas.output import CompletedOutputCreate, CompletedOutputResponse
 from app.schemas.otp import (
     OtpCreateResponse,
     OtpResolveRequest,
     OtpStateResponse,
     OtpSubmitRequest,
-    PendingCitizenOtpResponse,
 )
+from app.schemas.output import CompletedOutputCreate, CompletedOutputResponse
 from app.schemas.payment import (
     RazorpayOrderResponse,
     RazorpayVerifyRequest,
@@ -128,6 +127,8 @@ ALLOWED_TRANSITIONS = {
     "CANCELLED": [],
     "UNABLE_TO_PROCEED": [],
 }
+
+TERMINAL_REQUEST_STATUSES = ("COMPLETED", "CLOSED", "CANCELLED", "UNABLE_TO_PROCEED")
 
 
 def _perform_transition(
@@ -256,14 +257,20 @@ def list_requests(
             raise HTTPException(status_code=403, detail="Employee profile not found")
         if employee.approval_status != "APPROVED":
             raise HTTPException(status_code=403, detail="Account pending approval by centre")
-        stmt = stmt.where(ServiceRequest.selected_centre_id == employee.centre_id)
+        stmt = stmt.where(
+            ServiceRequest.selected_centre_id == employee.centre_id,
+            ServiceRequest.status != "DRAFT",
+        )
     elif current_user.role == "centre_administrator":
         from app.models.profile import CentreAdministrator
 
         admin = session.get(CentreAdministrator, current_user.id)
         if not admin:
             raise HTTPException(status_code=403, detail="Admin profile not found")
-        stmt = stmt.where(ServiceRequest.selected_centre_id == admin.centre_id)
+        stmt = stmt.where(
+            ServiceRequest.selected_centre_id == admin.centre_id,
+            ServiceRequest.status != "DRAFT",
+        )
     # system_administrator: sees all, no filter
 
     # Compute status counts for caller's scope before filters
@@ -725,6 +732,11 @@ def list_request_documents(
     if not service_request:
         raise HTTPException(status_code=404, detail="Request not found")
 
+    if current_user.role in ("centre_employee", "centre_administrator") and (
+        service_request.status in {"COMPLETED", "CLOSED"}
+    ):
+        return []
+
     _verify_document_access(current_user, service_request, session)
 
     documents = session.scalars(
@@ -920,8 +932,9 @@ def download_request_document(
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Document file not found")
 
-    # Employees can only preview documents inline, not download as attachment
-    disposition = "inline" if current_user.role in ("centre_employee", "centre_admin") else "attachment"
+    disposition = (
+        "inline" if current_user.role in ("centre_employee", "centre_admin") else "attachment"
+    )
 
     headers = {"Content-Disposition": f'{disposition}; filename="{document.original_filename}"'}
     return FileResponse(
@@ -1508,9 +1521,11 @@ def reassign_request(
         session.scalar(
             select(func.count())
             .select_from(RequestAssignment)
+            .join(ServiceRequest, ServiceRequest.id == RequestAssignment.request_id)
             .where(
                 RequestAssignment.employee_id == body.employee_id,
                 RequestAssignment.is_active.is_(True),
+                ServiceRequest.status.notin_(TERMINAL_REQUEST_STATUSES),
             )
         )
         or 0
@@ -1586,13 +1601,23 @@ def list_request_payments(
     current_user: CurrentUser,
 ) -> Any:
     service_request = session.get(ServiceRequest, request_id)
-    if not service_request:
-        raise HTTPException(status_code=404, detail="Request not found")
     if current_user.role == "citizen":
         if service_request.citizen_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized")
     elif current_user.role == "centre_employee":
-        _verify_active_assignment(current_user, service_request, session)
+        from app.models.profile import EmployeeProfile
+
+        emp = session.get(EmployeeProfile, current_user.id)
+        if not emp or emp.centre_id != service_request.selected_centre_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+    elif current_user.role == "centre_administrator":
+        from app.models.profile import CentreAdministrator
+
+        admin = session.get(CentreAdministrator, current_user.id)
+        if not admin or admin.centre_id != service_request.selected_centre_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+    elif current_user.role == "system_administrator":
+        pass
     else:
         raise HTTPException(status_code=403, detail="Not authorized")
     return session.scalars(
@@ -1670,6 +1695,24 @@ def request_payment(
     return payment
 
 
+def _can_pay_for_request(current_user: User, service_request: ServiceRequest, session: Any) -> bool:
+    if current_user.role == "citizen":
+        return service_request.citizen_id == current_user.id
+    if current_user.role == "centre_employee":
+        from app.models.profile import EmployeeProfile
+
+        emp = session.get(EmployeeProfile, current_user.id)
+        return bool(emp and emp.centre_id == service_request.selected_centre_id)
+    if current_user.role == "centre_administrator":
+        from app.models.profile import CentreAdministrator
+
+        admin = session.get(CentreAdministrator, current_user.id)
+        return bool(admin and admin.centre_id == service_request.selected_centre_id)
+    if current_user.role == "system_administrator":
+        return True
+    return False
+
+
 @router.post(
     "/{request_id}/payments/{payment_id}/razorpay-order", response_model=RazorpayOrderResponse
 )
@@ -1677,13 +1720,13 @@ def create_razorpay_order(
     request_id: UUID,
     payment_id: UUID,
     session: SessionDep,
-    current_user: CurrentUserCitizen,
+    current_user: CurrentUser,
 ) -> Any:
     """Create a Razorpay order for the pending payment using server-side catalog amount."""
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
         raise HTTPException(status_code=404, detail="Request not found")
-    if service_request.citizen_id != current_user.id:
+    if not _can_pay_for_request(current_user, service_request, session):
         raise HTTPException(status_code=403, detail="Not authorized")
     if service_request.status != "PAYMENT_PENDING":
         raise HTTPException(status_code=409, detail="Request is not in PAYMENT_PENDING state")
@@ -1757,7 +1800,7 @@ def verify_razorpay_payment(
     payment_id: UUID,
     payload: RazorpayVerifyRequest,
     session: SessionDep,
-    current_user: CurrentUserCitizen,
+    current_user: CurrentUser,
 ) -> Any:
     """Verify Razorpay payment signature and transition request idempotently to PROCESSING."""
     import hashlib
@@ -1766,7 +1809,7 @@ def verify_razorpay_payment(
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
         raise HTTPException(status_code=404, detail="Request not found")
-    if service_request.citizen_id != current_user.id:
+    if not _can_pay_for_request(current_user, service_request, session):
         raise HTTPException(status_code=403, detail="Not authorized")
 
     payment = session.scalar(
@@ -1865,7 +1908,7 @@ def confirm_payment(
     request_id: UUID,
     payment_id: UUID,
     session: SessionDep,
-    current_user: CurrentUserCitizen,
+    current_user: CurrentUser,
 ) -> Any:
     return _complete_mock_payment(
         request_id=request_id,
@@ -1881,7 +1924,7 @@ def fail_payment(
     request_id: UUID,
     payment_id: UUID,
     session: SessionDep,
-    current_user: CurrentUserCitizen,
+    current_user: CurrentUser,
 ) -> Any:
     return _complete_mock_payment(
         request_id=request_id,
@@ -1897,7 +1940,7 @@ def cancel_payment(
     request_id: UUID,
     payment_id: UUID,
     session: SessionDep,
-    current_user: CurrentUserCitizen,
+    current_user: CurrentUser,
 ) -> Any:
     return _complete_mock_payment(
         request_id=request_id,
@@ -1942,9 +1985,11 @@ def accept_request(
         session.scalar(
             select(func.count())
             .select_from(RequestAssignment)
+            .join(ServiceRequest, ServiceRequest.id == RequestAssignment.request_id)
             .where(
                 RequestAssignment.employee_id == current_user.id,
                 RequestAssignment.is_active.is_(True),
+                ServiceRequest.status.notin_(TERMINAL_REQUEST_STATUSES),
             )
         )
         or 0
@@ -2022,6 +2067,8 @@ def _verify_request_access(user: Any, service_request: ServiceRequest, session: 
     if user.role == "citizen" and service_request.citizen_id != user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
     if user.role == "centre_employee":
+        if service_request.status == "DRAFT":
+            raise HTTPException(status_code=403, detail="Staff cannot access draft requests")
         from app.models.profile import EmployeeProfile
 
         employee = session.get(EmployeeProfile, user.id)
@@ -2030,6 +2077,8 @@ def _verify_request_access(user: Any, service_request: ServiceRequest, session: 
         if employee.centre_id != service_request.selected_centre_id:
             raise HTTPException(status_code=403, detail="Not authorized")
     if user.role == "centre_administrator":
+        if service_request.status == "DRAFT":
+            raise HTTPException(status_code=403, detail="Staff cannot access draft requests")
         from app.models.profile import CentreAdministrator
 
         admin = session.get(CentreAdministrator, user.id)
@@ -2042,6 +2091,13 @@ def _verify_document_access(user: Any, service_request: ServiceRequest, session:
         if service_request.citizen_id != user.id:
             raise HTTPException(status_code=403, detail="Not authorized")
         return
+
+    if user.role in ("centre_employee", "centre_administrator"):
+        if service_request.status in {"COMPLETED", "CLOSED"}:
+            raise HTTPException(
+                status_code=403,
+                detail="Applicant documents are no longer accessible after request completion",
+            )
 
     if user.role == "centre_employee":
         _verify_active_assignment(user, service_request, session)
@@ -2063,6 +2119,17 @@ def _verify_active_assignment(user: Any, service_request: ServiceRequest, sessio
     from datetime import UTC, datetime
 
     from app.models.profile import EmployeeProfile
+
+    if user.role == "system_administrator":
+        return
+
+    if user.role == "centre_administrator":
+        from app.models.profile import CentreAdministrator
+
+        admin = session.get(CentreAdministrator, user.id)
+        if not admin or admin.centre_id != service_request.selected_centre_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        return
 
     # 1. Centre-scoping check: Ensure employee's centre matches request's centre
     if user.role == "centre_employee":
@@ -2097,6 +2164,53 @@ def _verify_active_assignment(user: Any, service_request: ServiceRequest, sessio
         )
     )
     if not assignment:
+        # Check if this employee has an unrevoked assignment or can resume active processing
+        # if the request is already in progress at their centre and not assigned to another employee
+        if user.role == "centre_employee" and service_request.status in {
+            "ACCEPTED",
+            "UNDER_REVIEW",
+            "READY_FOR_PROCESSING",
+            "PROCESSING",
+            "PAYMENT_PENDING",
+        }:
+            other_active = session.scalar(
+                select(RequestAssignment).where(
+                    RequestAssignment.request_id == service_request.id,
+                    RequestAssignment.employee_id != user.id,
+                    RequestAssignment.is_active.is_(True),
+                )
+            )
+            if not other_active:
+                unrevoked = session.scalar(
+                    select(RequestAssignment).where(
+                        RequestAssignment.request_id == service_request.id,
+                        RequestAssignment.employee_id == user.id,
+                        RequestAssignment.revoked_at.is_(None),
+                    )
+                )
+                if unrevoked:
+                    unrevoked.is_active = True
+                    session.add(unrevoked)
+                    session.commit()
+                    return
+                # If there are no assignments at all for this accepted
+                # in-progress request at the centre, create an active assignment
+                # for this approved centre employee
+                any_assignment = session.scalar(
+                    select(RequestAssignment).where(
+                        RequestAssignment.request_id == service_request.id,
+                    )
+                )
+                if not any_assignment:
+                    new_assign = RequestAssignment(
+                        request_id=service_request.id,
+                        employee_id=user.id,
+                        is_active=True,
+                    )
+                    session.add(new_assign)
+                    session.commit()
+                    return
+
         raise HTTPException(status_code=403, detail="Not authorized")
 
 
@@ -2113,6 +2227,19 @@ def _verify_message_access(
                 detail="Request has not been accepted by centre staff yet",
             )
         _verify_active_assignment(user, service_request, session)
+    elif user.role == "centre_administrator":
+        if service_request.status in {"DRAFT", "SUBMITTED", "WAITING_FOR_CENTRE"}:
+            raise HTTPException(
+                status_code=403,
+                detail="Request has not been accepted by centre staff yet",
+            )
+        from app.models.profile import CentreAdministrator
+
+        admin = session.get(CentreAdministrator, user.id)
+        if not admin or admin.centre_id != service_request.selected_centre_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+    elif user.role == "system_administrator":
+        pass
     else:
         raise HTTPException(status_code=403, detail="Not authorized")
 
@@ -2190,7 +2317,7 @@ def _complete_mock_payment(
     service_request = session.get(ServiceRequest, request_id)
     if not service_request:
         raise HTTPException(status_code=404, detail="Request not found")
-    if service_request.citizen_id != current_user.id:
+    if not _can_pay_for_request(current_user, service_request, session):
         raise HTTPException(status_code=403, detail="Not authorized")
 
     payment = cast(
@@ -2475,7 +2602,6 @@ def complete_request(
     )
     session.add(output)
 
-    service_request.completed_at = now
     _perform_transition(
         session,
         service_request,
@@ -2487,6 +2613,8 @@ def complete_request(
         notification_title="Request completed",
         notification_body=f"Your request {request_id} has been completed.",
     )
+    service_request.completed_at = now
+    session.add(service_request)
 
     session.commit()
     session.refresh(output)
@@ -2600,9 +2728,11 @@ def accept_and_start_review_request(
         session.scalar(
             select(func.count())
             .select_from(RequestAssignment)
+            .join(ServiceRequest, ServiceRequest.id == RequestAssignment.request_id)
             .where(
                 RequestAssignment.employee_id == current_user.id,
                 RequestAssignment.is_active.is_(True),
+                ServiceRequest.status.notin_(TERMINAL_REQUEST_STATUSES),
             )
         )
         or 0
@@ -2734,6 +2864,8 @@ def mark_ready_and_start_processing_request(
 
 
 def _verify_otp_staff_access(user: Any, service_request: ServiceRequest, session: Any) -> None:
+    if user.role == "system_administrator":
+        return
     if user.role == "centre_employee":
         _verify_active_assignment(user, service_request, session)
         return
@@ -2748,7 +2880,12 @@ def _verify_otp_staff_access(user: Any, service_request: ServiceRequest, session
 
 
 def _sync_otp_expiry(otp: OtpRequest, session: Any, now: datetime) -> bool:
-    if otp.status in {"PENDING", "SUBMITTED"} and otp.expires_at <= now:
+    expires_at = otp.expires_at
+    if expires_at is not None and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    if otp.status in {"PENDING", "SUBMITTED"} and expires_at is not None and expires_at <= now:
         otp.status = "EXPIRED"
         otp.code = None
         otp.resolved_at = now
@@ -2798,7 +2935,10 @@ def request_otp(
     if failed_count >= 3:
         raise HTTPException(
             status_code=409,
-            detail="Maximum OTP verification attempts (3) exceeded for this request. Please contact your Centre Manager.",
+            detail=(
+                "Maximum OTP verification attempts (3) exceeded for this request. "
+                "Please contact your Centre Manager."
+            ),
         )
 
     # Check active OTP requests
@@ -2866,7 +3006,7 @@ def request_otp(
     return new_otp
 
 
-@router.get("/{request_id}/otp", response_model=OtpStateResponse)
+@router.get("/{request_id}/otp", response_model=OtpStateResponse | None)
 def get_request_otp(
     *,
     request_id: UUID,
@@ -2881,7 +3021,7 @@ def get_request_otp(
     if current_user.role == "citizen":
         if service_request.citizen_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized")
-    elif current_user.role in {"centre_employee", "centre_administrator"}:
+    elif current_user.role in {"centre_employee", "centre_administrator", "system_administrator"}:
         _verify_otp_staff_access(current_user, service_request, session)
         is_staff = True
     else:
@@ -2891,8 +3031,7 @@ def get_request_otp(
 
     # Sync any expired active OTP
     active_otps = session.scalars(
-        select(OtpRequest)
-        .where(
+        select(OtpRequest).where(
             OtpRequest.request_id == request_id,
             OtpRequest.status.in_(["PENDING", "SUBMITTED"]),
         )
@@ -2910,7 +3049,7 @@ def get_request_otp(
         .order_by(OtpRequest.created_at.desc())
     )
     if not latest_otp:
-        raise HTTPException(status_code=404, detail="No OTP requests found for this request")
+        return None
 
     failed_count = (
         session.scalar(
@@ -3058,4 +3197,3 @@ def resolve_otp(
     session.commit()
     session.refresh(target_otp)
     return target_otp
-

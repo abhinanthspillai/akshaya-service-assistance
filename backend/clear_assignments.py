@@ -28,7 +28,7 @@ def main():
     assert_local_database()
     session = SessionLocal()
     try:
-        session.execute(update(RequestAssignment).values(is_active=False))
+
         # Clean up ephemeral e2e test accounts and requests to prevent FK conflicts
         from app.models.assignment import RequestHistory
         from app.models.document import RequestDocument, RequestDocumentReview
@@ -96,6 +96,9 @@ def main():
             session.query(Notification).filter(Notification.user_id.in_(test_user_ids)).delete(
                 synchronize_session=False
             )
+            session.query(RequestAssignment).filter(
+                RequestAssignment.employee_id.in_(test_user_ids)
+            ).delete(synchronize_session=False)
             session.query(User).filter(User.id.in_(test_user_ids)).delete(synchronize_session=False)
         session.commit()
         print("Successfully cleared all active request assignments.")

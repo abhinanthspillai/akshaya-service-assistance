@@ -38,4 +38,3 @@ api_router.add_api_route(
     response_model=users.PendingCitizenOtpResponse | None,
     tags=["users"],
 )
-
