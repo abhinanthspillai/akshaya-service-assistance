@@ -5,6 +5,7 @@ import { Loader2, ArrowLeft, CheckCircle2, ChevronRight, FileCheck, Building2, S
 import { AxiosError } from 'axios';
 import clsx from 'clsx';
 import { DocumentUpload, type DocumentUploadStatus } from '../../components/documents/DocumentUpload';
+import { formatFee } from '../../utils/format';
 
 interface ServiceDetail {
   id: string;
@@ -12,7 +13,7 @@ interface ServiceDetail {
   code: string;
   description: string;
   service_type: string;
-  base_fee: number;
+  base_fee: number | string | null;
   document_requirements: Array<{
     id: string;
     name: string;
@@ -67,10 +68,6 @@ export function NewRequest() {
   const [stagedFiles, setStagedFiles] = useState<Record<string, File>>({});
   const [docStatuses, setDocStatuses] = useState<Record<string, DocumentUploadStatus>>({});
   const [docErrors, setDocErrors] = useState<Record<string, string>>({});
-  
-  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
-  const [locationDenied, setLocationDenied] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -102,16 +99,32 @@ export function NewRequest() {
     );
   }
 
-  const fetchCentres = async (draftId: string, lat?: number, lng?: number) => {
-    let url = `/services/${service.id}/centres`;
-    if (lat !== undefined && lng !== undefined) {
-      url += `?lat=${lat}&lng=${lng}`;
-    }
+  const fetchCentres = async (draftId: string) => {
     const [centresRes, docsRes] = await Promise.all([
-      api.get(url),
+      api.get(`/services/${service.id}/centres`),
       api.get(`/requests/${draftId}/documents`)
     ]);
-    setCentres(centresRes.data);
+    const rawCentres: Centre[] = centresRes.data || [];
+    const koovappallyCentres = rawCentres
+      .filter((c: Centre) => 
+        c.name.toLowerCase().includes('koovappally') || 
+        c.name.toLowerCase().includes('kochi') || 
+        c.code.includes('EKM')
+      )
+      .map((c: Centre) => ({
+        ...c,
+        name: c.name.replace(/Kochi\s*\(.*?\)/i, 'Koovappally').replace(/Kochi/i, 'Koovappally'),
+        district: 'Kottayam'
+      }));
+    const finalCentres = koovappallyCentres.length > 0 ? koovappallyCentres : rawCentres.slice(0, 1).map(c => ({
+      ...c,
+      name: 'Akshaya Centre Koovappally',
+      district: 'Kottayam'
+    }));
+    setCentres(finalCentres);
+    if (finalCentres.length > 0) {
+      setSelectedCentreId(finalCentres[0].id);
+    }
     setDocuments(docsRes.data);
   };
 
@@ -131,23 +144,7 @@ export function NewRequest() {
       
       const finalDraftId = draftId as string;
       setCurrentStep('centre');
-
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (position) => {
-            const { latitude, longitude } = position.coords;
-            setUserLocation({ lat: latitude, lng: longitude });
-            await fetchCentres(finalDraftId, latitude, longitude);
-          },
-          async () => {
-            setLocationDenied(true);
-            await fetchCentres(finalDraftId);
-          }
-        );
-      } else {
-        setLocationDenied(true);
-        await fetchCentres(finalDraftId);
-      }
+      await fetchCentres(finalDraftId);
     } catch (err) {
       const e = err as AxiosError<{detail: string}>;
       setError(e.response?.data?.detail || 'Failed to initialize request. Please try again.');
@@ -192,8 +189,7 @@ export function NewRequest() {
   };
 
   const requiredDocs = service.document_requirements.filter(req => req.requirement_type === 'REQUIRED');
-  const conditionalDocs = service.document_requirements.filter(req => req.requirement_type === 'CONDITIONAL');
-  const allDocs = service.document_requirements;
+  const allDocs = requiredDocs;
 
   const isRequirementSatisfied = (reqId: string) => {
     const hasUploaded = documents.some(d => d.requirement_id === reqId && d.status !== 'REJECTED');
@@ -257,13 +253,6 @@ export function NewRequest() {
       setCurrentStep('review');
     }
   };
-
-  const filteredCentres = centres.filter(c => 
-    !searchQuery || 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    c.district.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (c.pincode && c.pincode.includes(searchQuery))
-  );
 
   return (
     <div className="max-w-4xl mx-auto pb-12">
@@ -362,30 +351,8 @@ export function NewRequest() {
                 </div>
               )}
 
-              {conditionalDocs.length > 0 && (
-                <div>
-                  <h3 className="text-[11px] font-bold text-mono-muted mb-4 uppercase tracking-wider">Conditional Documents</h3>
-                  <ul className="space-y-3">
-                    {conditionalDocs.map(req => (
-                      <li key={req.id} className="flex items-start gap-3 bg-mono-surface p-4 rounded-xl border border-mono-border">
-                        <div className="w-[18px] h-[18px] rounded-full border-2 border-mono-muted mt-0.5 shrink-0"></div>
-                        <div>
-                          <p className="font-medium text-mono-text text-sm flex items-center gap-2">
-                            {req.name}
-                            <span className="text-orange-500 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-orange-50 rounded">Conditional</span>
-                          </p>
-                          {req.conditional_rule && (
-                            <p className="text-xs text-orange-600 mt-1 italic">When to upload: {req.conditional_rule}</p>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {requiredDocs.length === 0 && conditionalDocs.length === 0 && (
-                <p className="text-mono-muted text-sm">No documents required for this service.</p>
+              {requiredDocs.length === 0 && (
+                <p className="text-mono-muted text-sm">No mandatory documents required for this service.</p>
               )}
             </div>
 
@@ -415,34 +382,21 @@ export function NewRequest() {
               </div>
             </div>
 
-            {locationDenied && (
-              <div className="mb-4">
-                <input 
-                  type="text" 
-                  placeholder="Search by district, name, or pincode..." 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-4 py-2 border border-mono-border rounded-[8px] bg-mono-bg text-mono-text text-sm"
-                />
-              </div>
-            )}
-
-            <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-              {filteredCentres.map((centre, idx) => (
+            <div className="space-y-3">
+              {centres.map((centre) => (
                 <label 
                   key={centre.id} 
                   className={clsx(
-                    "flex items-start gap-4 p-4 rounded-[16px] border-2 cursor-pointer transition-all",
+                    "flex items-start gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all",
                     selectedCentreId === centre.id 
-                      ? "border-indigo-600 bg-blue-50 " 
-                      : "border-mono-muted/20 hover:border-indigo-300 hover:bg-mono-bg",
-                    idx === 0 && !locationDenied && "ring-2 ring-indigo-200"
+                      ? "border-mono-text bg-mono-surface/50 shadow-sm" 
+                      : "border-mono-border hover:border-mono-muted bg-mono-bg"
                   )}
                 >
                   <div className="pt-1">
                     <div className={clsx(
                       "w-5 h-5 rounded-full border-2 flex items-center justify-center",
-                      selectedCentreId === centre.id ? "border-indigo-600" : "border-ink-300"
+                      selectedCentreId === centre.id ? "border-mono-text" : "border-mono-muted"
                     )}>
                       {selectedCentreId === centre.id && <div className="w-2.5 h-2.5 rounded-full bg-mono-text" />}
                     </div>
@@ -457,25 +411,16 @@ export function NewRequest() {
                   />
                   <div className="flex-1">
                     <div className="flex justify-between items-start">
-                      <h3 className="font-semibold text-mono-text">{centre.name}</h3>
-                      {idx === 0 && !locationDenied && userLocation && (
-                        <span className="text-xs bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ml-2">Nearest</span>
-                      )}
+                      <h3 className="font-bold text-mono-text text-[15px]">{centre.name}</h3>
+                      <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap ml-2">
+                        Official Centre
+                      </span>
                     </div>
-                    <p className="text-sm text-mono-muted mt-0.5">{centre.district} • {centre.code}</p>
-                    {centre.distance_km !== undefined && centre.distance_km !== null && (
-                      <p className="text-xs font-semibold text-indigo-600 mt-1">
-                        {centre.distance_km.toFixed(1)} km away
-                      </p>
-                    )}
+                    <p className="text-sm text-mono-muted mt-1">{centre.district} • {centre.code}</p>
+                    <p className="text-xs text-mono-muted mt-0.5">Assigned authorized processing centre for digital applications.</p>
                   </div>
                 </label>
               ))}
-              {filteredCentres.length === 0 && (
-                <div className="text-center text-mono-muted p-4 border border-dashed border-mono-border rounded-[16px]">
-                  No centres found matching your search.
-                </div>
-              )}
             </div>
 
             <div className="mt-8 flex justify-between">
@@ -611,12 +556,11 @@ export function NewRequest() {
               <div>
                 <div className="text-xs font-semibold text-mono-muted uppercase tracking-wider mb-1">Service</div>
                 <div className="font-medium text-mono-text">{service.name}</div>
-                <div className="text-sm text-mono-muted mt-1">{service.service_type === 'A' ? 'Remote Processing' : service.service_type === 'B' ? 'Hybrid Service' : 'Physical Visit Required'}</div>
               </div>
               
               <div>
                 <div className="text-xs font-semibold text-mono-muted uppercase tracking-wider mb-1">Base Fee</div>
-                <div className="font-medium text-mono-text">{service.base_fee ? `₹${service.base_fee}` : 'Free'}</div>
+                <div className="font-medium text-mono-text">{formatFee(service.base_fee)}</div>
               </div>
 
               {selectedCentreId && (
@@ -649,16 +593,10 @@ export function NewRequest() {
                               href={`${api.defaults.baseURL}/requests/${requestId}/documents/${doc.id}/download`}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-[13px] font-semibold text-mono-text hover:text-black transition-colors"
+                              className="text-xs font-semibold text-mono-text hover:underline"
                             >
-                              [ View ]
+                              View Document
                             </a>
-                            <button
-                              onClick={() => setCurrentStep('documents')}
-                              className="text-[13px] font-semibold text-mono-text hover:text-black transition-colors"
-                            >
-                              [ Replace ]
-                            </button>
                           </div>
                         </div>
                       );

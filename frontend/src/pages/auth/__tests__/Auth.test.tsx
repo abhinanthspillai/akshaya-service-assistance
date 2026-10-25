@@ -46,15 +46,17 @@ describe('Auth UI Tests', () => {
  expect(screen.getAllByPlaceholderText('John Doe').length).toBeGreaterThan(0);
  });
 
- it('renders forgot password informational screen', () => {
+ it('renders self-service password recovery screen and inputs', () => {
  render(
  <MemoryRouter>
  <ForgotPassword />
  </MemoryRouter>
  );
  expect(screen.getByRole('heading', { name: 'Password Recovery' })).toBeInTheDocument();
- expect(screen.getByText(/Self-service recovery is not available yet/)).toBeInTheDocument();
- expect(screen.getByText('Return to Sign In')).toBeInTheDocument();
+ expect(screen.getByPlaceholderText('name@example.com')).toBeInTheDocument();
+ expect(screen.getByPlaceholderText('At least 6 characters')).toBeInTheDocument();
+ expect(screen.getByPlaceholderText('Re-enter new password')).toBeInTheDocument();
+ expect(screen.getByRole('button', { name: 'Reset Password' })).toBeInTheDocument();
  });
 
  it('performs role-aware routing on login', async () => {

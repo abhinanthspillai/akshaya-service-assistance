@@ -124,16 +124,7 @@ export function DocumentUpload({
           )}
         </div>
 
-        {!existingDocument && !stagedFile && (
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => fileInputRef.current?.click()}
-            className="shrink-0 text-[14px] font-semibold bg-white border border-mono-border px-4 py-2 rounded-xl text-mono-text hover:bg-mono-surface hover:text-black transition-colors disabled:opacity-50"
-          >
-            [ Choose File ]
-          </button>
-        )}
+
       </div>
 
       {/* Show staged file if user selected one */}
@@ -163,14 +154,6 @@ export function DocumentUpload({
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => fileInputRef.current?.click()}
-                className="text-[13px] font-semibold text-mono-text hover:text-black px-2 py-1 rounded transition-colors disabled:opacity-50"
-              >
-                [ Replace ]
-              </button>
               <button
                 type="button"
                 disabled={disabled}
@@ -233,16 +216,8 @@ export function DocumentUpload({
                 rel="noreferrer"
                 className="text-[13px] font-semibold text-mono-text hover:text-black transition-colors"
               >
-                [ Preview ]
+                Preview Document
               </a>
-              <button 
-                type="button"
-                disabled={disabled}
-                onClick={() => fileInputRef.current?.click()}
-                className="text-[13px] font-semibold text-mono-text hover:text-black transition-colors disabled:opacity-50"
-              >
-                [ Replace ]
-              </button>
             </div>
           </div>
         </div>

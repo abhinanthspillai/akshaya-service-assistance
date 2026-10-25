@@ -21,43 +21,52 @@ interface ServiceRequest {
 
 
 
+interface Employee {
+  user_id: string;
+  full_name: string;
+  email: string;
+  is_available: boolean;
+}
+
 export function Escalations() {
- const [escalations, setEscalations] = useState<Escalation[]>([]);
- const [requests, setRequests] = useState<Record<string, ServiceRequest>>({});
+  const [escalations, setEscalations] = useState<Escalation[]>([]);
+  const [requests, setRequests] = useState<Record<string, ServiceRequest>>({});
+  const [employees, setEmployees] = useState<Employee[]>([]);
 
- const [isLoading, setIsLoading] = useState(true);
- const [error, setError] = useState('');
- const [selectedEmployee, setSelectedEmployee] = useState<Record<string, string>>({});
- const [isProcessing, setIsProcessing] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [error, setError] = useState('');
+  const [selectedEmployee, setSelectedEmployee] = useState<Record<string, string>>({});
+  const [isProcessing, setIsProcessing] = useState<string | null>(null);
 
- useEffect(() => {
- const fetchData = async () => {
- try {
- const res = await api.get('/escalations?is_resolved=false');
- setEscalations(res.data);
- 
- // Fetch request details for each escalation
- const requestData: Record<string, ServiceRequest> = {};
- for (const esc of res.data) {
- if (!requestData[esc.request_id]) {
- try {
- const reqRes = await api.get('/requests/' + esc.request_id);
- requestData[esc.request_id] = reqRes.data;
- } catch {
- // ignore
- }
- }
- }
- setRequests(requestData);
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await api.get('/escalations/?is_resolved=false');
+        setEscalations(res.data);
 
- // Try fetching employees (assuming an endpoint exists)
- try {
- await api.get('/employees'); 
- } catch {
- // If no such endpoint, we might just use a generic approach or we need to add it.
- }
+        // Fetch request details for each escalation
+        const requestData: Record<string, ServiceRequest> = {};
+        for (const esc of res.data) {
+          if (!requestData[esc.request_id]) {
+            try {
+              const reqRes = await api.get('/requests/' + esc.request_id);
+              requestData[esc.request_id] = reqRes.data;
+            } catch {
+              // ignore
+            }
+          }
+        }
+        setRequests(requestData);
 
- } catch {
+        // Fetch centre employees
+        try {
+          const empRes = await api.get<Employee[]>('/staff/employees');
+          setEmployees(empRes.data || []);
+        } catch {
+          setEmployees([]);
+        }
+      } catch {
  setError('Failed to load escalations.');
  } finally {
  setIsLoading(false);
@@ -67,16 +76,17 @@ export function Escalations() {
  }, []);
 
  const handleDetect = async () => {
- setIsLoading(true);
- try {
- await api.post('/escalations/detect');
- const res = await api.get('/escalations?is_resolved=false');
- setEscalations(res.data);
- } catch {
- setError('Failed to detect stale requests.');
- } finally {
- setIsLoading(false);
- }
+    setIsDetecting(true);
+    setError('');
+    try {
+      await api.post('/escalations/detect/');
+      const res = await api.get('/escalations/?is_resolved=false');
+      setEscalations(res.data);
+    } catch {
+      setError('Failed to detect stale requests.');
+    } finally {
+      setIsDetecting(false);
+    }
  };
 
  const handleReassign = async (requestId: string, escalationId: string) => {
@@ -127,12 +137,15 @@ export function Escalations() {
  </h1>
  <p className="text-mono-muted mt-2">Manage stale or unaccepted requests</p>
  </div>
- <button
- onClick={handleDetect}
- className="bg-mono-text hover:bg-mono-text text-white px-4 py-2 rounded-[16px] font-medium transition-colors"
- >
- Run Detection
- </button>
+        <button
+          type="button"
+          onClick={handleDetect}
+          disabled={isDetecting}
+          className="bg-mono-text hover:bg-mono-text/90 text-white px-4 py-2 rounded-[16px] font-medium transition-colors flex items-center gap-2 disabled:opacity-60 cursor-pointer"
+        >
+          {isDetecting && <Loader2 className="animate-spin" size={16} />}
+          Run Detection
+        </button>
  </div>
 
  {error && (
@@ -164,8 +177,22 @@ export function Escalations() {
  </div>
  </div>
  
- <div className="flex flex-col gap-3 min-w-[200px]">
+ <div className="flex flex-col gap-3 min-w-[220px]">
  <div className="flex gap-2">
+ {employees.length > 0 ? (
+ <select
+ value={selectedEmployee[esc.request_id] || ''}
+ onChange={(e) => setSelectedEmployee({ ...selectedEmployee, [esc.request_id]: e.target.value })}
+ className="w-full bg-mono-bg border border-mono-border rounded-[12px] px-3 py-2 text-xs text-mono-text focus:outline-none focus:ring-2 focus:ring-mono-text"
+ >
+ <option value="">Select Operator...</option>
+ {employees.map((emp) => (
+ <option key={emp.user_id} value={emp.user_id}>
+ {emp.full_name} {!emp.is_available ? '(Offline)' : ''}
+ </option>
+ ))}
+ </select>
+ ) : (
  <input 
  type="text" 
  placeholder="Employee ID"
@@ -173,6 +200,7 @@ export function Escalations() {
  onChange={(e) => setSelectedEmployee({ ...selectedEmployee, [esc.request_id]: e.target.value })}
  className="w-full bg-mono-bg border border-mono-border rounded-[12px] px-4 py-3 text-mono-text focus:outline-none focus:ring-2 focus:ring-ink-900 focus:border-red-500 focus:ring-1 focus:ring-red-500"
  />
+ )}
  </div>
  <div className="flex gap-2">
  <button

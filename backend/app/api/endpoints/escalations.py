@@ -13,6 +13,7 @@ from app.schemas.escalation import EscalationResponse
 router = APIRouter()
 
 
+@router.get("", response_model=list[EscalationResponse])
 @router.get("/", response_model=list[EscalationResponse])
 def list_escalations(
     session: SessionDep,
@@ -43,6 +44,7 @@ def list_escalations(
 
 
 @router.post("/detect", response_model=list[EscalationResponse])
+@router.post("/detect/", response_model=list[EscalationResponse])
 def detect_stale_requests(
     session: SessionDep,
     current_user: CurrentUser,

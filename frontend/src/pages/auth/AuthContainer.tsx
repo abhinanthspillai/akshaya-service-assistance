@@ -16,7 +16,7 @@ export function AuthContainer() {
         {/* Mobile Header & Toggle */}
         <div className="flex items-center gap-2.5 mb-6 text-ink-900 justify-center">
           <AkshayaLogoIcon size={28} className="text-ink-900" />
-          <span className="text-ink-900 font-bold text-xl tracking-tight">Akshaya</span>
+          <span className="text-ink-900 font-bold text-xl tracking-tight">Sahaya</span>
         </div>
 
         <div className="flex bg-ink-100 p-1 rounded-2xl mb-6 relative max-w-sm mx-auto">
@@ -64,7 +64,7 @@ export function AuthContainer() {
         >
           <div className="flex items-center gap-2.5 mb-6 text-ink-900 shrink-0">
             <AkshayaLogoIcon size={24} className="text-ink-900" />
-            <span className="text-ink-900 font-bold text-lg tracking-tight">Akshaya</span>
+            <span className="text-ink-900 font-bold text-lg tracking-tight">Sahaya</span>
           </div>
           <LoginForm />
         </div>
@@ -80,7 +80,7 @@ export function AuthContainer() {
         >
           <div className="flex items-center gap-2.5 mb-5 text-ink-900 shrink-0">
             <AkshayaLogoIcon size={24} className="text-ink-900" />
-            <span className="text-ink-900 font-bold text-lg tracking-tight">Akshaya</span>
+            <span className="text-ink-900 font-bold text-lg tracking-tight">Sahaya</span>
           </div>
           <RegisterForm />
         </div>
@@ -128,7 +128,7 @@ export function AuthContainer() {
             >
               <h2 className="text-3xl font-bold text-white mb-4">Hello, Welcome!</h2>
               <p className="text-indigo-100 mb-8 max-w-[280px] leading-relaxed">
-                New to Akshaya Service Assistance? Create an account to get started.
+                New to Sahaya Service Assistance? Create an account to get started.
               </p>
               <button
                 onClick={() => navigate('/register')}

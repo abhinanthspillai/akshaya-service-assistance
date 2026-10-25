@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     log_level: str = "INFO"
     database_url: str = "postgresql+psycopg://akshaya_app:change_me@localhost:5432/akshaya"
-    jwt_secret_key: str = Field(default="replace_with_secure_secret")
+    jwt_secret_key: str = Field(default="replace_with_secure_secret_at_least_32_chars_long")
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
     cors_origins: str = "http://localhost:5173,https://sahaya2.netlify.app"

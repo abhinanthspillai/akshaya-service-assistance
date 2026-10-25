@@ -69,6 +69,7 @@ class ServiceCreate(ServiceBase):
 class ServiceUpdate(BaseModel):
     name: str | None = Field(None, max_length=200)
     description: str | None = None
+    service_type: str | None = Field(None, pattern="^[ABC]$")
     is_active: bool | None = None
     base_fee: Decimal | None = Field(None, ge=0)
     retention_days: int | None = Field(None, ge=0)

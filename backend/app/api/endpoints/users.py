@@ -30,7 +30,7 @@ def crop_center(pil_img: Image.Image, crop_width: int, crop_height: int) -> Imag
 @router.post("/me/photo")
 async def upload_photo(
     current_user: CurrentUser, session: SessionDep, file: UploadFile = File(...)
-):
+) -> dict[str, str]:
     if file.size and file.size > 2 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large. Maximum 2 MB allowed.")
 
@@ -89,7 +89,7 @@ async def upload_photo(
 def delete_photo(
     current_user: CurrentUser,
     session: SessionDep,
-):
+) -> None:
     if not current_user.profile_photo:
         return
 
@@ -110,27 +110,27 @@ def update_profile(
     user_in: UserUpdate,
     current_user: CurrentUser,
     session: SessionDep,
-):
+) -> UserAuthMe:
     if current_user.role == "citizen":
-        profile = session.scalar(
+        cit_profile = session.scalar(
             select(CitizenProfile).where(CitizenProfile.user_id == current_user.id)
         )
-        if profile:
+        if cit_profile:
             if user_in.full_name is not None:
-                profile.full_name = user_in.full_name
+                cit_profile.full_name = user_in.full_name
             if user_in.phone is not None:
-                profile.phone = user_in.phone
+                cit_profile.phone = user_in.phone
             if user_in.address_text is not None:
-                profile.address_text = user_in.address_text
-            session.add(profile)
+                cit_profile.address_text = user_in.address_text
+            session.add(cit_profile)
     elif current_user.role == "centre_employee":
-        profile = session.scalar(
+        emp_profile = session.scalar(
             select(EmployeeProfile).where(EmployeeProfile.user_id == current_user.id)
         )
-        if profile:
+        if emp_profile:
             if user_in.full_name is not None:
-                profile.full_name = user_in.full_name
-            session.add(profile)
+                emp_profile.full_name = user_in.full_name
+            session.add(emp_profile)
 
     session.commit()
 
@@ -144,7 +144,7 @@ def update_profile(
 def get_pending_otp(
     current_user: CurrentUser,
     session: SessionDep,
-):
+) -> PendingCitizenOtpResponse | None:
     from datetime import UTC, datetime
 
     from app.models.assignment import RequestHistory
@@ -209,4 +209,3 @@ def get_pending_otp(
         expires_at=valid_pending.expires_at,
         created_at=valid_pending.created_at,
     )
-

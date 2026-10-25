@@ -268,7 +268,7 @@ export function ChatSidebar({ currentUserId }: ChatSidebarProps) {
         className={clsx(
           'fixed z-40 flex items-center justify-center rounded-full shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-mono-border',
           'bg-mono-text text-mono-bg hover:bg-black',
-          'bottom-6 right-6 w-14 h-14',
+          'bottom-20 right-6 w-14 h-14',
           isOpen && 'pointer-events-none opacity-0 scale-90'
         )}
       >

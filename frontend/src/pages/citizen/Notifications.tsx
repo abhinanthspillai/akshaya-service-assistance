@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Loader2, CheckSquare, Settings, FileText, Clock, Users, Info, ChevronRight, HelpCircle, ExternalLink, ArrowRight } from 'lucide-react';
+import { Bell, CheckSquare, FileText, Clock, Users, Info, ChevronRight, HelpCircle, ExternalLink, ArrowRight } from 'lucide-react';
 import { api } from '../../lib/api';
 import clsx from 'clsx';
 import { PageHeader } from '../../components/ui/PageHeader';
@@ -34,13 +34,6 @@ export function Notifications() {
  setNotifications(res.data);
  if (res.data.length > 0) {
  setSelectedId(res.data[0].id);
- }
- 
- const hasUnread = res.data.some((n: NotificationItem) => !n.is_read);
- if (hasUnread) {
-   await api.post('/notifications/read-all');
-   setNotifications(current => current.map(item => ({ ...item, is_read: true })));
-   window.dispatchEvent(new Event('notificationsRead'));
  }
  } catch {
  setError('Failed to load notifications.');
@@ -114,13 +107,7 @@ export function Notifications() {
  return `1 week ago`;
  };
 
- if (isLoading) {
- return (
- <div className="flex justify-center items-center h-64">
- <Loader2 className="animate-spin text-mono-text" size={32} />
- </div>
- );
- }
+
 
  const tabs: Tab[] = ['All', 'Unread', 'Requests', 'Service Updates', 'System'];
 
@@ -130,24 +117,7 @@ export function Notifications() {
  <PageHeader 
  title="Notifications"
  subtitle="Stay updated on your requests, services and important updates."
- >
- <div className="flex items-center gap-2">
- <Button 
- variant="ghost"
- onClick={markAllAsRead}
- icon={<CheckSquare size={16} />}
- >
- Mark all as read
- </Button>
- <div className="w-px h-4 bg-mono-border"></div>
- <Button 
- variant="ghost"
- icon={<Settings size={16} />}
- >
- Notification settings
- </Button>
- </div>
- </PageHeader>
+ />
 
  {/* Category Pills */}
  <div className="flex gap-3 overflow-x-auto pb-2 mb-6 hide-scrollbar">
@@ -187,15 +157,40 @@ export function Notifications() {
  {/* Left Pane: Notification List */}
  <div className="lg:col-span-7 xl:col-span-8">
  <Card padding="none">
- {filteredNotifications.length === 0 ? (
- <div className="py-16">
- <EmptyState
- icon={<Bell size={48} />}
- title="No notifications"
- description="You are all caught up."
- />
+ {notifications.length > 0 && (
+ <div className="px-5 py-3.5 border-b border-mono-border flex items-center justify-between bg-mono-surface/30">
+ <span className="text-xs font-semibold text-mono-muted uppercase tracking-wider">
+ {filteredNotifications.length} {filteredNotifications.length === 1 ? 'Notification' : 'Notifications'}
+ </span>
+ <button
+ onClick={markAllAsRead}
+ className="flex items-center gap-1.5 text-xs font-semibold text-mono-text hover:text-black hover:underline cursor-pointer transition-colors"
+ >
+ <CheckSquare size={14} /> Mark all as read
+ </button>
  </div>
- ) : (
+ )}
+  {isLoading && notifications.length === 0 ? (
+    <div className="p-6 space-y-4">
+      {[...Array(4)].map((_, i) => (
+        <div key={i} className="animate-pulse flex items-center gap-4">
+          <div className="w-10 h-10 rounded-full bg-mono-surface shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-4 bg-mono-surface rounded w-1/2" />
+            <div className="h-3 bg-mono-surface rounded w-3/4" />
+          </div>
+        </div>
+      ))}
+    </div>
+  ) : filteredNotifications.length === 0 ? (
+    <div className="py-16">
+      <EmptyState
+        icon={<Bell size={48} />}
+        title="No notifications"
+        description="You are all caught up."
+      />
+    </div>
+  ) : (
  <ul className="divide-y divide-mono-border/50">
  {filteredNotifications.map((notification) => {
  const isSelected = selectedId === notification.id;

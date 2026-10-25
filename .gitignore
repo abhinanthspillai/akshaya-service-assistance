@@ -28,6 +28,8 @@ tmp/
 logs/
 *.sqlite
 *.sqlite3
+sqlite.db
+backend/sqlite.db
 backend/temp/
 backend/pytest_temp/
 backend/pytest_temp_dir/
@@ -36,3 +38,4 @@ backend/file
 diff*.txt
 scratch/
 file
+pytest_temp/

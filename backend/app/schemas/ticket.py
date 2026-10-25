@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class TicketMessageCreate(BaseModel):
@@ -9,14 +9,13 @@ class TicketMessageCreate(BaseModel):
 
 
 class TicketMessageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     ticket_id: UUID
     sender_id: UUID
     body: str
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class SupportTicketCreate(BaseModel):
@@ -30,6 +29,8 @@ class SupportTicketUpdate(BaseModel):
 
 
 class SupportTicketResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     citizen_id: UUID
     request_id: UUID | None
@@ -38,6 +39,3 @@ class SupportTicketResponse(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True

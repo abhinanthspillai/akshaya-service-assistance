@@ -46,3 +46,8 @@ class UserAuthMe(UserRead):
     centre_id: UUID | None = None
     approval_status: str | None = None
     photo_url: str | None = None
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    new_password: str = Field(..., min_length=6, max_length=128)

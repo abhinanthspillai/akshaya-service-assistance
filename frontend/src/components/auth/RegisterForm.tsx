@@ -194,7 +194,7 @@ export function RegisterForm() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4" data-testid="register-form">
         <div>
           <label className="block text-sm font-semibold text-ink-900 mb-1.5">Full Name</label>
           <input

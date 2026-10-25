@@ -28,8 +28,8 @@ describe('LandingPage', () => {
     expect(screen.getByText('Submit Request')).toBeInTheDocument();
     expect(screen.getByText('Track Progress')).toBeInTheDocument();
     
-    // Check stats
-    expect(screen.getByText('50+')).toBeInTheDocument();
-    expect(screen.getByText('2,900+')).toBeInTheDocument();
+    // Check core guarantees
+    expect(screen.getByText('Certified Centre Network')).toBeInTheDocument();
+    expect(screen.getByText('Live Status Tracking')).toBeInTheDocument();
   });
 });

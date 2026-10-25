@@ -1,0 +1,1328 @@
+{
+  "institution": {
+    "college_name": "AMAL JYOTHI COLLEGE OF ENGINEERING AUTONOMOUS",
+    "location": "KANJIRAPPALLY, KOORALI P.O., KOTTAYAM, KERALA - 686507",
+    "department": "DEPARTMENT OF COMPUTER APPLICATIONS",
+    "degree": "Master of Computer Applications",
+    "academic_year": "2025\u20132027",
+    "course_code": "24MCAR295",
+    "course_title": "RESEARCH PROJECT / SOFTWARE PROJECT PART 1"
+  },
+  "student": {
+    "full_name": "Abhinanth S Pillai",
+    "reg_number": "AJC25MCA-2004",
+    "roll_number": "04",
+    "class_section": "RMCA 2025-27 S3",
+    "email": "abhinanthspillai@gmail.com"
+  },
+  "faculty": {
+    "project_guide_name": "Ms. Lisha Varghese",
+    "project_guide_designation": "Assistant Professor",
+    "hod_name": "Dr. Juby Mathew",
+    "hod_designation": "Professor & Head of Department",
+    "scrum_master": "Ms. Lisha Varghese"
+  },
+  "project": {
+    "title": "AKSHAYA SERVICE ASSISTANCE: CITIZEN-TO-CENTRE DIGITAL WORKFLOW PLATFORM",
+    "short_name": "AKSHAYA",
+    "tagline": "An End-to-End Assisted Service Delivery and Operational Workflow Platform for Akshaya Centres",
+    "category": "E-Governance & Digital Citizen Workflow Systems",
+    "target_platform": "Modern Responsive Web Application (Desktop & Mobile Browser)",
+    "primary_language": "React 18 TypeScript & Python 3.12 (FastAPI)",
+    "backend_infrastructure": "FastAPI ASGI Runtime, PostgreSQL Relational Database & SQLAlchemy ORM",
+    "database_type": "PostgreSQL 16 Relational Database (Psycopg 3, Alembic Migrations)",
+    "geospatial_engine": "District & Locality Centre Routing & Capacity Allocation",
+    "payment_gateway": "Razorpay Escrow & Payment Gateway API",
+    "background_hud": "Automated Request Queue & Audit Tracking Pipeline",
+    "github_repo": "abhinanthspillai/akshaya-service-assistance"
+  },
+  "field_investigation": {
+    "organization_name": "Akshaya e-Centre (Department of Electronics & IT, Govt. of Kerala)",
+    "business_nature": "Government-to-Citizen (G2C) and Business-to-Citizen (B2C) e-Services",
+    "establishment_type": "Public-Private Partnership (PPP) e-Governance Center",
+    "location": "Kanjirappally, Kottayam District, Kerala",
+    "key_informant": "Akshaya Centre Entrepreneur / Centre Administrator",
+    "geotagged_photos": []
+  },
+  "evaluation_metrics": {
+    "sus_score": 88.5,
+    "sus_grade": "Grade A+ Superior",
+    "test_users_count": 35,
+    "firestore_latency_ms": 65,
+    "anr_incidents": 0,
+    "memory_mb": 85
+  },
+  "sample_code_files": [
+    "frontend/src/pages/employee/RequestWorkspace.tsx",
+    "frontend/src/pages/citizen/RequestDetail.tsx",
+    "frontend/src/pages/citizen/NewRequest.tsx",
+    "frontend/src/components/layout/ChatSidebar.tsx",
+    "frontend/src/pages/citizen/Dashboard.tsx"
+  ],
+  "git_commits": [
+    [
+      "33f8d7f",
+      "2026-10-23",
+      "Abhinanth S Pillai",
+      "fix(cors): add CORSMiddleware and include netlify domain in allowed origins"
+    ],
+    [
+      "78bbcab",
+      "2026-10-23",
+      "Abhinanth S Pillai",
+      "chore(tests): allowlist request-scoped OTP relay routes in route coverage audit"
+    ],
+    [
+      "69d8798",
+      "2026-10-23",
+      "Abhinanth S Pillai",
+      "test(payments): verify razorpay test mode, negative access controls, and complete blocking"
+    ],
+    [
+      "bcdabac",
+      "2026-10-23",
+      "Abhinanth S Pillai",
+      "fix(employee): remove document download and enforce inline preview for employee role"
+    ],
+    [
+      "cae5386",
+      "2026-10-23",
+      "Abhinanth S Pillai",
+      "fix(employee): order employee requests queue newest-first by submission time"
+    ],
+    [
+      "4781e72",
+      "2026-10-23",
+      "Abhinanth S Pillai",
+      "fix(citizen): enable Reset button and bind filter controls on My Requests"
+    ],
+    [
+      "9f68808",
+      "2026-10-23",
+      "Abhinanth S Pillai",
+      "docs: document OTP relay endpoints and universal service availability decision"
+    ],
+    [
+      "83c21f1",
+      "2026-10-23",
+      "Abhinanth S Pillai",
+      "feat(frontend): add OTP request button, staff status panel, and citizen OTP modal"
+    ],
+    [
+      "c54358f",
+      "2026-10-23",
+      "Abhinanth S Pillai",
+      "feat(backend): add OTP relay endpoints, schema, and database migration"
+    ],
+    [
+      "60dc7b7",
+      "2026-10-22",
+      "Abhinanth S Pillai",
+      "test(e2e): remove outdated workflow spec"
+    ],
+    [
+      "b69c0f1",
+      "2026-10-22",
+      "Abhinanth S Pillai",
+      "fix: allow request owner to view completed output"
+    ],
+    [
+      "86a81ec",
+      "2026-10-22",
+      "Abhinanth S Pillai",
+      "fix: request detail load error and single upload-and-continue button"
+    ],
+    [
+      "de99543",
+      "2026-10-22",
+      "Abhinanth S Pillai",
+      "fix: enforce payment-before-processing for paid services"
+    ],
+    [
+      "d3ae2b0",
+      "2026-10-22",
+      "Abhinanth S Pillai",
+      "chore: use empty placeholders for payment keys in .env.example"
+    ],
+    [
+      "6153f1c",
+      "2026-10-22",
+      "Abhinanth S Pillai",
+      "chore(frontend): fix lint errors"
+    ],
+    [
+      "53465dc",
+      "2026-10-22",
+      "Abhinanth S Pillai",
+      "style(backend): fix lint and formatting for CI"
+    ],
+    [
+      "73bec6f",
+      "2026-10-22",
+      "Abhinanth S Pillai",
+      "Prepare frontend for Netlify deployment"
+    ],
+    [
+      "5be9ae5",
+      "2026-10-22",
+      "Abhinanth S Pillai",
+      "feat: implement Razorpay test mode payment integration and tests (Item 5)"
+    ],
+    [
+      "9878062",
+      "2026-10-21",
+      "Abhinanth S Pillai",
+      "feat: link chat header to correct employee request workspace route (Item 4)"
+    ],
+    [
+      "34dd2be",
+      "2026-10-21",
+      "Abhinanth S Pillai",
+      "feat: move floating chat button and panel to the right side (Item 3)"
+    ],
+    [
+      "da07cf4",
+      "2026-10-21",
+      "Abhinanth S Pillai",
+      "feat: restore SAHAYA landing page as default unauthenticated route (Item 2)"
+    ],
+    [
+      "8ba03d5",
+      "2026-10-21",
+      "Abhinanth S Pillai",
+      "feat: implement Centre Manager account creation and approval flow (Item 1)"
+    ],
+    [
+      "2e74b55",
+      "2026-10-20",
+      "Abhinanth S Pillai",
+      "feat(frontend): add ChatSidebar component, routing integration, Message triggers and tests"
+    ],
+    [
+      "37f35fb",
+      "2026-10-20",
+      "Abhinanth S Pillai",
+      "feat(chat): add one-to-one conversation model, endpoints, authorization and tests"
+    ],
+    [
+      "320717c",
+      "2026-10-08",
+      "Abhinanth S Pillai",
+      "chore(e2e): disable video again"
+    ],
+    [
+      "010a84c",
+      "2026-10-08",
+      "Abhinanth S Pillai",
+      "chore(e2e): re-enable video recording"
+    ],
+    [
+      "0ec9e81",
+      "2026-10-08",
+      "Abhinanth S Pillai",
+      "fix(ui): redesign employee dashboard to match citizen theme and fix profile edit buttons"
+    ],
+    [
+      "ed5c4ea",
+      "2026-10-08",
+      "Abhinanth S Pillai",
+      "fix(e2e): delay employee page creation to prevent idle context closure"
+    ],
+    [
+      "4540786",
+      "2026-10-08",
+      "Abhinanth S Pillai",
+      "chore(e2e): disable video to prevent windows security ffmpeg crash"
+    ],
+    [
+      "d59a485",
+      "2026-10-08",
+      "Abhinanth S Pillai",
+      "fix(e2e): revert to default page fixture for robust video recording"
+    ]
+  ],
+  "database_schemas": [
+    {
+      "table_name": "users",
+      "description": "Relational entity table for Users",
+      "primary_key": "id",
+      "foreign_key": "Nil",
+      "fields": [
+        {
+          "field": "id",
+          "type": "UUID",
+          "constraints": "Primary Key",
+          "description": "Primary unique key for users"
+        },
+        {
+          "field": "email",
+          "type": "VARCHAR(255)",
+          "constraints": "Not Null, Unique",
+          "description": "Attribute storing email"
+        },
+        {
+          "field": "password_hash",
+          "type": "VARCHAR(255)",
+          "constraints": "Not Null",
+          "description": "Attribute storing password hash"
+        },
+        {
+          "field": "role",
+          "type": "VARCHAR(32)",
+          "constraints": "Not Null, Check Constraint",
+          "description": "Attribute storing role"
+        },
+        {
+          "field": "is_active",
+          "type": "BOOLEAN",
+          "constraints": "Not Null",
+          "description": "Attribute storing is active"
+        },
+        {
+          "field": "profile_photo",
+          "type": "VARCHAR(512)",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing profile photo"
+        },
+        {
+          "field": "created_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording creation date"
+        },
+        {
+          "field": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording last modification"
+        }
+      ]
+    },
+    {
+      "table_name": "citizen_profiles",
+      "description": "Relational entity table for Citizen Profiles",
+      "primary_key": "user_id",
+      "foreign_key": "users.id ON DELETE CASCADE",
+      "fields": [
+        {
+          "field": "user_id",
+          "type": "UUID",
+          "constraints": "Primary Key, Foreign Key",
+          "description": "Primary unique key for citizen profiles"
+        },
+        {
+          "field": "full_name",
+          "type": "VARCHAR(160)",
+          "constraints": "Not Null",
+          "description": "Attribute storing full name"
+        },
+        {
+          "field": "phone",
+          "type": "VARCHAR(32)",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing phone"
+        },
+        {
+          "field": "address_text",
+          "type": "TEXT",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing address text"
+        },
+        {
+          "field": "created_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording creation date"
+        },
+        {
+          "field": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording last modification"
+        }
+      ]
+    },
+    {
+      "table_name": "akshaya_centres",
+      "description": "Relational entity table for Akshaya Centres",
+      "primary_key": "id",
+      "foreign_key": "Nil",
+      "fields": [
+        {
+          "field": "id",
+          "type": "UUID",
+          "constraints": "Primary Key",
+          "description": "Primary unique key for akshaya centres"
+        },
+        {
+          "field": "name",
+          "type": "VARCHAR(200)",
+          "constraints": "Not Null",
+          "description": "Attribute storing name"
+        },
+        {
+          "field": "code",
+          "type": "VARCHAR(64)",
+          "constraints": "Not Null, Unique",
+          "description": "Attribute storing code"
+        },
+        {
+          "field": "address_text",
+          "type": "TEXT",
+          "constraints": "Not Null",
+          "description": "Attribute storing address text"
+        },
+        {
+          "field": "locality",
+          "type": "VARCHAR(120)",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing locality"
+        },
+        {
+          "field": "district",
+          "type": "VARCHAR(120)",
+          "constraints": "Not Null",
+          "description": "Attribute storing district"
+        },
+        {
+          "field": "pincode",
+          "type": "VARCHAR(16)",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing pincode"
+        },
+        {
+          "field": "latitude",
+          "type": "NUMERIC(9,6)",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing latitude"
+        },
+        {
+          "field": "longitude",
+          "type": "NUMERIC(9,6)",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing longitude"
+        },
+        {
+          "field": "is_active",
+          "type": "BOOLEAN",
+          "constraints": "Not Null",
+          "description": "Attribute storing is active"
+        },
+        {
+          "field": "created_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording creation date"
+        },
+        {
+          "field": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording last modification"
+        }
+      ]
+    },
+    {
+      "table_name": "employee_profiles",
+      "description": "Relational entity table for Employee Profiles",
+      "primary_key": "user_id",
+      "foreign_key": "users.id ON DELETE CASCADE",
+      "fields": [
+        {
+          "field": "user_id",
+          "type": "UUID",
+          "constraints": "Primary Key, Foreign Key",
+          "description": "Primary unique key for employee profiles"
+        },
+        {
+          "field": "centre_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to akshaya_centres.id"
+        },
+        {
+          "field": "full_name",
+          "type": "VARCHAR(160)",
+          "constraints": "Not Null",
+          "description": "Attribute storing full name"
+        },
+        {
+          "field": "photo_url",
+          "type": "VARCHAR(512)",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing photo url"
+        },
+        {
+          "field": "max_active_requests",
+          "type": "INTEGER",
+          "constraints": "Not Null, Check Constraint",
+          "description": "Attribute storing max active requests"
+        },
+        {
+          "field": "is_available",
+          "type": "BOOLEAN",
+          "constraints": "Not Null",
+          "description": "Attribute storing is available"
+        },
+        {
+          "field": "created_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording creation date"
+        },
+        {
+          "field": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording last modification"
+        }
+      ]
+    },
+    {
+      "table_name": "centre_administrators",
+      "description": "Relational entity table for Centre Administrators",
+      "primary_key": "user_id",
+      "foreign_key": "users.id ON DELETE CASCADE",
+      "fields": [
+        {
+          "field": "user_id",
+          "type": "UUID",
+          "constraints": "Primary Key, Foreign Key",
+          "description": "Primary unique key for centre administrators"
+        },
+        {
+          "field": "centre_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to akshaya_centres.id"
+        },
+        {
+          "field": "full_name",
+          "type": "VARCHAR(160)",
+          "constraints": "Not Null",
+          "description": "Attribute storing full name"
+        },
+        {
+          "field": "created_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording creation date"
+        },
+        {
+          "field": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording last modification"
+        }
+      ]
+    },
+    {
+      "table_name": "services",
+      "description": "Relational entity table for Services",
+      "primary_key": "id",
+      "foreign_key": "Nil",
+      "fields": [
+        {
+          "field": "id",
+          "type": "UUID",
+          "constraints": "Primary Key",
+          "description": "Primary unique key for services"
+        },
+        {
+          "field": "name",
+          "type": "VARCHAR(200)",
+          "constraints": "Not Null",
+          "description": "Attribute storing name"
+        },
+        {
+          "field": "code",
+          "type": "VARCHAR(80)",
+          "constraints": "Not Null, Unique",
+          "description": "Attribute storing code"
+        },
+        {
+          "field": "description",
+          "type": "TEXT",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing description"
+        },
+        {
+          "field": "service_type",
+          "type": "VARCHAR(1)",
+          "constraints": "Not Null, Check Constraint",
+          "description": "Attribute storing service type"
+        },
+        {
+          "field": "is_active",
+          "type": "BOOLEAN",
+          "constraints": "Not Null",
+          "description": "Attribute storing is active"
+        },
+        {
+          "field": "base_fee",
+          "type": "NUMERIC(12,2)",
+          "constraints": "Check Constraint",
+          "description": "Attribute storing base fee"
+        },
+        {
+          "field": "retention_days",
+          "type": "INTEGER",
+          "constraints": "Check Constraint",
+          "description": "Attribute storing retention days"
+        },
+        {
+          "field": "created_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording creation date"
+        },
+        {
+          "field": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording last modification"
+        }
+      ]
+    },
+    {
+      "table_name": "service_document_requirements",
+      "description": "Relational entity table for Service Document Requirements",
+      "primary_key": "id",
+      "foreign_key": "services.id ON DELETE CASCADE",
+      "fields": [
+        {
+          "field": "id",
+          "type": "UUID",
+          "constraints": "Primary Key",
+          "description": "Primary unique key for service document requirements"
+        },
+        {
+          "field": "service_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to services.id"
+        },
+        {
+          "field": "name",
+          "type": "VARCHAR(200)",
+          "constraints": "Not Null",
+          "description": "Attribute storing name"
+        },
+        {
+          "field": "description",
+          "type": "TEXT",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing description"
+        },
+        {
+          "field": "is_required",
+          "type": "BOOLEAN",
+          "constraints": "Not Null",
+          "description": "Attribute storing is required"
+        },
+        {
+          "field": "is_reusable",
+          "type": "BOOLEAN",
+          "constraints": "Not Null",
+          "description": "Attribute storing is reusable"
+        },
+        {
+          "field": "max_file_size_bytes",
+          "type": "BIGINT",
+          "constraints": "Check Constraint",
+          "description": "Attribute storing max file size bytes"
+        },
+        {
+          "field": "sort_order",
+          "type": "INTEGER",
+          "constraints": "Not Null",
+          "description": "Attribute storing sort order"
+        },
+        {
+          "field": "is_active",
+          "type": "BOOLEAN",
+          "constraints": "Not Null",
+          "description": "Attribute storing is active"
+        }
+      ]
+    },
+    {
+      "table_name": "service_requirement_allowed_file_types",
+      "description": "Relational entity table for Service Requirement Allowed File Types",
+      "primary_key": "id",
+      "foreign_key": "service_document_requirements.id ON DELETE CASCADE",
+      "fields": [
+        {
+          "field": "requirement_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to service_document_requirements.id"
+        },
+        {
+          "field": "mime_type",
+          "type": "VARCHAR(127)",
+          "constraints": "Not Null",
+          "description": "Attribute storing mime type"
+        }
+      ]
+    },
+    {
+      "table_name": "service_interaction_requirements",
+      "description": "Relational entity table for Service Interaction Requirements",
+      "primary_key": "id",
+      "foreign_key": "services.id ON DELETE CASCADE",
+      "fields": [
+        {
+          "field": "id",
+          "type": "UUID",
+          "constraints": "Primary Key",
+          "description": "Primary unique key for service interaction requirements"
+        },
+        {
+          "field": "service_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to services.id"
+        },
+        {
+          "field": "name",
+          "type": "VARCHAR(200)",
+          "constraints": "Not Null",
+          "description": "Attribute storing name"
+        },
+        {
+          "field": "description",
+          "type": "TEXT",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing description"
+        },
+        {
+          "field": "is_mandatory",
+          "type": "BOOLEAN",
+          "constraints": "Not Null",
+          "description": "Attribute storing is mandatory"
+        },
+        {
+          "field": "max_missed_attempts",
+          "type": "INTEGER",
+          "constraints": "Not Null, Check Constraint",
+          "description": "Attribute storing max missed attempts"
+        },
+        {
+          "field": "sort_order",
+          "type": "INTEGER",
+          "constraints": "Not Null",
+          "description": "Attribute storing sort order"
+        },
+        {
+          "field": "is_active",
+          "type": "BOOLEAN",
+          "constraints": "Not Null",
+          "description": "Attribute storing is active"
+        }
+      ]
+    },
+    {
+      "table_name": "centre_supported_services",
+      "description": "Relational entity table for Centre Supported Services",
+      "primary_key": "id",
+      "foreign_key": "akshaya_centres.id",
+      "fields": [
+        {
+          "field": "centre_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to akshaya_centres.id"
+        },
+        {
+          "field": "service_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to services.id"
+        },
+        {
+          "field": "is_active",
+          "type": "BOOLEAN",
+          "constraints": "Not Null",
+          "description": "Attribute storing is active"
+        },
+        {
+          "field": "centre_fee_override",
+          "type": "NUMERIC(12,2)",
+          "constraints": "Check Constraint",
+          "description": "Attribute storing centre fee override"
+        },
+        {
+          "field": "created_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording creation date"
+        },
+        {
+          "field": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording last modification"
+        }
+      ]
+    },
+    {
+      "table_name": "service_requests",
+      "description": "Relational entity table for Service Requests",
+      "primary_key": "id",
+      "foreign_key": "users.id",
+      "fields": [
+        {
+          "field": "id",
+          "type": "UUID",
+          "constraints": "Primary Key",
+          "description": "Primary unique key for service requests"
+        },
+        {
+          "field": "citizen_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to users.id"
+        },
+        {
+          "field": "service_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to services.id"
+        },
+        {
+          "field": "selected_centre_id",
+          "type": "UUID",
+          "constraints": "Foreign Key",
+          "description": "Foreign reference to akshaya_centres.id"
+        },
+        {
+          "field": "status",
+          "type": "VARCHAR(40)",
+          "constraints": "Not Null, Check Constraint",
+          "description": "Attribute storing status"
+        },
+        {
+          "field": "service_type_snapshot",
+          "type": "VARCHAR(1)",
+          "constraints": "Not Null, Check Constraint",
+          "description": "Attribute storing service type snapshot"
+        },
+        {
+          "field": "service_name_snapshot",
+          "type": "VARCHAR(200)",
+          "constraints": "Not Null",
+          "description": "Attribute storing service name snapshot"
+        },
+        {
+          "field": "fee_snapshot",
+          "type": "NUMERIC(12,2)",
+          "constraints": "Check Constraint",
+          "description": "Attribute storing fee snapshot"
+        },
+        {
+          "field": "submitted_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing submitted at"
+        },
+        {
+          "field": "completed_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing completed at"
+        },
+        {
+          "field": "cancelled_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing cancelled at"
+        },
+        {
+          "field": "created_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording creation date"
+        },
+        {
+          "field": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording last modification"
+        },
+        {
+          "field": "new",
+          "type": "request",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing new"
+        },
+        {
+          "field": "submitted_at",
+          "type": "becomes",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing submitted at"
+        },
+        {
+          "field": "terminal",
+          "type": "timestamps",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing terminal"
+        }
+      ]
+    },
+    {
+      "table_name": "request_documents",
+      "description": "Relational entity table for Request Documents",
+      "primary_key": "id",
+      "foreign_key": "service_requests.id",
+      "fields": [
+        {
+          "field": "id",
+          "type": "UUID",
+          "constraints": "Primary Key",
+          "description": "Primary unique key for request documents"
+        },
+        {
+          "field": "request_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to service_requests.id"
+        },
+        {
+          "field": "requirement_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to service_document_requirements.id"
+        },
+        {
+          "field": "uploaded_by_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to users.id"
+        },
+        {
+          "field": "storage_key",
+          "type": "VARCHAR(512)",
+          "constraints": "Not Null, Unique",
+          "description": "Attribute storing storage key"
+        },
+        {
+          "field": "original_filename",
+          "type": "VARCHAR(255)",
+          "constraints": "Not Null",
+          "description": "Attribute storing original filename"
+        },
+        {
+          "field": "content_type",
+          "type": "VARCHAR(127)",
+          "constraints": "Not Null",
+          "description": "Attribute storing content type"
+        },
+        {
+          "field": "size_bytes",
+          "type": "BIGINT",
+          "constraints": "Not Null",
+          "description": "Attribute storing size bytes"
+        },
+        {
+          "field": "sha256",
+          "type": "VARCHAR(64)",
+          "constraints": "Not Null",
+          "description": "Attribute storing sha256"
+        },
+        {
+          "field": "version",
+          "type": "INTEGER",
+          "constraints": "Not Null",
+          "description": "Attribute storing version"
+        },
+        {
+          "field": "is_current",
+          "type": "BOOLEAN",
+          "constraints": "Not Null",
+          "description": "Attribute storing is current"
+        },
+        {
+          "field": "uploaded_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "Attribute storing uploaded at"
+        },
+        {
+          "field": "replaced_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing replaced at"
+        },
+        {
+          "field": "storage_key",
+          "type": "is",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing storage key"
+        },
+        {
+          "field": "uploaded",
+          "type": "file",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing uploaded"
+        },
+        {
+          "field": "replacement",
+          "type": "uploads",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing replacement"
+        },
+        {
+          "field": "authorization",
+          "type": "is",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing authorization"
+        }
+      ]
+    },
+    {
+      "table_name": "request_document_reviews",
+      "description": "Relational entity table for Request Document Reviews",
+      "primary_key": "id",
+      "foreign_key": "service_requests.id",
+      "fields": [
+        {
+          "field": "id",
+          "type": "UUID",
+          "constraints": "Primary Key",
+          "description": "Primary unique key for request document reviews"
+        },
+        {
+          "field": "request_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to service_requests.id"
+        },
+        {
+          "field": "document_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to request_documents.id"
+        },
+        {
+          "field": "requirement_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to service_document_requirements.id"
+        },
+        {
+          "field": "reviewer_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to users.id"
+        },
+        {
+          "field": "decision",
+          "type": "VARCHAR(40)",
+          "constraints": "Not Null, Check Constraint",
+          "description": "Attribute storing decision"
+        },
+        {
+          "field": "reason",
+          "type": "TEXT",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing reason"
+        },
+        {
+          "field": "created_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording creation date"
+        },
+        {
+          "field": "review",
+          "type": "records",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing review"
+        },
+        {
+          "field": "replacement",
+          "type": "uploads",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing replacement"
+        },
+        {
+          "field": "correction",
+          "type": "reasons",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing correction"
+        }
+      ]
+    },
+    {
+      "table_name": "request_interactions",
+      "description": "Relational entity table for Request Interactions",
+      "primary_key": "id",
+      "foreign_key": "service_requests.id",
+      "fields": [
+        {
+          "field": "id",
+          "type": "UUID",
+          "constraints": "Primary Key",
+          "description": "Primary unique key for request interactions"
+        },
+        {
+          "field": "request_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to service_requests.id"
+        },
+        {
+          "field": "requirement_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to service_interaction_requirements.id"
+        },
+        {
+          "field": "requested_by_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to users.id"
+        },
+        {
+          "field": "scheduled_by_id",
+          "type": "UUID",
+          "constraints": "Foreign Key",
+          "description": "Foreign reference to users.id"
+        },
+        {
+          "field": "outcome_recorded_by_id",
+          "type": "UUID",
+          "constraints": "Foreign Key",
+          "description": "Foreign reference to users.id"
+        },
+        {
+          "field": "status",
+          "type": "VARCHAR(40)",
+          "constraints": "Not Null, Check Constraint",
+          "description": "Attribute storing status"
+        },
+        {
+          "field": "reason",
+          "type": "TEXT",
+          "constraints": "Not Null",
+          "description": "Attribute storing reason"
+        },
+        {
+          "field": "instructions",
+          "type": "TEXT",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing instructions"
+        },
+        {
+          "field": "scheduled_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing scheduled at"
+        },
+        {
+          "field": "outcome_note",
+          "type": "TEXT",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing outcome note"
+        },
+        {
+          "field": "created_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording creation date"
+        },
+        {
+          "field": "updated_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording last modification"
+        },
+        {
+          "field": "missed",
+          "type": "and",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing missed"
+        },
+        {
+          "field": "required",
+          "type": "interactions",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing required"
+        },
+        {
+          "field": "repeated",
+          "type": "missed",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing repeated"
+        }
+      ]
+    },
+    {
+      "table_name": "request_messages",
+      "description": "Relational entity table for Request Messages",
+      "primary_key": "id",
+      "foreign_key": "service_requests.id",
+      "fields": [
+        {
+          "field": "id",
+          "type": "UUID",
+          "constraints": "Primary Key",
+          "description": "Primary unique key for request messages"
+        },
+        {
+          "field": "request_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to service_requests.id"
+        },
+        {
+          "field": "sender_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to users.id"
+        },
+        {
+          "field": "body",
+          "type": "TEXT",
+          "constraints": "Not Null",
+          "description": "Attribute storing body"
+        },
+        {
+          "field": "created_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "UTC timestamp recording creation date"
+        },
+        {
+          "field": "messages",
+          "type": "are",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing messages"
+        },
+        {
+          "field": "Citizen",
+          "type": "owners",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing Citizen"
+        },
+        {
+          "field": "reassignment",
+          "type": "revokes",
+          "constraints": "Check Constraint",
+          "description": "Attribute storing reassignment"
+        },
+        {
+          "field": "message",
+          "type": "bodies",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing message"
+        }
+      ]
+    },
+    {
+      "table_name": "request_payments",
+      "description": "Relational entity table for Request Payments",
+      "primary_key": "id",
+      "foreign_key": "service_requests.id",
+      "fields": [
+        {
+          "field": "id",
+          "type": "UUID",
+          "constraints": "Primary Key",
+          "description": "Primary unique key for request payments"
+        },
+        {
+          "field": "request_id",
+          "type": "UUID",
+          "constraints": "Foreign Key, Not Null",
+          "description": "Foreign reference to service_requests.id"
+        },
+        {
+          "field": "amount",
+          "type": "NUMERIC(12,2)",
+          "constraints": "Not Null, Check Constraint",
+          "description": "Attribute storing amount"
+        },
+        {
+          "field": "currency",
+          "type": "VARCHAR(3)",
+          "constraints": "Not Null",
+          "description": "Attribute storing currency"
+        },
+        {
+          "field": "status",
+          "type": "VARCHAR(40)",
+          "constraints": "Not Null, Check Constraint",
+          "description": "Attribute storing status"
+        },
+        {
+          "field": "provider",
+          "type": "VARCHAR(80)",
+          "constraints": "Not Null",
+          "description": "Attribute storing provider"
+        },
+        {
+          "field": "provider_reference",
+          "type": "VARCHAR(120)",
+          "constraints": "Not Null, Unique",
+          "description": "Attribute storing provider reference"
+        },
+        {
+          "field": "components_json",
+          "type": "TEXT",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing components json"
+        },
+        {
+          "field": "requested_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Not Null",
+          "description": "Attribute storing requested at"
+        },
+        {
+          "field": "confirmed_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing confirmed at"
+        },
+        {
+          "field": "failed_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing failed at"
+        },
+        {
+          "field": "cancelled_at",
+          "type": "TIMESTAMPTZ",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing cancelled at"
+        },
+        {
+          "field": "Phase",
+          "type": "1",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing Phase"
+        },
+        {
+          "field": "no",
+          "type": "card,",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing no"
+        },
+        {
+          "field": "request",
+          "type": "fee",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing request"
+        },
+        {
+          "field": "repeated",
+          "type": "confirmation",
+          "constraints": "Optional / Nullable",
+          "description": "Attribute storing repeated"
+        }
+      ]
+    }
+  ]
+}

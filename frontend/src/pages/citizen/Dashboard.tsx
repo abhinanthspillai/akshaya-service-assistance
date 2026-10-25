@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../lib/api';
 import { useNavigate } from 'react-router-dom';
-import { FileText, AlertCircle, CheckCircle, Search, ArrowRight, Loader2, Plus, Clock, FileEdit, HelpCircle, PhoneCall, ChevronRight, Info } from 'lucide-react';
+import { FileText, AlertCircle, CheckCircle, Search, ArrowRight, Plus, Clock, FileEdit, HelpCircle, PhoneCall, ChevronRight, Info } from 'lucide-react';
 import clsx from 'clsx';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
@@ -28,7 +28,6 @@ export function Dashboard() {
     description?: string;
   }
   const [popularServices, setPopularServices] = useState<PopularService[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [requestsError, setRequestsError] = useState(false);
   const [servicesError, setServicesError] = useState(false);
 
@@ -57,25 +56,17 @@ export function Dashboard() {
   };
 
   const fetchDashboardData = async () => {
-    setIsLoading(true);
     await Promise.allSettled([
       fetchRequests(),
       fetchPopularServices()
     ]);
-    setIsLoading(false);
   };
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
 
-  if (isLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="animate-spin text-mono-text" size={32} />
-      </div>
-    );
-  }
+
 
   // Calculate summaries using status counts from backend
   const getCount = (statuses: string[]) => {

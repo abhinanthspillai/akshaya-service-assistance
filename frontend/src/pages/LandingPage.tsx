@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search,
@@ -9,7 +10,6 @@ import {
   ShieldCheck,
   Users,
   Landmark,
-  Component,
   IdCard,
   Home as HomeIcon,
   FileCheck
@@ -17,13 +17,14 @@ import {
 
 export function LandingPage() {
   const navigate = useNavigate();
+  const [activeSection, setActiveSection] = useState<'home' | 'services' | 'how-it-works'>('home');
 
   return (
     <div className="min-h-screen bg-white text-[#1D1D1F] font-sans selection:bg-[#1D1D1F] selection:text-white pb-24">
       {/* 1. Navbar */}
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-[#E5E5EA]">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveSection('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
             <div className="font-bold text-2xl tracking-tight leading-none">
               SAHAYA
               <div className="text-[10px] text-[#6E6E73] font-medium tracking-wider uppercase mt-1">
@@ -33,11 +34,33 @@ export function LandingPage() {
           </div>
 
           <div className="absolute left-1/2 -translate-x-1/2 hidden md:flex items-center gap-1 text-[15px] font-medium text-[#6E6E73]">
-            <a href="#" className="bg-[#F5F5F7] text-[#1D1D1F] px-4 py-1.5 rounded-full transition-colors">Home</a>
-            <a href="#services" className="px-4 py-1.5 hover:text-[#1D1D1F] transition-colors">Services</a>
-            <a href="#how-it-works" className="px-4 py-1.5 hover:text-[#1D1D1F] transition-colors">How it works</a>
-            <a href="#about" className="px-4 py-1.5 hover:text-[#1D1D1F] transition-colors">About</a>
-            <a href="#help" className="px-4 py-1.5 hover:text-[#1D1D1F] transition-colors">Help</a>
+            <a 
+              href="#" 
+              onClick={() => { setActiveSection('home'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              className={`px-4 py-1.5 rounded-full transition-colors ${activeSection === 'home' ? 'bg-[#F5F5F7] text-[#1D1D1F]' : 'hover:text-[#1D1D1F]'}`}
+            >
+              Home
+            </a>
+            <a 
+              href="#services" 
+              onClick={() => setActiveSection('services')}
+              className={`px-4 py-1.5 rounded-full transition-colors ${activeSection === 'services' ? 'bg-[#F5F5F7] text-[#1D1D1F]' : 'hover:text-[#1D1D1F]'}`}
+            >
+              Services
+            </a>
+            <a 
+              href="#how-it-works" 
+              onClick={() => setActiveSection('how-it-works')}
+              className={`px-4 py-1.5 rounded-full transition-colors ${activeSection === 'how-it-works' ? 'bg-[#F5F5F7] text-[#1D1D1F]' : 'hover:text-[#1D1D1F]'}`}
+            >
+              How it works
+            </a>
+            <button 
+              onClick={() => navigate('/about')}
+              className="px-4 py-1.5 rounded-full hover:text-[#1D1D1F] transition-colors cursor-pointer"
+            >
+              About
+            </button>
           </div>
 
           <div className="flex items-center gap-3">
@@ -210,19 +233,19 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 py-16">
           <div className="mb-12">
             <h2 className="text-[20px] md:text-[24px] font-bold tracking-tight text-[#1D1D1F]">How SAHAYA Works</h2>
-            <p className="text-[#6E6E73] mt-1 text-[13px] md:text-[14px]">A simple process to get your services done.</p>
+            <p className="text-[#6E6E73] mt-1 text-[13px] md:text-[14px]">A transparent, four-step digital workflow connecting you with your local Akshaya Centre.</p>
           </div>
 
           <div className="flex flex-col md:flex-row items-center justify-between w-full gap-4 md:gap-2">
             {[
-              { icon: Search, num: 1, title: "Search Service", desc: "Find the service you need" },
-              { icon: FileText, num: 2, title: "Submit Request", desc: "Provide required details and documents" },
-              { icon: Clock, num: 3, title: "Track Progress", desc: "Stay updated on your request status" },
-              { icon: CheckCircle2, num: 4, title: "Get It Done", desc: "Receive your service from Akshaya centre" }
+              { icon: Search, num: 1, title: "Select Service", desc: "Browse authenticated government certificates and schemes" },
+              { icon: FileText, num: 2, title: "Upload & Submit", desc: "Attach required documents digitally and submit securely" },
+              { icon: Clock, num: 3, title: "Centre Verification", desc: "Certified centre staff verify details and process your request" },
+              { icon: CheckCircle2, num: 4, title: "Track & Receive", desc: "Follow real-time status and download approved documents" }
             ].map((step, i) => (
               <div key={i} className="flex items-center flex-1 w-full md:w-auto">
                 <div className="flex items-center gap-3 md:gap-4 shrink-0">
-                  <div className="bg-white border-[1.5px] border-[#1D1D1F] w-[48px] h-[48px] md:w-[56px] md:h-[56px] shrink-0 rounded-full flex items-center justify-center z-10">
+                  <div className="bg-white border-[1.5px] border-[#1D1D1F] w-[48px] h-[48px] md:w-[56px] md:h-[56px] shrink-0 rounded-full flex items-center justify-center z-10 shadow-xs">
                     <step.icon size={22} strokeWidth={1.5} className="text-[#1D1D1F]" />
                   </div>
                   <div className="flex flex-col max-w-[130px] md:max-w-[150px]">
@@ -239,39 +262,47 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* 5. Stats Bar */}
+      {/* 5. Core Platform Guarantees (Replacing fake stats) */}
       <section className="bg-[#F5F5F7] pb-12">
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 bg-white border border-[#E5E5EA] rounded-[24px] p-8 md:p-10 shadow-sm">
             <div className="flex items-center gap-5">
-              <Component size={32} strokeWidth={1.5} className="text-[#1D1D1F] shrink-0" />
+              <div className="w-12 h-12 rounded-xl bg-[#F5F5F7] flex items-center justify-center shrink-0">
+                <Landmark size={24} strokeWidth={1.75} className="text-[#1D1D1F]" />
+              </div>
               <div>
-                <h4 className="font-bold text-xl text-[#1D1D1F]">50+</h4>
-                <p className="text-[#6E6E73] text-[13px] mt-0.5">Government services</p>
+                <h4 className="font-bold text-[15px] text-[#1D1D1F]">Certified Centre Network</h4>
+                <p className="text-[#6E6E73] text-[12px] mt-0.5 leading-snug">Official operator verification & department coordination</p>
               </div>
             </div>
             
             <div className="flex items-center gap-5">
-              <Landmark size={32} strokeWidth={1.5} className="text-[#1D1D1F] shrink-0" />
+              <div className="w-12 h-12 rounded-xl bg-[#F5F5F7] flex items-center justify-center shrink-0">
+                <ShieldCheck size={24} strokeWidth={1.75} className="text-[#1D1D1F]" />
+              </div>
               <div>
-                <h4 className="font-bold text-xl text-[#1D1D1F]">2,900+</h4>
-                <p className="text-[#6E6E73] text-[13px] mt-0.5">Akshaya centres<br/>across Kerala</p>
+                <h4 className="font-bold text-[15px] text-[#1D1D1F]">Secure & Private</h4>
+                <p className="text-[#6E6E73] text-[12px] mt-0.5 leading-snug">Encrypted file storage and strict data confidentiality</p>
               </div>
             </div>
             
             <div className="flex items-center gap-5">
-              <Users size={32} strokeWidth={1.5} className="text-[#1D1D1F] shrink-0" />
+              <div className="w-12 h-12 rounded-xl bg-[#F5F5F7] flex items-center justify-center shrink-0">
+                <Clock size={24} strokeWidth={1.75} className="text-[#1D1D1F]" />
+              </div>
               <div>
-                <h4 className="font-bold text-xl text-[#1D1D1F]">1M+</h4>
-                <p className="text-[#6E6E73] text-[13px] mt-0.5">Citizens served<br/>and counting</p>
+                <h4 className="font-bold text-[15px] text-[#1D1D1F]">Live Status Tracking</h4>
+                <p className="text-[#6E6E73] text-[12px] mt-0.5 leading-snug">Transparent audit trail from draft to final approval</p>
               </div>
             </div>
             
             <div className="flex items-center gap-5">
-              <ShieldCheck size={32} strokeWidth={1.5} className="text-[#1D1D1F] shrink-0" />
+              <div className="w-12 h-12 rounded-xl bg-[#F5F5F7] flex items-center justify-center shrink-0">
+                <CheckCircle2 size={24} strokeWidth={1.75} className="text-[#1D1D1F]" />
+              </div>
               <div>
-                <h4 className="font-bold text-xl text-[#1D1D1F]">100%</h4>
-                <p className="text-[#6E6E73] text-[13px] mt-0.5">Official and secure</p>
+                <h4 className="font-bold text-[15px] text-[#1D1D1F]">Official Delivery</h4>
+                <p className="text-[#6E6E73] text-[12px] mt-0.5 leading-snug">Direct download of authentic government certificates</p>
               </div>
             </div>
           </div>

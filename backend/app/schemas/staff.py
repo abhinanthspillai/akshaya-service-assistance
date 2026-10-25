@@ -67,3 +67,24 @@ class AccountRequestResponse(BaseModel):
 
 class AccountRejectRequest(BaseModel):
     reason: str | None = None
+
+
+class CentreEmployeeItem(BaseModel):
+    user_id: UUID
+    full_name: str
+    email: str
+    role: str
+    centre_id: UUID
+    is_active: bool
+    is_available: bool
+    max_active_requests: int
+    approval_status: str
+    created_at: datetime
+    active_requests_count: int = 0
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EmployeeProfileUpdate(BaseModel):
+    is_available: bool | None = None
+    max_active_requests: int | None = Field(None, gt=0, le=50)
+    full_name: str | None = Field(None, min_length=2, max_length=160)

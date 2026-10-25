@@ -42,3 +42,10 @@ export function formatRelativeTime(dateString: string): string {
   const diffInYears = Math.floor(diffInDays / 365);
   return `${diffInYears}y ago`;
 }
+
+export function formatFee(fee: number | string | null | undefined): string {
+  if (fee === null || fee === undefined || fee === '') return 'Free';
+  const num = typeof fee === 'number' ? fee : Number(fee);
+  if (isNaN(num) || num <= 0) return 'Free';
+  return `₹${num.toFixed(2)}`;
+}

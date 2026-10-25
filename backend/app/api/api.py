@@ -7,13 +7,13 @@ from app.api.endpoints import (
     conversations,
     escalations,
     notifications,
-    profile,
     requests,
     services,
     staff,
     tickets,
     users,
 )
+from app.schemas.otp import PendingCitizenOtpResponse
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -28,14 +28,12 @@ api_router.include_router(requests.router, prefix="/requests", tags=["requests"]
 api_router.include_router(escalations.router, prefix="/escalations", tags=["escalations"])
 api_router.include_router(tickets.router, prefix="/tickets", tags=["tickets"])
 api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
-api_router.include_router(profile.router, prefix="/profile", tags=["profile"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 # Convenience redirect/inclusion for /me/pending-otp as specified in spec
 api_router.add_api_route(
     "/me/pending-otp",
     users.get_pending_otp,
     methods=["GET"],
-    response_model=users.PendingCitizenOtpResponse | None,
+    response_model=PendingCitizenOtpResponse | None,
     tags=["users"],
 )
-

@@ -28,6 +28,9 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins if origins else ["*"],
+        allow_origin_regex=r"^https:\/\/.*\.netlify\.app$"
+        if any("netlify.app" in o for o in origins)
+        else None,
         allow_credentials=True if "*" not in origins else False,
         allow_methods=["*"],
         allow_headers=["*"],
